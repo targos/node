@@ -75,7 +75,7 @@ is wrapped in an `Error` with the original value stored in a field named
 added: v0.11.3
 -->
 
-* `section` {string} A string identifying the portion of the application for
+* `section` {string} A wildcard string identifying the portion of the application for
   which the `debuglog` function is being created.
 * Returns: {Function} The logging function
 
@@ -89,16 +89,16 @@ For example:
 
 ```js
 const util = require('util');
-const debuglog = util.debuglog('foo');
+const debuglog = util.debuglog('foo-bar');
 
 debuglog('hello from foo [%d]', 123);
 ```
 
-If this program is run with `NODE_DEBUG=foo` in the environment, then
+If this program is run with `NODE_DEBUG=foo*` or `NODE_DEBUG=foo-bar` in the environment, then
 it will output something like:
 
 ```txt
-FOO 3245: hello from foo [123]
+FOO-BAR 3245: hello from foo [123]
 ```
 
 where `3245` is the process id.  If it is not run with that
