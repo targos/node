@@ -1,0 +1,43 @@
+# Copyright 2018 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# This BUILD.gn file is specific to the standalone project. Do not
+# copy this downstream.
+
+import("//testing/test.gni")
+
+static_library("encoding") {
+  sources = [
+    "encoding/encoding.cc",
+  ]
+}
+
+# In this (upstream) standalone package, we declare encoding_test, and
+# a few minimal files in testing to make it look like Chromium's testing
+# package. However, in Chromium, we run encoding/encoding_test as part
+# of the content_unittests, declared in content/test/BUILD.gn.
+
+test("encoding_test") {
+  sources = [
+    "encoding/encoding_test.cc",
+    "encoding/encoding_test_helper.h",
+  ]
+  include_dirs = [ "." ]
+  deps = [
+    ":encoding",
+    "//base",
+    "//testing/gmock:gmock",
+    "//testing/gtest:gtest",
+    "//testing/gtest:gtest_main",
+  ]
+}
+
+executable("transcode") {
+  sources = [
+    "encoding/transcode.cc",
+  ]
+  deps = [
+    ":encoding",
+  ]
+}
