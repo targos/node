@@ -422,21 +422,6 @@ These CommonJS variables are not available in ES modules.
 `__filename` and `__dirname` use cases can be replicated via
 [`import.meta.url`][].
 
-#### No JSON Module Loading
-
-JSON imports are still experimental and only supported via the
-`--experimental-json-modules` flag.
-
-Local JSON files can be loaded relative to `import.meta.url` with `fs` directly:
-
-<!-- eslint-skip -->
-```js
-import { readFile } from 'fs/promises';
-const json = JSON.parse(await readFile(new URL('./dat.json', import.meta.url)));
-```
-
-Alterantively `module.createRequire()` can be used.
-
 #### No Native Module Loading
 
 Native modules are not currently supported with ES module imports.
@@ -472,15 +457,9 @@ separate cache.
 
 ## JSON modules
 
-> Stability: 1 - Experimental
+> Stability: 2 - Stable
 
-Currently importing JSON modules are only supported in the `commonjs` mode
-and are loaded using the CJS loader. [WHATWG JSON modules specification][] are
-still being standardized, and are experimentally supported by including the
-additional flag `--experimental-json-modules` when running Node.js.
-
-When the `--experimental-json-modules` flag is included, both the
-`commonjs` and `module` mode use the new experimental JSON
+Both the `commonjs` and `module` modes use the same JSON
 loader. The imported JSON only exposes a `default`. There is no
 support for named exports. A cache entry is created in the CommonJS
 cache to avoid duplication. The same object is returned in
@@ -492,14 +471,12 @@ Assuming an `index.mjs` with
 <!-- eslint-skip -->
 ```js
 import packageConfig from './package.json';
+
+console.log(package.name);
 ```
 
-The `--experimental-json-modules` flag is needed for the module
-to work.
-
 ```bash
-node index.mjs # fails
-node --experimental-json-modules index.mjs # works
+node index.mjs # Prints the value of the "name" field in "package.json"
 ```
 
 <i id="esm_experimental_wasm_modules"></i>
@@ -1308,7 +1285,6 @@ success!
 [Node.js Module Resolution Algorithm]: #esm_resolver_algorithm_specification
 [Terminology]: #esm_terminology
 [URL]: https://url.spec.whatwg.org/
-[WHATWG JSON modules specification]: https://html.spec.whatwg.org/#creating-a-json-module-script
 [`"exports"`]: packages.md#packages_exports
 [`"type"`]: packages.md#packages_type
 [`ArrayBuffer`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer

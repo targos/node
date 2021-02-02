@@ -222,13 +222,6 @@ added:
 
 Enable experimental `import.meta.resolve()` support.
 
-### `--experimental-json-modules`
-<!-- YAML
-added: v12.9.0
--->
-
-Enable experimental JSON support for the ES Module loader.
-
 ### `--experimental-loader=module`
 <!-- YAML
 added: v9.0.0
@@ -1351,7 +1344,6 @@ Node.js options that are allowed are:
 * `--enable-source-maps`
 * `--experimental-abortcontroller`
 * `--experimental-import-meta-resolve`
-* `--experimental-json-modules`
 * `--experimental-loader`
 * `--experimental-modules`
 * `--experimental-policy`
