@@ -726,6 +726,12 @@ function requireNoPackageJSONAbove() {
   }
 }
 
+process.on('warning', (warning) => {
+  if (warning.name !== 'internal/test/binding') {
+    assert.fail('Unexpected process warning: ' + warning.name);
+  }
+});
+
 const common = {
   allowGlobals,
   buildType,
