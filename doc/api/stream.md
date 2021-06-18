@@ -1879,11 +1879,12 @@ const removeSpaces = new Transform({
     callback(null, String(chunk).replace(' '));
   }
 });
-const toUpper = new Transform({
-  transform(chunk, encoding, callback) {
-    callback(null, String(chunk).toUpperCase());
+const toUpper = async function*(source) {
+  for await (const chink of source) {
+    yield String(chunk).toUpperCase();
   }
-});
+};
+
 const removeSpacesAndToUpper = pipelinify(removeSpaces, toUpper);
 removeSpacesAndToUpper
   .end('hello world')
