@@ -97,6 +97,7 @@ const expectedModules = new Set([
   'NativeModule internal/streams/legacy',
   'NativeModule internal/streams/passthrough',
   'NativeModule internal/streams/pipeline',
+  'NativeModule internal/streams/pipelinify',
   'NativeModule internal/streams/readable',
   'NativeModule internal/streams/state',
   'NativeModule internal/streams/transform',
