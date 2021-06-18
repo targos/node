@@ -1879,8 +1879,8 @@ const removeSpaces = new Transform({
     callback(null, String(chunk).replace(' '));
   }
 });
-const toUpper = async function*(source) {
-  for await (const chink of source) {
+async function* toUpper(source) {
+  for await (const chunk of source) {
     yield String(chunk).toUpperCase();
   }
 };
