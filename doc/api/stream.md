@@ -1859,6 +1859,39 @@ run().catch(console.error);
 after the `callback` has been invoked. In the case of reuse of streams after
 failure, this can cause event listener leaks and swallowed errors.
 
+### `stream.pipelinify(...streams)`
+<!-- YAML
+added: REPLACEME
+-->
+
+* `streams` {Stream[]|Iterable[]|AsyncIterable[]|Function[]}
+* Returns: {stream.Duplex}
+
+Combines multiple streams into a `Duplex` stream. This works by
+calling `stream.pipeline` on all the passed streams and then creating
+a `Duplex` stream which writes to the first passed stream and reads from
+the stream returned from `stream.pipeline`.
+
+```js
+const { pipelinify, Transform } = require('streams');
+const removeSpaces = new Transform({
+  transform(chunk, encoding, callback) {
+    callback(null, String(chunk).replace(' '));
+  }
+});
+const toUpper = new Transform({
+  transform(chunk, encoding, callback) {
+    callback(null, String(chunk).toUpperCase());
+  }
+});
+const removeSpacesAndToUpper = pipelinify(removeSpaces, toUpper);
+removeSpacesAndToUpper
+  .end('hello world')
+  .on('data', (buf) => {
+    console.log(buf); // prints 'HELLOWORLD'
+  });
+```
+
 ### `stream.Readable.from(iterable, [options])`
 <!-- YAML
 added:

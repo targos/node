@@ -270,6 +270,7 @@
       'lib/internal/streams/destroy.js',
       'lib/internal/streams/state.js',
       'lib/internal/streams/pipeline.js',
+      'lib/internal/streams/pipelinify.js',
       'lib/internal/streams/end-of-stream.js',
       'lib/internal/streams/utils.js',
       'deps/v8/tools/splaytree.mjs',
