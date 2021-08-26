@@ -4,7 +4,7 @@
 
 // Flags: --experimental-wasm-gc
 
-load('test/mjsunit/wasm/wasm-module-builder.js');
+d8.file.execute('test/mjsunit/wasm/wasm-module-builder.js');
 
 let instance = (() => {
   let builder = new WasmModuleBuilder();
@@ -57,7 +57,7 @@ let instance = (() => {
         .addBody([kExprLocalGet, 0])
         .exportFunc();
     builder.addFunction(key + '_null', makeSig([], [type]))
-        .addBody([kExprRefNull, test_types[key]])
+        .addBody([kExprRefNull, ...wasmSignedLeb(test_types[key])])
         .exportFunc();
   }
 

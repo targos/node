@@ -238,7 +238,7 @@ void float32_to_uint64_sat_wrapper(Address data) {
     WriteUnalignedValue<uint64_t>(data, static_cast<uint64_t>(input));
     return;
   }
-  if (input >= std::numeric_limits<uint64_t>::max()) {
+  if (input >= static_cast<float>(std::numeric_limits<uint64_t>::max())) {
     WriteUnalignedValue<uint64_t>(data, std::numeric_limits<uint64_t>::max());
     return;
   }
@@ -268,7 +268,7 @@ void float64_to_uint64_sat_wrapper(Address data) {
     WriteUnalignedValue<uint64_t>(data, static_cast<uint64_t>(input));
     return;
   }
-  if (input >= std::numeric_limits<uint64_t>::max()) {
+  if (input >= static_cast<double>(std::numeric_limits<uint64_t>::max())) {
     WriteUnalignedValue<uint64_t>(data, std::numeric_limits<uint64_t>::max());
     return;
   }
@@ -451,7 +451,6 @@ class V8_NODISCARD ThreadNotInWasmScope {
 #endif
 };
 
-#ifdef DISABLE_UNTRUSTED_CODE_MITIGATIONS
 inline byte* EffectiveAddress(WasmInstanceObject instance, uint32_t index) {
   return instance.memory_start() + index;
 }
@@ -459,19 +458,6 @@ inline byte* EffectiveAddress(WasmInstanceObject instance, uint32_t index) {
 inline byte* EffectiveAddress(byte* base, size_t size, uint32_t index) {
   return base + index;
 }
-
-#else
-inline byte* EffectiveAddress(WasmInstanceObject instance, uint32_t index) {
-  // Compute the effective address of the access, making sure to condition
-  // the index even in the in-bounds case.
-  return instance.memory_start() + (index & instance.memory_mask());
-}
-
-inline byte* EffectiveAddress(byte* base, size_t size, uint32_t index) {
-  size_t mem_mask = base::bits::RoundUpToPowerOfTwo(size) - 1;
-  return base + (index & mem_mask);
-}
-#endif
 
 template <typename V>
 V ReadAndIncrementOffset(Address data, size_t* offset) {

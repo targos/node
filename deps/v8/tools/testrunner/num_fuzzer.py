@@ -63,6 +63,11 @@ class NumFuzzer(base_runner.BaseTestRunner):
                       help="probability [0-10] of adding --random-gc-interval "
                            "flag to the test")
 
+    # Stress stack size
+    parser.add_option("--stress-stack-size", default=0, type="int",
+                      help="probability [0-10] of adding --stack-size "
+                           "flag to the test")
+
     # Stress tasks
     parser.add_option("--stress-delay-tasks", default=0, type="int",
                       help="probability [0-10] of adding --stress-delay-tasks "
@@ -119,7 +124,10 @@ class NumFuzzer(base_runner.BaseTestRunner):
 
   def _runner_flags(self):
     """Extra default flags specific to the test runner implementation."""
-    return ['--no-abort-on-contradictory-flags']
+    flags = ['--no-abort-on-contradictory-flags']
+    if self.infra_staging:
+      flags.append('--no-fail')
+    return flags
 
   def _get_statusfile_variables(self, options):
     variables = (
@@ -133,6 +141,7 @@ class NumFuzzer(base_runner.BaseTestRunner):
                              options.stress_compaction,
                              options.stress_gc,
                              options.stress_delay_tasks,
+                             options.stress_stack_size,
                              options.stress_thread_pool_size])),
     })
     return variables
@@ -221,6 +230,7 @@ class NumFuzzer(base_runner.BaseTestRunner):
     add('marking', options.stress_marking)
     add('scavenge', options.stress_scavenge)
     add('gc_interval', options.stress_gc)
+    add('stack', options.stress_stack_size)
     add('threads', options.stress_thread_pool_size)
     add('delay', options.stress_delay_tasks)
     add('deopt', options.stress_deopt, options.stress_deopt_min)

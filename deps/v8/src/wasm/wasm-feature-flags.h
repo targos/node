@@ -24,6 +24,16 @@
   /* V8 side owner: jkummerow */                                               \
   V(gc, "garbage collection", false)                                           \
                                                                                \
+  /* Non-specified, V8-only experimental additions to the GC proposal */       \
+  /* V8 side owner: jkummerow */                                               \
+  V(gc_experiments, "garbage collection V8-only experimental features", false) \
+  V(nn_locals,                                                                 \
+    "allow non-defaultable/non-nullable locals, validated with 'until end of " \
+    "block' semantics",                                                        \
+    false)                                                                     \
+  V(unsafe_nn_locals,                                                          \
+    "allow non-defaultable/non-nullable locals, no validation", false)         \
+                                                                               \
   /* Typed function references proposal. */                                    \
   /* Official proposal: https://github.com/WebAssembly/function-references */  \
   /* V8 side owner: manoskouk */                                               \

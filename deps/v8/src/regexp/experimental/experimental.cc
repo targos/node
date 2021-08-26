@@ -14,7 +14,7 @@
 namespace v8 {
 namespace internal {
 
-bool ExperimentalRegExp::CanBeHandled(RegExpTree* tree, JSRegExp::Flags flags,
+bool ExperimentalRegExp::CanBeHandled(RegExpTree* tree, RegExpFlags flags,
                                       int capture_count) {
   DCHECK(FLAG_enable_experimental_regexp_engine ||
          FLAG_enable_experimental_regexp_engine_on_excessive_backtracks);
@@ -22,16 +22,16 @@ bool ExperimentalRegExp::CanBeHandled(RegExpTree* tree, JSRegExp::Flags flags,
 }
 
 void ExperimentalRegExp::Initialize(Isolate* isolate, Handle<JSRegExp> re,
-                                    Handle<String> source,
-                                    JSRegExp::Flags flags, int capture_count) {
+                                    Handle<String> source, RegExpFlags flags,
+                                    int capture_count) {
   DCHECK(FLAG_enable_experimental_regexp_engine);
   if (FLAG_trace_experimental_regexp_engine) {
     StdoutStream{} << "Initializing experimental regexp " << *source
                    << std::endl;
   }
 
-  isolate->factory()->SetRegExpExperimentalData(re, source, flags,
-                                                capture_count);
+  isolate->factory()->SetRegExpExperimentalData(
+      re, source, JSRegExp::AsJSRegExpFlags(flags), capture_count);
 }
 
 bool ExperimentalRegExp::IsCompiled(Handle<JSRegExp> re, Isolate* isolate) {
@@ -46,7 +46,7 @@ bool ExperimentalRegExp::IsCompiled(Handle<JSRegExp> re, Isolate* isolate) {
 }
 
 template <class T>
-Handle<ByteArray> VectorToByteArray(Isolate* isolate, Vector<T> data) {
+Handle<ByteArray> VectorToByteArray(Isolate* isolate, base::Vector<T> data) {
   STATIC_ASSERT(std::is_trivial<T>::value);
 
   int byte_length = sizeof(T) * data.length();
@@ -69,15 +69,14 @@ base::Optional<CompilationResult> CompileImpl(Isolate* isolate,
   Zone zone(isolate->allocator(), ZONE_NAME);
 
   Handle<String> source(regexp->Pattern(), isolate);
-  JSRegExp::Flags flags = regexp->GetFlags();
 
   // Parse and compile the regexp source.
   RegExpCompileData parse_result;
-  FlatStringReader reader(isolate, source);
   DCHECK(!isolate->has_pending_exception());
 
-  bool parse_success =
-      RegExpParser::ParseRegExp(isolate, &zone, &reader, flags, &parse_result);
+  bool parse_success = RegExpParser::ParseRegExpFromHeapString(
+      isolate, &zone, source, JSRegExp::AsRegExpFlags(regexp->GetFlags()),
+      &parse_result);
   if (!parse_success) {
     // The pattern was already parsed successfully during initialization, so
     // the only way parsing can fail now is because of stack overflow.
@@ -87,12 +86,13 @@ base::Optional<CompilationResult> CompileImpl(Isolate* isolate,
     return base::nullopt;
   }
 
-  ZoneList<RegExpInstruction> bytecode =
-      ExperimentalRegExpCompiler::Compile(parse_result.tree, flags, &zone);
+  ZoneList<RegExpInstruction> bytecode = ExperimentalRegExpCompiler::Compile(
+      parse_result.tree, JSRegExp::AsRegExpFlags(regexp->GetFlags()), &zone);
 
   CompilationResult result;
   result.bytecode = VectorToByteArray(isolate, bytecode.ToVector());
-  result.capture_name_map = parse_result.capture_name_map;
+  result.capture_name_map =
+      RegExp::CreateCaptureNameMap(isolate, parse_result.named_captures);
   return result;
 }
 
@@ -123,20 +123,20 @@ bool ExperimentalRegExp::Compile(Isolate* isolate, Handle<JSRegExp> re) {
                 *compilation_result->bytecode);
 
   Handle<Code> trampoline = BUILTIN_CODE(isolate, RegExpExperimentalTrampoline);
-  re->SetDataAt(JSRegExp::kIrregexpLatin1CodeIndex, *trampoline);
-  re->SetDataAt(JSRegExp::kIrregexpUC16CodeIndex, *trampoline);
+  re->SetDataAt(JSRegExp::kIrregexpLatin1CodeIndex, ToCodeT(*trampoline));
+  re->SetDataAt(JSRegExp::kIrregexpUC16CodeIndex, ToCodeT(*trampoline));
 
   re->SetCaptureNameMap(compilation_result->capture_name_map);
 
   return true;
 }
 
-Vector<RegExpInstruction> AsInstructionSequence(ByteArray raw_bytes) {
+base::Vector<RegExpInstruction> AsInstructionSequence(ByteArray raw_bytes) {
   RegExpInstruction* inst_begin =
       reinterpret_cast<RegExpInstruction*>(raw_bytes.GetDataStartAddress());
   int inst_num = raw_bytes.length() / sizeof(RegExpInstruction);
   DCHECK_EQ(sizeof(RegExpInstruction) * inst_num, raw_bytes.length());
-  return Vector<RegExpInstruction>(inst_begin, inst_num);
+  return base::Vector<RegExpInstruction>(inst_begin, inst_num);
 }
 
 namespace {

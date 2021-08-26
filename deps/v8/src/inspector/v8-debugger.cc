@@ -4,6 +4,11 @@
 
 #include "src/inspector/v8-debugger.h"
 
+#include "include/v8-container.h"
+#include "include/v8-context.h"
+#include "include/v8-function.h"
+#include "include/v8-microtask-queue.h"
+#include "include/v8-util.h"
 #include "src/inspector/inspected-context.h"
 #include "src/inspector/protocol/Protocol.h"
 #include "src/inspector/string-util.h"
@@ -13,8 +18,6 @@
 #include "src/inspector/v8-runtime-agent-impl.h"
 #include "src/inspector/v8-stack-trace-impl.h"
 #include "src/inspector/v8-value-utils.h"
-
-#include "include/v8-util.h"
 
 namespace v8_inspector {
 
@@ -153,7 +156,6 @@ std::vector<std::unique_ptr<V8DebuggerScript>> V8Debugger::getCompiledScripts(
 void V8Debugger::setBreakpointsActive(bool active) {
   if (!enabled()) {
     UNREACHABLE();
-    return;
   }
   m_breakpointsActiveCount += active ? 1 : -1;
   v8::debug::SetBreakPointsActive(m_isolate, m_breakpointsActiveCount);
@@ -247,7 +249,7 @@ void V8Debugger::stepIntoStatement(int targetContextGroupId,
   if (asyncStepOutOfFunction(targetContextGroupId, true)) return;
   m_targetContextGroupId = targetContextGroupId;
   m_pauseOnAsyncCall = breakOnAsyncCall;
-  v8::debug::PrepareStep(m_isolate, v8::debug::StepIn);
+  v8::debug::PrepareStep(m_isolate, v8::debug::StepInto);
   continueProgram(targetContextGroupId);
 }
 
@@ -256,7 +258,7 @@ void V8Debugger::stepOverStatement(int targetContextGroupId) {
   DCHECK(targetContextGroupId);
   if (asyncStepOutOfFunction(targetContextGroupId, true)) return;
   m_targetContextGroupId = targetContextGroupId;
-  v8::debug::PrepareStep(m_isolate, v8::debug::StepNext);
+  v8::debug::PrepareStep(m_isolate, v8::debug::StepOver);
   continueProgram(targetContextGroupId);
 }
 
@@ -404,6 +406,7 @@ void V8Debugger::handleProgramBreak(
     v8::debug::PrepareStep(m_isolate, v8::debug::StepOut);
     return;
   }
+  const bool forScheduledBreak = hasScheduledBreakOnNextFunctionCall();
   m_targetContextGroupId = 0;
   m_pauseOnNextCallRequested = false;
   m_pauseOnAsyncCall = false;
@@ -432,15 +435,78 @@ void V8Debugger::handleProgramBreak(
   DCHECK(contextGroupId);
   m_pausedContextGroupId = contextGroupId;
 
+  // First pass is for any instrumentation breakpoints. This effectively does
+  // nothing if none of the breakpoints are instrumentation breakpoints.
+  // `sessionToInstrumentationBreakpoints` is only created if there is at least
+  // one session with an instrumentation breakpoint.
+  std::unique_ptr<
+      std::map<V8InspectorSessionImpl*, std::vector<v8::debug::BreakpointId>>>
+      sessionToInstrumentationBreakpoints;
+  if (forScheduledBreak) {
+    m_inspector->forEachSession(
+        contextGroupId,
+        [&pausedContext, &breakpointIds, &sessionToInstrumentationBreakpoints](
+            V8InspectorSessionImpl* session) {
+          if (!session->debuggerAgent()->acceptsPause(false)) return;
+
+          const std::vector<v8::debug::BreakpointId>
+              instrumentationBreakpointIds =
+                  session->debuggerAgent()
+                      ->instrumentationBreakpointIdsMatching(breakpointIds);
+          if (instrumentationBreakpointIds.empty()) return;
+
+          if (!sessionToInstrumentationBreakpoints) {
+            sessionToInstrumentationBreakpoints = std::make_unique<
+                std::map<V8InspectorSessionImpl*,
+                         std::vector<v8::debug::BreakpointId>>>();
+          }
+          (*sessionToInstrumentationBreakpoints)[session] =
+              instrumentationBreakpointIds;
+          session->debuggerAgent()->didPause(
+              InspectedContext::contextId(pausedContext), {},
+              instrumentationBreakpointIds,
+              v8::debug::ExceptionType::kException, false, false, false);
+        });
+    if (sessionToInstrumentationBreakpoints) {
+      v8::Context::Scope scope(pausedContext);
+      m_inspector->client()->runMessageLoopOnPause(contextGroupId);
+
+      m_inspector->forEachSession(
+          contextGroupId, [&sessionToInstrumentationBreakpoints](
+                              V8InspectorSessionImpl* session) {
+            if (session->debuggerAgent()->enabled() &&
+                sessionToInstrumentationBreakpoints->count(session)) {
+              session->debuggerAgent()->didContinue();
+            }
+          });
+    }
+  }
+
+  // Second pass is for other breakpoints (which may include instrumentation
+  // breakpoints in certain scenarios).
   m_inspector->forEachSession(
-      contextGroupId, [&pausedContext, &exception, &breakpointIds,
-                       &exceptionType, &isUncaught, &scheduledOOMBreak,
-                       &scheduledAssertBreak](V8InspectorSessionImpl* session) {
+      contextGroupId,
+      [&pausedContext, &exception, &breakpointIds, &exceptionType, &isUncaught,
+       &scheduledOOMBreak, &scheduledAssertBreak,
+       &sessionToInstrumentationBreakpoints](V8InspectorSessionImpl* session) {
         if (session->debuggerAgent()->acceptsPause(scheduledOOMBreak)) {
+          std::vector<v8::debug::BreakpointId> sessionBreakpointIds =
+              breakpointIds;
+          if (sessionToInstrumentationBreakpoints) {
+            const std::vector<v8::debug::BreakpointId>
+                instrumentationBreakpointIds =
+                    (*sessionToInstrumentationBreakpoints)[session];
+            for (const v8::debug::BreakpointId& breakpointId :
+                 instrumentationBreakpointIds) {
+              auto iter = std::find(sessionBreakpointIds.begin(),
+                                    sessionBreakpointIds.end(), breakpointId);
+              sessionBreakpointIds.erase(iter);
+            }
+          }
           session->debuggerAgent()->didPause(
               InspectedContext::contextId(pausedContext), exception,
-              breakpointIds, exceptionType, isUncaught, scheduledOOMBreak,
-              scheduledAssertBreak);
+              sessionBreakpointIds, exceptionType, isUncaught,
+              scheduledOOMBreak, scheduledAssertBreak);
         }
       });
   {
@@ -472,10 +538,6 @@ size_t HeapLimitForDebugging(size_t initial_heap_limit) {
 size_t V8Debugger::nearHeapLimitCallback(void* data, size_t current_heap_limit,
                                          size_t initial_heap_limit) {
   V8Debugger* thisPtr = static_cast<V8Debugger*>(data);
-// TODO(solanes, v8:10876): Remove when bug is solved.
-#if DEBUG
-  printf("nearHeapLimitCallback\n");
-#endif
   thisPtr->m_originalHeapLimit = current_heap_limit;
   thisPtr->m_scheduledOOMBreak = true;
   v8::Local<v8::Context> context =
@@ -796,7 +858,7 @@ v8::Local<v8::Array> V8Debugger::queryObjects(v8::Local<v8::Context> context,
 
 std::unique_ptr<V8StackTraceImpl> V8Debugger::createStackTrace(
     v8::Local<v8::StackTrace> v8StackTrace) {
-  return V8StackTraceImpl::create(this, currentContextGroupId(), v8StackTrace,
+  return V8StackTraceImpl::create(this, v8StackTrace,
                                   V8StackTraceImpl::maxCallStackSizeToCapture);
 }
 
@@ -839,7 +901,7 @@ V8StackTraceId V8Debugger::storeCurrentStackTrace(
   if (!contextGroupId) return V8StackTraceId();
 
   std::shared_ptr<AsyncStackTrace> asyncStack =
-      AsyncStackTrace::capture(this, contextGroupId, toString16(description),
+      AsyncStackTrace::capture(this, toString16(description),
                                V8StackTraceImpl::maxCallStackSizeToCapture);
   if (!asyncStack) return V8StackTraceId();
 
@@ -917,9 +979,8 @@ void V8Debugger::asyncTaskScheduledForStack(const String16& taskName,
                                             void* task, bool recurring) {
   if (!m_maxAsyncCallStackDepth) return;
   v8::HandleScope scope(m_isolate);
-  std::shared_ptr<AsyncStackTrace> asyncStack =
-      AsyncStackTrace::capture(this, currentContextGroupId(), taskName,
-                               V8StackTraceImpl::maxCallStackSizeToCapture);
+  std::shared_ptr<AsyncStackTrace> asyncStack = AsyncStackTrace::capture(
+      this, taskName, V8StackTraceImpl::maxCallStackSizeToCapture);
   if (asyncStack) {
     m_asyncTaskStacks[task] = asyncStack;
     if (recurring) m_recurringTasks.insert(task);
@@ -1041,7 +1102,7 @@ std::unique_ptr<V8StackTraceImpl> V8Debugger::captureStackTrace(
             stackSize = V8StackTraceImpl::maxCallStackSizeToCapture;
         });
   }
-  return V8StackTraceImpl::capture(this, contextGroupId, stackSize);
+  return V8StackTraceImpl::capture(this, stackSize);
 }
 
 int V8Debugger::currentContextGroupId() {

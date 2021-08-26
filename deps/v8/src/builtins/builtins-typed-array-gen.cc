@@ -65,9 +65,8 @@ TNode<JSArrayBuffer> TypedArrayBuiltinsAssembler::AllocateEmptyOnHeapBuffer(
 
   StoreObjectFieldNoWriteBarrier(buffer, JSArrayBuffer::kByteLengthOffset,
                                  byte_length);
-  InitializeExternalPointerField(buffer, JSArrayBuffer::kBackingStoreOffset,
-                                 PointerConstant(nullptr),
-                                 kArrayBufferBackingStoreTag);
+  StoreObjectFieldNoWriteBarrier(buffer, JSArrayBuffer::kBackingStoreOffset,
+                                 PointerConstant(nullptr));
   StoreObjectFieldNoWriteBarrier(buffer, JSArrayBuffer::kExtensionOffset,
                                  IntPtrConstant(0));
   for (int offset = JSArrayBuffer::kHeaderSize;
@@ -102,7 +101,7 @@ TF_BUILTIN(TypedArrayConstructor, TypedArrayBuiltinsAssembler) {
   Label throwtypeerror(this, Label::kDeferred);
   GotoIf(IsUndefined(new_target), &throwtypeerror);
 
-  TNode<Object> result = CallBuiltin(Builtins::kCreateTypedArray, context,
+  TNode<Object> result = CallBuiltin(Builtin::kCreateTypedArray, context,
                                      target, new_target, arg1, arg2, arg3);
   args.PopAndReturn(result);
 
@@ -154,13 +153,16 @@ TF_BUILTIN(TypedArrayPrototypeByteOffset, TypedArrayBuiltinsAssembler) {
   // Check if the {receiver} is actually a JSTypedArray.
   ThrowIfNotInstanceType(context, receiver, JS_TYPED_ARRAY_TYPE, kMethodName);
 
-  // Default to zero if the {receiver}s buffer was detached.
-  TNode<JSArrayBuffer> receiver_buffer =
-      LoadJSArrayBufferViewBuffer(CAST(receiver));
-  TNode<UintPtrT> byte_offset = Select<UintPtrT>(
-      IsDetachedBuffer(receiver_buffer), [=] { return UintPtrConstant(0); },
-      [=] { return LoadJSArrayBufferViewByteOffset(CAST(receiver)); });
-  Return(ChangeUintPtrToTagged(byte_offset));
+  // Default to zero if the {receiver}s buffer was detached / out of bounds.
+  Label detached_or_oob(this), not_detached_or_oob(this);
+  IsTypedArrayDetachedOrOutOfBounds(CAST(receiver), &detached_or_oob,
+                                    &not_detached_or_oob);
+  BIND(&detached_or_oob);
+  Return(ChangeUintPtrToTagged(UintPtrConstant(0)));
+
+  BIND(&not_detached_or_oob);
+  Return(
+      ChangeUintPtrToTagged(LoadJSArrayBufferViewByteOffset(CAST(receiver))));
 }
 
 // ES6 #sec-get-%typedarray%.prototype.length
@@ -173,28 +175,12 @@ TF_BUILTIN(TypedArrayPrototypeLength, TypedArrayBuiltinsAssembler) {
   ThrowIfNotInstanceType(context, receiver, JS_TYPED_ARRAY_TYPE, kMethodName);
 
   TNode<JSTypedArray> receiver_array = CAST(receiver);
-  TNode<JSArrayBuffer> receiver_buffer =
-      LoadJSArrayBufferViewBuffer(receiver_array);
-
-  Label variable_length(this), normal(this);
-  Branch(IsVariableLengthTypedArray(receiver_array), &variable_length, &normal);
-  BIND(&variable_length);
-  {
-    Label miss(this);
-    Return(ChangeUintPtrToTagged(LoadVariableLengthJSTypedArrayLength(
-        receiver_array, receiver_buffer, &miss)));
-    BIND(&miss);
-    Return(ChangeUintPtrToTagged(UintPtrConstant(0)));
-  }
-
-  BIND(&normal);
-  {
-    // Default to zero if the {receiver}s buffer was detached.
-    TNode<UintPtrT> length = Select<UintPtrT>(
-        IsDetachedBuffer(receiver_buffer), [=] { return UintPtrConstant(0); },
-        [=] { return LoadJSTypedArrayLength(receiver_array); });
-    Return(ChangeUintPtrToTagged(length));
-  }
+  TVARIABLE(UintPtrT, length);
+  Label detached(this), end(this);
+  length = LoadJSTypedArrayLengthAndCheckDetached(receiver_array, &detached);
+  Return(ChangeUintPtrToTagged(length.value()));
+  BIND(&detached);
+  Return(ChangeUintPtrToTagged(UintPtrConstant(0)));
 }
 
 TNode<BoolT> TypedArrayBuiltinsAssembler::IsUint8ElementsKind(
@@ -283,12 +269,34 @@ void TypedArrayBuiltinsAssembler::CallCMemmove(TNode<RawPtrT> dest_ptr,
                 std::make_pair(MachineType::UintPtr(), byte_length));
 }
 
+void TypedArrayBuiltinsAssembler::CallCRelaxedMemmove(
+    TNode<RawPtrT> dest_ptr, TNode<RawPtrT> src_ptr,
+    TNode<UintPtrT> byte_length) {
+  TNode<ExternalReference> memmove =
+      ExternalConstant(ExternalReference::relaxed_memmove_function());
+  CallCFunction(memmove, MachineType::AnyTagged(),
+                std::make_pair(MachineType::Pointer(), dest_ptr),
+                std::make_pair(MachineType::Pointer(), src_ptr),
+                std::make_pair(MachineType::UintPtr(), byte_length));
+}
+
 void TypedArrayBuiltinsAssembler::CallCMemcpy(TNode<RawPtrT> dest_ptr,
                                               TNode<RawPtrT> src_ptr,
                                               TNode<UintPtrT> byte_length) {
   TNode<ExternalReference> memcpy =
       ExternalConstant(ExternalReference::libc_memcpy_function());
   CallCFunction(memcpy, MachineType::AnyTagged(),
+                std::make_pair(MachineType::Pointer(), dest_ptr),
+                std::make_pair(MachineType::Pointer(), src_ptr),
+                std::make_pair(MachineType::UintPtr(), byte_length));
+}
+
+void TypedArrayBuiltinsAssembler::CallCRelaxedMemcpy(
+    TNode<RawPtrT> dest_ptr, TNode<RawPtrT> src_ptr,
+    TNode<UintPtrT> byte_length) {
+  TNode<ExternalReference> relaxed_memcpy =
+      ExternalConstant(ExternalReference::relaxed_memcpy_function());
+  CallCFunction(relaxed_memcpy, MachineType::AnyTagged(),
                 std::make_pair(MachineType::Pointer(), dest_ptr),
                 std::make_pair(MachineType::Pointer(), src_ptr),
                 std::make_pair(MachineType::UintPtr(), byte_length));
@@ -393,12 +401,6 @@ void TypedArrayBuiltinsAssembler::DispatchTypedArrayByElementsKind(
   Unreachable();
 
   BIND(&next);
-}
-
-void TypedArrayBuiltinsAssembler::AllocateJSTypedArrayExternalPointerEntry(
-    TNode<JSTypedArray> holder) {
-  InitializeExternalPointerField(
-      holder, IntPtrConstant(JSTypedArray::kExternalPointerOffset));
 }
 
 void TypedArrayBuiltinsAssembler::SetJSTypedArrayOnHeapDataPtr(

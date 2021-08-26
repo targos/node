@@ -15,8 +15,11 @@
 #include "src/compiler/code-assembler.h"
 #include "src/objects/arguments.h"
 #include "src/objects/bigint.h"
+#include "src/objects/cell.h"
 #include "src/objects/feedback-vector.h"
 #include "src/objects/js-function.h"
+#include "src/objects/js-generator.h"
+#include "src/objects/js-promise.h"
 #include "src/objects/objects.h"
 #include "src/objects/promise.h"
 #include "src/objects/shared-function-info.h"
@@ -65,6 +68,8 @@ enum class PrimitiveType { kBoolean, kNumber, kString, kSymbol };
     AsyncGeneratorYieldResolveSharedFun)                                       \
   V(AsyncIteratorValueUnwrapSharedFun, async_iterator_value_unwrap_shared_fun, \
     AsyncIteratorValueUnwrapSharedFun)                                         \
+  V(IsConcatSpreadableProtector, is_concat_spreadable_protector,               \
+    IsConcatSpreadableProtector)                                               \
   V(MapIteratorProtector, map_iterator_protector, MapIteratorProtector)        \
   V(NoElementsProtector, no_elements_protector, NoElementsProtector)           \
   V(MegaDOMProtector, mega_dom_protector, MegaDOMProtector)                    \
@@ -332,6 +337,12 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
   TNode<IntPtrT> ParameterToIntPtr(TNode<UintPtrT> value) {
     return Signed(value);
   }
+
+  enum InitializationMode {
+    kUninitialized,
+    kInitializeToZero,
+    kInitializeToNull
+  };
 
   TNode<Smi> ParameterToTagged(TNode<Smi> value) { return value; }
 
@@ -748,9 +759,6 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
                              AllocationFlags flags = kNone);
 
   TNode<HeapObject> Allocate(int size, AllocationFlags flags = kNone);
-  TNode<HeapObject> InnerAllocate(TNode<HeapObject> previous, int offset);
-  TNode<HeapObject> InnerAllocate(TNode<HeapObject> previous,
-                                  TNode<IntPtrT> offset);
 
   TNode<BoolT> IsRegularHeapObjectSize(TNode<IntPtrT> size);
 
@@ -782,6 +790,49 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
                   std::initializer_list<ExtraNode> extra_nodes = {});
 
   void FastCheck(TNode<BoolT> condition);
+
+  TNode<BoolT> IsCodeTMap(TNode<Map> map) {
+    return V8_EXTERNAL_CODE_SPACE_BOOL ? IsCodeDataContainerMap(map)
+                                       : IsCodeMap(map);
+  }
+  TNode<BoolT> IsCodeT(TNode<HeapObject> object) {
+    return IsCodeTMap(LoadMap(object));
+  }
+
+  TNode<Code> FromCodeT(TNode<CodeT> code) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    return LoadObjectField<Code>(code, CodeDataContainer::kCodeOffset);
+#else
+    return code;
+#endif
+  }
+
+  TNode<CodeDataContainer> CodeDataContainerFromCodeT(TNode<CodeT> code) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    return code;
+#else
+    return LoadObjectField<CodeDataContainer>(code,
+                                              Code::kCodeDataContainerOffset);
+#endif
+  }
+
+  TNode<CodeT> ToCodeT(TNode<Code> code) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    return LoadObjectField<CodeDataContainer>(code,
+                                              Code::kCodeDataContainerOffset);
+#else
+    return code;
+#endif
+  }
+
+  TNode<CodeT> ToCodeT(TNode<Code> code,
+                       TNode<CodeDataContainer> code_data_container) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    return code_data_container;
+#else
+    return code;
+#endif
+  }
 
   // The following Call wrappers call an object according to the semantics that
   // one finds in the EcmaScript spec, operating on an Callable (e.g. a
@@ -1056,15 +1107,14 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
 
   TNode<RawPtrT> LoadJSTypedArrayExternalPointerPtr(
       TNode<JSTypedArray> holder) {
-    return LoadExternalPointerFromObject(holder,
-                                         JSTypedArray::kExternalPointerOffset,
-                                         kTypedArrayExternalPointerTag);
+    return LoadObjectField<RawPtrT>(holder,
+                                    JSTypedArray::kExternalPointerOffset);
   }
 
   void StoreJSTypedArrayExternalPointerPtr(TNode<JSTypedArray> holder,
                                            TNode<RawPtrT> value) {
-    StoreExternalPointerToObject(holder, JSTypedArray::kExternalPointerOffset,
-                                 value, kTypedArrayExternalPointerTag);
+    StoreObjectFieldNoWriteBarrier<RawPtrT>(
+        holder, JSTypedArray::kExternalPointerOffset, value);
   }
 
   // Load value from current parent frame by given offset in bytes.
@@ -1397,40 +1447,35 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
   // Array is any array-like type that has a fixed header followed by
   // tagged elements.
   template <typename Array, typename TIndex, typename TValue = MaybeObject>
-  TNode<TValue> LoadArrayElement(
-      TNode<Array> array, int array_header_size, TNode<TIndex> index,
-      int additional_offset = 0,
-      LoadSensitivity needs_poisoning = LoadSensitivity::kSafe);
+  TNode<TValue> LoadArrayElement(TNode<Array> array, int array_header_size,
+                                 TNode<TIndex> index,
+                                 int additional_offset = 0);
 
   template <typename TIndex>
   TNode<Object> LoadFixedArrayElement(
       TNode<FixedArray> object, TNode<TIndex> index, int additional_offset = 0,
-      LoadSensitivity needs_poisoning = LoadSensitivity::kSafe,
       CheckBounds check_bounds = CheckBounds::kAlways);
 
   // This doesn't emit a bounds-check. As part of the security-performance
   // tradeoff, only use it if it is performance critical.
-  TNode<Object> UnsafeLoadFixedArrayElement(
-      TNode<FixedArray> object, TNode<IntPtrT> index, int additional_offset = 0,
-      LoadSensitivity needs_poisoning = LoadSensitivity::kSafe) {
+  TNode<Object> UnsafeLoadFixedArrayElement(TNode<FixedArray> object,
+                                            TNode<IntPtrT> index,
+                                            int additional_offset = 0) {
     return LoadFixedArrayElement(object, index, additional_offset,
-                                 needs_poisoning, CheckBounds::kDebugOnly);
+                                 CheckBounds::kDebugOnly);
   }
 
-  TNode<Object> LoadFixedArrayElement(
-      TNode<FixedArray> object, int index, int additional_offset = 0,
-      LoadSensitivity needs_poisoning = LoadSensitivity::kSafe) {
+  TNode<Object> LoadFixedArrayElement(TNode<FixedArray> object, int index,
+                                      int additional_offset = 0) {
     return LoadFixedArrayElement(object, IntPtrConstant(index),
-                                 additional_offset, needs_poisoning);
+                                 additional_offset);
   }
   // This doesn't emit a bounds-check. As part of the security-performance
   // tradeoff, only use it if it is performance critical.
-  TNode<Object> UnsafeLoadFixedArrayElement(
-      TNode<FixedArray> object, int index, int additional_offset = 0,
-      LoadSensitivity needs_poisoning = LoadSensitivity::kSafe) {
+  TNode<Object> UnsafeLoadFixedArrayElement(TNode<FixedArray> object, int index,
+                                            int additional_offset = 0) {
     return LoadFixedArrayElement(object, IntPtrConstant(index),
-                                 additional_offset, needs_poisoning,
-                                 CheckBounds::kDebugOnly);
+                                 additional_offset, CheckBounds::kDebugOnly);
   }
 
   TNode<Object> LoadPropertyArrayElement(TNode<PropertyArray> object,
@@ -1942,6 +1987,9 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
 
   TNode<PropertyArray> AllocatePropertyArray(TNode<IntPtrT> capacity);
 
+  TNode<HeapObject> AllocateWasmArray(TNode<IntPtrT> size_in_bytes,
+                                      int initialization);
+
   // TODO(v8:9722): Return type should be JSIteratorResult
   TNode<JSObject> AllocateJSIteratorResult(TNode<Context> context,
                                            TNode<Object> value,
@@ -2084,7 +2132,6 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
     kFixedArrays = 1,
     kFixedDoubleArrays = 2,
     kDontCopyCOW = 4,
-    kNewSpaceAllocationOnly = 8,
     kAllFixedArrays = kFixedArrays | kFixedDoubleArrays,
     kAllFixedArraysDontCopyCOW = kAllFixedArrays | kDontCopyCOW
   };
@@ -2254,6 +2301,8 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
                                    TNode<IntPtrT> base_allocation_size,
                                    TNode<AllocationSite> allocation_site);
 
+  TNode<IntPtrT> TryTaggedToInt32AsIntPtr(TNode<Object> value,
+                                          Label* if_not_possible);
   TNode<Float64T> TryTaggedToFloat64(TNode<Object> value,
                                      Label* if_valueisnotnumber);
   TNode<Float64T> TruncateTaggedToFloat64(TNode<Context> context,
@@ -2492,6 +2541,7 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
   TNode<BoolT> IsPromiseResolveProtectorCellInvalid();
   TNode<BoolT> IsPromiseThenProtectorCellInvalid();
   TNode<BoolT> IsArraySpeciesProtectorCellInvalid();
+  TNode<BoolT> IsIsConcatSpreadableProtectorCellInvalid();
   TNode<BoolT> IsTypedArraySpeciesProtectorCellInvalid();
   TNode<BoolT> IsRegExpSpeciesProtectorCellInvalid();
   TNode<BoolT> IsPromiseSpeciesProtectorCellInvalid();
@@ -3025,19 +3075,19 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
 
   TNode<Object> GetProperty(TNode<Context> context, TNode<Object> receiver,
                             TNode<Object> name) {
-    return CallBuiltin(Builtins::kGetProperty, context, receiver, name);
+    return CallBuiltin(Builtin::kGetProperty, context, receiver, name);
   }
 
   TNode<Object> SetPropertyStrict(TNode<Context> context,
                                   TNode<Object> receiver, TNode<Object> key,
                                   TNode<Object> value) {
-    return CallBuiltin(Builtins::kSetProperty, context, receiver, key, value);
+    return CallBuiltin(Builtin::kSetProperty, context, receiver, key, value);
   }
 
   TNode<Object> SetPropertyInLiteral(TNode<Context> context,
                                      TNode<JSObject> receiver,
                                      TNode<Object> key, TNode<Object> value) {
-    return CallBuiltin(Builtins::kSetPropertyInLiteral, context, receiver, key,
+    return CallBuiltin(Builtin::kSetPropertyInLiteral, context, receiver, key,
                        value);
   }
 
@@ -3052,15 +3102,13 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
                                             TNode<Object> sync_iterator);
 
   template <class... TArgs>
-  TNode<Object> CallBuiltin(Builtins::Name id, TNode<Object> context,
-                            TArgs... args) {
+  TNode<Object> CallBuiltin(Builtin id, TNode<Object> context, TArgs... args) {
     return CallStub<Object>(Builtins::CallableFor(isolate(), id), context,
                             args...);
   }
 
   template <class... TArgs>
-  void TailCallBuiltin(Builtins::Name id, TNode<Object> context,
-                       TArgs... args) {
+  void TailCallBuiltin(Builtin id, TNode<Object> context, TArgs... args) {
     return TailCallStub(Builtins::CallableFor(isolate(), id), context, args...);
   }
 
@@ -3503,7 +3551,8 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
       const char* method_name);
 
   // JSTypedArray helpers
-  TNode<UintPtrT> LoadJSTypedArrayLength(TNode<JSTypedArray> typed_array);
+  TNode<UintPtrT> LoadJSTypedArrayLengthAndCheckDetached(
+      TNode<JSTypedArray> typed_array, Label* detached);
   // Helper for length tracking JSTypedArrays and JSTypedArrays backed by
   // ResizableArrayBuffer.
   TNode<UintPtrT> LoadVariableLengthJSTypedArrayLength(
@@ -3513,6 +3562,10 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
   TNode<UintPtrT> LoadVariableLengthJSTypedArrayByteLength(
       TNode<Context> context, TNode<JSTypedArray> array,
       TNode<JSArrayBuffer> buffer);
+  void IsTypedArrayDetachedOrOutOfBounds(TNode<JSTypedArray> array,
+                                         Label* detached_or_oob,
+                                         Label* not_detached_nor_oob);
+
   TNode<IntPtrT> RabGsabElementsKindToElementByteSize(
       TNode<Int32T> elementsKind);
   TNode<RawPtrT> LoadJSTypedArrayDataPtr(TNode<JSTypedArray> typed_array);
@@ -4154,7 +4207,7 @@ class PrototypeCheckAssembler : public CodeStubAssembler {
   PrototypeCheckAssembler(compiler::CodeAssemblerState* state, Flags flags,
                           TNode<NativeContext> native_context,
                           TNode<Map> initial_prototype_map,
-                          Vector<DescriptorIndexNameValue> properties);
+                          base::Vector<DescriptorIndexNameValue> properties);
 
   void CheckAndBranch(TNode<HeapObject> prototype, Label* if_unmodified,
                       Label* if_modified);
@@ -4163,7 +4216,7 @@ class PrototypeCheckAssembler : public CodeStubAssembler {
   const Flags flags_;
   const TNode<NativeContext> native_context_;
   const TNode<Map> initial_prototype_map_;
-  const Vector<DescriptorIndexNameValue> properties_;
+  const base::Vector<DescriptorIndexNameValue> properties_;
 };
 
 DEFINE_OPERATORS_FOR_FLAGS(CodeStubAssembler::AllocationFlags)

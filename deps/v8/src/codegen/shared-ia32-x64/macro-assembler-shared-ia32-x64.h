@@ -21,9 +21,29 @@ namespace v8 {
 namespace internal {
 class Assembler;
 
+// For WebAssembly we care about the full floating point register. If we are not
+// running Wasm, we can get away with saving half of those registers.
+#if V8_ENABLE_WEBASSEMBLY
+constexpr int kStackSavedSavedFPSize = 2 * kDoubleSize;
+#else
+constexpr int kStackSavedSavedFPSize = kDoubleSize;
+#endif  // V8_ENABLE_WEBASSEMBLY
+
+// Base class for SharedTurboAssemblerBase. This class contains macro-assembler
+// functions that can be shared across ia32 and x64 without any template
+// machinery, i.e. does not require the CRTP pattern that
+// SharedTurboAssemblerBase exposes. This allows us to keep the bulk of
+// definition inside a separate source file, rather than putting everything
+// inside this header.
 class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
  public:
   using TurboAssemblerBase::TurboAssemblerBase;
+
+  void Move(Register dst, uint32_t src);
+  // Move if registers are not identical.
+  void Move(Register dst, Register src);
+  void Add(Register dst, Immediate src);
+  void And(Register dst, Immediate src);
 
   void Movapd(XMMRegister dst, XMMRegister src);
 
@@ -151,6 +171,8 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   // Keep this list sorted by required extension, then instruction name.
   AVX_OP(Addpd, addpd)
   AVX_OP(Addps, addps)
+  AVX_OP(Addsd, addsd)
+  AVX_OP(Addss, addss)
   AVX_OP(Andnpd, andnpd)
   AVX_OP(Andnps, andnps)
   AVX_OP(Andpd, andpd)
@@ -158,7 +180,9 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP(Cmpeqpd, cmpeqpd)
   AVX_OP(Cmplepd, cmplepd)
   AVX_OP(Cmpleps, cmpleps)
+  AVX_OP(Cmpltps, cmpltps)
   AVX_OP(Cmpltpd, cmpltpd)
+  AVX_OP(Cmpneqps, cmpneqps)
   AVX_OP(Cmpneqpd, cmpneqpd)
   AVX_OP(Cmpunordpd, cmpunordpd)
   AVX_OP(Cmpunordps, cmpunordps)
@@ -169,6 +193,8 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP(Cvttps2dq, cvttps2dq)
   AVX_OP(Divpd, divpd)
   AVX_OP(Divps, divps)
+  AVX_OP(Divsd, divsd)
+  AVX_OP(Divss, divss)
   AVX_OP(Maxpd, maxpd)
   AVX_OP(Maxps, maxps)
   AVX_OP(Minpd, minpd)
@@ -186,6 +212,8 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP(Movups, movups)
   AVX_OP(Mulpd, mulpd)
   AVX_OP(Mulps, mulps)
+  AVX_OP(Mulsd, mulsd)
+  AVX_OP(Mulss, mulss)
   AVX_OP(Orpd, orpd)
   AVX_OP(Orps, orps)
   AVX_OP(Packssdw, packssdw)
@@ -195,6 +223,7 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP(Paddd, paddd)
   AVX_OP(Paddq, paddq)
   AVX_OP(Paddsb, paddsb)
+  AVX_OP(Paddsw, paddsw)
   AVX_OP(Paddusb, paddusb)
   AVX_OP(Paddusw, paddusw)
   AVX_OP(Paddw, paddw)
@@ -202,13 +231,19 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP(Pavgb, pavgb)
   AVX_OP(Pavgw, pavgw)
   AVX_OP(Pcmpgtb, pcmpgtb)
+  AVX_OP(Pcmpgtd, pcmpgtd)
   AVX_OP(Pcmpeqd, pcmpeqd)
+  AVX_OP(Pcmpeqw, pcmpeqw)
+  AVX_OP(Pinsrw, pinsrw)
+  AVX_OP(Pmaxsw, pmaxsw)
   AVX_OP(Pmaxub, pmaxub)
+  AVX_OP(Pminsw, pminsw)
   AVX_OP(Pminub, pminub)
   AVX_OP(Pmovmskb, pmovmskb)
   AVX_OP(Pmullw, pmullw)
   AVX_OP(Pmuludq, pmuludq)
   AVX_OP(Por, por)
+  AVX_OP(Pshufb, pshufb)
   AVX_OP(Pshufd, pshufd)
   AVX_OP(Pshufhw, pshufhw)
   AVX_OP(Pshuflw, pshuflw)
@@ -224,7 +259,9 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP(Psubd, psubd)
   AVX_OP(Psubq, psubq)
   AVX_OP(Psubsb, psubsb)
+  AVX_OP(Psubsw, psubsw)
   AVX_OP(Psubusb, psubusb)
+  AVX_OP(Psubusw, psubusw)
   AVX_OP(Psubw, psubw)
   AVX_OP(Punpckhbw, punpckhbw)
   AVX_OP(Punpckhdq, punpckhdq)
@@ -243,6 +280,8 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP(Sqrtss, sqrtss)
   AVX_OP(Subpd, subpd)
   AVX_OP(Subps, subps)
+  AVX_OP(Subsd, subsd)
+  AVX_OP(Subss, subss)
   AVX_OP(Unpcklps, unpcklps)
   AVX_OP(Xorpd, xorpd)
   AVX_OP(Xorps, xorps)
@@ -255,6 +294,7 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP_SSSE3(Pabsd, pabsd)
   AVX_OP_SSSE3(Pabsw, pabsw)
   AVX_OP_SSSE3(Palignr, palignr)
+  AVX_OP_SSSE3(Pmulhrsw, pmulhrsw)
   AVX_OP_SSSE3(Psignb, psignb)
   AVX_OP_SSSE3(Psignd, psignd)
   AVX_OP_SSSE3(Psignw, psignw)
@@ -263,15 +303,22 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   AVX_OP_SSE4_1(Pblendw, pblendw)
   AVX_OP_SSE4_1(Pextrb, pextrb)
   AVX_OP_SSE4_1(Pextrw, pextrw)
+  AVX_OP_SSE4_1(Pinsrb, pinsrb)
   AVX_OP_SSE4_1(Pmaxsb, pmaxsb)
   AVX_OP_SSE4_1(Pmaxsd, pmaxsd)
+  AVX_OP_SSE4_1(Pmaxud, pmaxud)
+  AVX_OP_SSE4_1(Pmaxuw, pmaxuw)
   AVX_OP_SSE4_1(Pminsb, pminsb)
+  AVX_OP_SSE4_1(Pminsd, pminsd)
+  AVX_OP_SSE4_1(Pminud, pminud)
+  AVX_OP_SSE4_1(Pminuw, pminuw)
   AVX_OP_SSE4_1(Pmovsxbw, pmovsxbw)
   AVX_OP_SSE4_1(Pmovsxdq, pmovsxdq)
   AVX_OP_SSE4_1(Pmovsxwd, pmovsxwd)
   AVX_OP_SSE4_1(Pmovzxbw, pmovzxbw)
   AVX_OP_SSE4_1(Pmovzxdq, pmovzxdq)
   AVX_OP_SSE4_1(Pmovzxwd, pmovzxwd)
+  AVX_OP_SSE4_1(Pmulld, pmulld)
   AVX_OP_SSE4_1(Ptest, ptest)
   AVX_OP_SSE4_1(Roundpd, roundpd)
   AVX_OP_SSE4_1(Roundps, roundps)
@@ -286,6 +333,22 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   void F32x4Splat(XMMRegister dst, DoubleRegister src);
   void F32x4ExtractLane(FloatRegister dst, XMMRegister src, uint8_t lane);
   void S128Store32Lane(Operand dst, XMMRegister src, uint8_t laneidx);
+  void I8x16Splat(XMMRegister dst, Register src, XMMRegister scratch);
+  void I8x16Splat(XMMRegister dst, Operand src, XMMRegister scratch);
+  void I8x16Shl(XMMRegister dst, XMMRegister src1, uint8_t src2, Register tmp1,
+                XMMRegister tmp2);
+  void I8x16Shl(XMMRegister dst, XMMRegister src1, Register src2, Register tmp1,
+                XMMRegister tmp2, XMMRegister tmp3);
+  void I8x16ShrS(XMMRegister dst, XMMRegister src1, uint8_t src2,
+                 XMMRegister tmp);
+  void I8x16ShrS(XMMRegister dst, XMMRegister src1, Register src2,
+                 Register tmp1, XMMRegister tmp2, XMMRegister tmp3);
+  void I8x16ShrU(XMMRegister dst, XMMRegister src1, uint8_t src2, Register tmp1,
+                 XMMRegister tmp2);
+  void I8x16ShrU(XMMRegister dst, XMMRegister src1, Register src2,
+                 Register tmp1, XMMRegister tmp2, XMMRegister tmp3);
+  void I16x8Splat(XMMRegister dst, Register src);
+  void I16x8Splat(XMMRegister dst, Operand src);
   void I16x8ExtMulLow(XMMRegister dst, XMMRegister src1, XMMRegister src2,
                       XMMRegister scrat, bool is_signed);
   void I16x8ExtMulHighS(XMMRegister dst, XMMRegister src1, XMMRegister src2,
@@ -295,9 +358,15 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   void I16x8SConvertI8x16High(XMMRegister dst, XMMRegister src);
   void I16x8UConvertI8x16High(XMMRegister dst, XMMRegister src,
                               XMMRegister scratch);
+  // Will move src1 to dst if AVX is not supported.
+  void I16x8Q15MulRSatS(XMMRegister dst, XMMRegister src1, XMMRegister src2,
+                        XMMRegister scratch);
   // Requires that dst == src1 if AVX is not supported.
   void I32x4ExtMul(XMMRegister dst, XMMRegister src1, XMMRegister src2,
                    XMMRegister scratch, bool low, bool is_signed);
+  // Requires dst == src if AVX is not supported.
+  void I32x4SConvertF32x4(XMMRegister dst, XMMRegister src,
+                          XMMRegister scratch);
   void I32x4SConvertI16x8High(XMMRegister dst, XMMRegister src);
   void I32x4UConvertI16x8High(XMMRegister dst, XMMRegister src,
                               XMMRegister scratch);
@@ -307,6 +376,11 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
                 XMMRegister scratch);
   void I64x2GeS(XMMRegister dst, XMMRegister src0, XMMRegister src1,
                 XMMRegister scratch);
+  void I64x2ShrS(XMMRegister dst, XMMRegister src, uint8_t shift,
+                 XMMRegister xmm_tmp);
+  void I64x2ShrS(XMMRegister dst, XMMRegister src, Register shift,
+                 XMMRegister xmm_tmp, XMMRegister xmm_shift,
+                 Register tmp_shift);
   void I64x2ExtMul(XMMRegister dst, XMMRegister src1, XMMRegister src2,
                    XMMRegister scratch, bool low, bool is_signed);
   void I64x2SConvertI32x4High(XMMRegister dst, XMMRegister src);
@@ -316,7 +390,141 @@ class V8_EXPORT_PRIVATE SharedTurboAssembler : public TurboAssemblerBase {
   // Requires dst == mask when AVX is not supported.
   void S128Select(XMMRegister dst, XMMRegister mask, XMMRegister src1,
                   XMMRegister src2, XMMRegister scratch);
+  void S128Load8Splat(XMMRegister dst, Operand src, XMMRegister scratch);
+  void S128Load16Splat(XMMRegister dst, Operand src, XMMRegister scratch);
+  void S128Load32Splat(XMMRegister dst, Operand src);
+  void S128Store64Lane(Operand dst, XMMRegister src, uint8_t laneidx);
+
+ private:
+  template <typename Op>
+  void I8x16SplatPreAvx2(XMMRegister dst, Op src, XMMRegister scratch);
+  template <typename Op>
+  void I16x8SplatPreAvx2(XMMRegister dst, Op src);
 };
+
+// Common base class template shared by ia32 and x64 TurboAssembler. This uses
+// the Curiously Recurring Template Pattern (CRTP), where Impl is the actual
+// class (subclass of SharedTurboAssemblerBase instantiated with the actual
+// class). This allows static polymorphism, where member functions can be move
+// into SharedTurboAssembler, and we can also call into member functions
+// defined in ia32 or x64 specific TurboAssembler from within this template
+// class, via Impl.
+//
+// Note: all member functions must be defined in this header file so that the
+// compiler can generate code for the function definitions. See
+// https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl for rationale.
+// If a function does not need polymorphism, move it into SharedTurboAssembler,
+// and define it outside of this header.
+template <typename Impl>
+class V8_EXPORT_PRIVATE SharedTurboAssemblerBase : public SharedTurboAssembler {
+  using SharedTurboAssembler::SharedTurboAssembler;
+
+ public:
+  void F64x2ConvertLowI32x4U(XMMRegister dst, XMMRegister src,
+                             Register scratch) {
+    ASM_CODE_COMMENT(this);
+    // dst = [ src_low, 0x43300000, src_high, 0x4330000 ];
+    // 0x43300000'00000000 is a special double where the significand bits
+    // precisely represents all uint32 numbers.
+    if (!CpuFeatures::IsSupported(AVX) && dst != src) {
+      movaps(dst, src);
+      src = dst;
+    }
+    Unpcklps(dst, src,
+             ExternalReferenceAsOperand(
+                 ExternalReference::
+                     address_of_wasm_f64x2_convert_low_i32x4_u_int_mask(),
+                 scratch));
+    Subpd(dst,
+          ExternalReferenceAsOperand(
+              ExternalReference::address_of_wasm_double_2_power_52(), scratch));
+  }
+
+  void I32x4TruncSatF64x2SZero(XMMRegister dst, XMMRegister src,
+                               XMMRegister scratch, Register tmp) {
+    if (CpuFeatures::IsSupported(AVX)) {
+      CpuFeatureScope avx_scope(this, AVX);
+      XMMRegister original_dst = dst;
+      // Make sure we don't overwrite src.
+      if (dst == src) {
+        DCHECK_NE(src, scratch);
+        dst = scratch;
+      }
+      // dst = 0 if src == NaN, else all ones.
+      vcmpeqpd(dst, src, src);
+      // dst = 0 if src == NaN, else INT32_MAX as double.
+      vandpd(
+          dst, dst,
+          ExternalReferenceAsOperand(
+              ExternalReference::address_of_wasm_int32_max_as_double(), tmp));
+      // dst = 0 if src == NaN, src is saturated to INT32_MAX as double.
+      vminpd(dst, src, dst);
+      // Values > INT32_MAX already saturated, values < INT32_MIN raises an
+      // exception, which is masked and returns 0x80000000.
+      vcvttpd2dq(original_dst, dst);
+    } else {
+      if (dst != src) {
+        movaps(dst, src);
+      }
+      movaps(scratch, dst);
+      cmpeqpd(scratch, dst);
+      andps(scratch,
+            ExternalReferenceAsOperand(
+                ExternalReference::address_of_wasm_int32_max_as_double(), tmp));
+      minpd(dst, scratch);
+      cvttpd2dq(dst, dst);
+    }
+  }
+
+  void I32x4TruncSatF64x2UZero(XMMRegister dst, XMMRegister src,
+                               XMMRegister scratch, Register tmp) {
+    if (CpuFeatures::IsSupported(AVX)) {
+      CpuFeatureScope avx_scope(this, AVX);
+      vxorpd(scratch, scratch, scratch);
+      // Saturate to 0.
+      vmaxpd(dst, src, scratch);
+      // Saturate to UINT32_MAX.
+      vminpd(
+          dst, dst,
+          ExternalReferenceAsOperand(
+              ExternalReference::address_of_wasm_uint32_max_as_double(), tmp));
+      // Truncate.
+      vroundpd(dst, dst, kRoundToZero);
+      // Add to special double where significant bits == uint32.
+      vaddpd(dst, dst,
+             ExternalReferenceAsOperand(
+                 ExternalReference::address_of_wasm_double_2_power_52(), tmp));
+      // Extract low 32 bits of each double's significand, zero top lanes.
+      // dst = [dst[0], dst[2], 0, 0]
+      vshufps(dst, dst, scratch, 0x88);
+    } else {
+      CpuFeatureScope scope(this, SSE4_1);
+      if (dst != src) {
+        movaps(dst, src);
+      }
+      xorps(scratch, scratch);
+      maxpd(dst, scratch);
+      minpd(dst, ExternalReferenceAsOperand(
+                     ExternalReference::address_of_wasm_uint32_max_as_double(),
+                     tmp));
+      roundpd(dst, dst, kRoundToZero);
+      addpd(dst,
+            ExternalReferenceAsOperand(
+                ExternalReference::address_of_wasm_double_2_power_52(), tmp));
+      shufps(dst, scratch, 0x88);
+    }
+  }
+
+ private:
+  // All implementation-specific methods must be called through this.
+  Impl* impl() { return static_cast<Impl*>(this); }
+
+  Operand ExternalReferenceAsOperand(ExternalReference reference,
+                                     Register scratch) {
+    return impl()->ExternalReferenceAsOperand(reference, scratch);
+  }
+};
+
 }  // namespace internal
 }  // namespace v8
 #endif  // V8_CODEGEN_SHARED_IA32_X64_MACRO_ASSEMBLER_SHARED_IA32_X64_H_

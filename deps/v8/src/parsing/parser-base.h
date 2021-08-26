@@ -6,6 +6,7 @@
 #define V8_PARSING_PARSER_BASE_H_
 
 #include <stdint.h>
+
 #include <utility>
 #include <vector>
 
@@ -18,19 +19,22 @@
 #include "src/codegen/bailout-reason.h"
 #include "src/common/globals.h"
 #include "src/common/message-template.h"
-#include "src/logging/counters.h"
 #include "src/logging/log.h"
+#include "src/logging/runtime-call-stats-scope.h"
 #include "src/objects/function-kind.h"
 #include "src/parsing/expression-scope.h"
 #include "src/parsing/func-name-inferrer.h"
 #include "src/parsing/parse-info.h"
 #include "src/parsing/scanner.h"
 #include "src/parsing/token.h"
+#include "src/regexp/regexp.h"
 #include "src/utils/pointer-with-payload.h"
 #include "src/zone/zone-chunk-list.h"
 
 namespace v8 {
 namespace internal {
+
+class PreParserIdentifier;
 
 enum FunctionNameValidity {
   kFunctionNameIsStrictReserved,
@@ -240,14 +244,13 @@ class ParserBase {
   const Impl* impl() const { return static_cast<const Impl*>(this); }
 
   ParserBase(Zone* zone, Scanner* scanner, uintptr_t stack_limit,
-             v8::Extension* extension, AstValueFactory* ast_value_factory,
+             AstValueFactory* ast_value_factory,
              PendingCompilationErrorHandler* pending_error_handler,
              RuntimeCallStats* runtime_call_stats, Logger* logger,
              UnoptimizedCompileFlags flags, bool parsing_on_main_thread)
       : scope_(nullptr),
         original_scope_(nullptr),
         function_state_(nullptr),
-        extension_(extension),
         fni_(ast_value_factory),
         ast_value_factory_(ast_value_factory),
         ast_node_factory_(ast_value_factory, zone),
@@ -594,7 +597,6 @@ class ParserBase {
           instance_fields(parser->impl()->NewClassPropertyList(4)),
           constructor(parser->impl()->NullExpression()),
           has_seen_constructor(false),
-          has_name_static_property(false),
           has_static_computed_names(false),
           has_static_elements(false),
           has_static_private_methods(false),
@@ -614,7 +616,6 @@ class ParserBase {
     FunctionLiteralT constructor;
 
     bool has_seen_constructor;
-    bool has_name_static_property;
     bool has_static_computed_names;
     bool has_static_elements;
     bool has_static_private_methods;
@@ -1076,22 +1077,24 @@ class ParserBase {
   }
 
   // Report syntax errors.
-  V8_NOINLINE void ReportMessage(MessageTemplate message) {
-    Scanner::Location source_location = scanner()->location();
-    impl()->ReportMessageAt(source_location, message,
-                            static_cast<const char*>(nullptr));
+  template <typename... Ts>
+  V8_NOINLINE void ReportMessage(MessageTemplate message, const Ts&... args) {
+    ReportMessageAt(scanner()->location(), message, args...);
   }
 
-  template <typename T>
-  V8_NOINLINE void ReportMessage(MessageTemplate message, T arg) {
-    Scanner::Location source_location = scanner()->location();
-    impl()->ReportMessageAt(source_location, message, arg);
+  template <typename... Ts>
+  V8_NOINLINE void ReportMessageAt(Scanner::Location source_location,
+                                   MessageTemplate message, const Ts&... args) {
+    impl()->pending_error_handler()->ReportMessageAt(
+        source_location.beg_pos, source_location.end_pos, message, args...);
+    scanner()->set_parser_error();
   }
 
-  V8_NOINLINE void ReportMessageAt(Scanner::Location location,
-                                   MessageTemplate message) {
-    impl()->ReportMessageAt(location, message,
-                            static_cast<const char*>(nullptr));
+  V8_NOINLINE void ReportMessageAt(Scanner::Location source_location,
+                                   MessageTemplate message,
+                                   const PreParserIdentifier& arg0) {
+    ReportMessageAt(source_location, message,
+                    impl()->PreParserIdentifierToAstRawString(arg0));
   }
 
   V8_NOINLINE void ReportUnexpectedToken(Token::Value token);
@@ -1142,6 +1145,11 @@ class ParserBase {
 
   ExpressionT ParsePropertyOrPrivatePropertyName();
 
+  const AstRawString* GetNextSymbolForRegExpLiteral() const {
+    return scanner()->NextSymbol(ast_value_factory());
+  }
+  bool ValidateRegExpLiteral(const AstRawString* pattern, RegExpFlags flags,
+                             const char** error_message);
   ExpressionT ParseRegExpLiteral();
 
   ExpressionT ParseBindingPattern();
@@ -1540,7 +1548,6 @@ class ParserBase {
   Scope* object_literal_scope_ = nullptr;
   Scope* original_scope_;  // The top scope for the current parsing item.
   FunctionState* function_state_;  // Function state stack.
-  v8::Extension* extension_;
   FuncNameInferrer fni_;
   AstValueFactory* ast_value_factory_;  // Not owned.
   typename Types::Factory ast_node_factory_;
@@ -1749,6 +1756,25 @@ ParserBase<Impl>::ParsePropertyOrPrivatePropertyName() {
 }
 
 template <typename Impl>
+bool ParserBase<Impl>::ValidateRegExpLiteral(const AstRawString* pattern,
+                                             RegExpFlags flags,
+                                             const char** error_message) {
+  // TODO(jgruber): If already validated in the preparser, skip validation in
+  // the parser.
+  DisallowGarbageCollection no_gc;
+  const unsigned char* d = pattern->raw_data();
+  if (pattern->is_one_byte()) {
+    return RegExp::VerifySyntax(zone(), stack_limit(),
+                                static_cast<const uint8_t*>(d),
+                                pattern->length(), flags, error_message, no_gc);
+  } else {
+    return RegExp::VerifySyntax(zone(), stack_limit(),
+                                reinterpret_cast<const uint16_t*>(d),
+                                pattern->length(), flags, error_message, no_gc);
+  }
+}
+
+template <typename Impl>
 typename ParserBase<Impl>::ExpressionT ParserBase<Impl>::ParseRegExpLiteral() {
   int pos = peek_position();
   if (!scanner()->ScanRegExpPattern()) {
@@ -1757,15 +1783,20 @@ typename ParserBase<Impl>::ExpressionT ParserBase<Impl>::ParseRegExpLiteral() {
     return impl()->FailureExpression();
   }
 
-  IdentifierT js_pattern = impl()->GetNextSymbol();
-  Maybe<int> flags = scanner()->ScanRegExpFlags();
-  if (flags.IsNothing()) {
+  const AstRawString* js_pattern = GetNextSymbolForRegExpLiteral();
+  base::Optional<RegExpFlags> flags = scanner()->ScanRegExpFlags();
+  if (!flags.has_value()) {
     Next();
     ReportMessage(MessageTemplate::kMalformedRegExpFlags);
     return impl()->FailureExpression();
   }
   Next();
-  return factory()->NewRegExpLiteral(js_pattern, flags.FromJust(), pos);
+  const char* error_message;
+  if (!ValidateRegExpLiteral(js_pattern, flags.value(), &error_message)) {
+    ReportMessage(MessageTemplate::kMalformedRegExp, js_pattern, error_message);
+    return impl()->FailureExpression();
+  }
+  return factory()->NewRegExpLiteral(js_pattern, flags.value(), pos);
 }
 
 template <typename Impl>
@@ -1949,7 +1980,7 @@ ParserBase<Impl>::ParsePrimaryExpression() {
       return ParseTemplateLiteral(impl()->NullExpression(), beg_pos, false);
 
     case Token::MOD:
-      if (flags().allow_natives_syntax() || extension_ != nullptr) {
+      if (flags().allow_natives_syntax() || impl()->ParsingExtension()) {
         return ParseV8Intrinsic();
       }
       break;
@@ -2313,11 +2344,6 @@ ParserBase<Impl>::ParseClassPropertyDefinition(ClassInfo* class_info,
     }
   } else {
     name_expression = ParseProperty(prop_info);
-  }
-
-  if (!class_info->has_name_static_property && prop_info->is_static &&
-      impl()->IsName(prop_info->name)) {
-    class_info->has_name_static_property = true;
   }
 
   switch (prop_info->kind) {
@@ -3461,11 +3487,6 @@ ParserBase<Impl>::ParseLeftHandSideContinuation(ExpressionT result) {
           // function literal eagerly, we can also compile it eagerly.
           if (result->IsFunctionLiteral()) {
             result->AsFunctionLiteral()->SetShouldEagerCompile();
-            if (scope()->is_script_scope()) {
-              // A non-top-level iife is likely to be executed multiple times
-              // and so shouldn`t be optimized as one-shot.
-              result->AsFunctionLiteral()->mark_as_oneshot_iife();
-            }
           }
         }
         bool has_spread;
@@ -5414,10 +5435,10 @@ ParserBase<Impl>::ParseExpressionOrLabelledStatement(
     }
   }
 
-  // If we have an extension, we allow a native function declaration.
-  // A native function declaration starts with "native function" with
-  // no line-terminator between the two words.
-  if (extension_ != nullptr && peek() == Token::FUNCTION &&
+  // We allow a native function declaration if we're parsing the source for an
+  // extension. A native function declaration starts with "native function"
+  // with no line-terminator between the two words.
+  if (impl()->ParsingExtension() && peek() == Token::FUNCTION &&
       !scanner()->HasLineTerminatorBeforeNext() && impl()->IsNative(expr) &&
       !scanner()->literal_contains_escapes()) {
     return ParseNativeDeclaration();

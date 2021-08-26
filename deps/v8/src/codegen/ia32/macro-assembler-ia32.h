@@ -68,9 +68,10 @@ class StackArgumentsAccessor {
   DISALLOW_IMPLICIT_CONSTRUCTORS(StackArgumentsAccessor);
 };
 
-class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
+class V8_EXPORT_PRIVATE TurboAssembler
+    : public SharedTurboAssemblerBase<TurboAssembler> {
  public:
-  using SharedTurboAssembler::SharedTurboAssembler;
+  using SharedTurboAssemblerBase<TurboAssembler>::SharedTurboAssemblerBase;
 
   void CheckPageFlag(Register object, Register scratch, int mask, Condition cc,
                      Label* condition_met,
@@ -139,7 +140,7 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
   void Move(XMMRegister dst, float src) { Move(dst, bit_cast<uint32_t>(src)); }
   void Move(XMMRegister dst, double src) { Move(dst, bit_cast<uint64_t>(src)); }
 
-  Operand EntryFromBuiltinIndexAsOperand(Builtins::Name builtin_index);
+  Operand EntryFromBuiltinAsOperand(Builtin builtin);
 
   void Call(Register reg) { call(reg); }
   void Call(Operand op) { call(op); }
@@ -149,28 +150,23 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
   // Load the builtin given by the Smi in |builtin_index| into the same
   // register.
   void LoadEntryFromBuiltinIndex(Register builtin_index);
-  void CallBuiltinByIndex(Register builtin_index) override;
-  void CallBuiltin(int builtin_index);
+  void CallBuiltinByIndex(Register builtin_index);
+  void CallBuiltin(Builtin builtin);
 
-  void LoadCodeObjectEntry(Register destination, Register code_object) override;
-  void CallCodeObject(Register code_object) override;
+  void LoadCodeObjectEntry(Register destination, Register code_object);
+  void CallCodeObject(Register code_object);
   void JumpCodeObject(Register code_object,
-                      JumpMode jump_mode = JumpMode::kJump) override;
-  void Jump(const ExternalReference& reference) override;
-
-  void RetpolineCall(Register reg);
-  void RetpolineCall(Address destination, RelocInfo::Mode rmode);
+                      JumpMode jump_mode = JumpMode::kJump);
+  void Jump(const ExternalReference& reference);
 
   void Jump(Handle<Code> code_object, RelocInfo::Mode rmode);
 
   void LoadMap(Register destination, Register object);
 
-  void RetpolineJump(Register reg);
+  void Trap();
+  void DebugBreak();
 
-  void Trap() override;
-  void DebugBreak() override;
-
-  void CallForDeoptimization(Builtins::Name target, int deopt_id, Label* exit,
+  void CallForDeoptimization(Builtin target, int deopt_id, Label* exit,
                              DeoptimizeKind kind, Label* ret,
                              Label* jump_deoptimization_entry_label);
 
@@ -203,19 +199,6 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
     SmiUntag(output);
   }
 
-  // Removes current frame and its arguments from the stack preserving the
-  // arguments and a return address pushed to the stack for the next call. Both
-  // |callee_args_count| and |caller_args_count| do not include receiver.
-  // |callee_args_count| is not modified. |caller_args_count| is trashed.
-  // |number_of_temp_values_after_return_address| specifies the number of words
-  // pushed to the stack after the return address. This is to allow "allocation"
-  // of scratch registers that this function requires by saving their values on
-  // the stack.
-  void PrepareForTailCall(Register callee_args_count,
-                          Register caller_args_count, Register scratch0,
-                          Register scratch1,
-                          int number_of_temp_values_after_return_address);
-
   // Before calling a C-function from generated code, align arguments on stack.
   // After aligning the frame, arguments must be stored in esp[0], esp[4],
   // etc., not pushed. The argument count assumes all arguments are word sized.
@@ -244,6 +227,20 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
   void StubPrologue(StackFrame::Type type);
   void Prologue();
 
+  // Helpers for argument handling
+  enum ArgumentsCountMode { kCountIncludesReceiver, kCountExcludesReceiver };
+  enum ArgumentsCountType { kCountIsInteger, kCountIsSmi, kCountIsBytes };
+  void DropArguments(Register count, Register scratch, ArgumentsCountType type,
+                     ArgumentsCountMode mode);
+  void DropArgumentsAndPushNewReceiver(Register argc, Register receiver,
+                                       Register scratch,
+                                       ArgumentsCountType type,
+                                       ArgumentsCountMode mode);
+  void DropArgumentsAndPushNewReceiver(Register argc, Operand receiver,
+                                       Register scratch,
+                                       ArgumentsCountType type,
+                                       ArgumentsCountMode mode);
+
   void Lzcnt(Register dst, Register src) { Lzcnt(dst, Operand(src)); }
   void Lzcnt(Register dst, Operand src);
 
@@ -269,13 +266,13 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
 
   void InitializeRootRegister();
 
-  void LoadRoot(Register destination, RootIndex index) override;
+  Operand RootAsOperand(RootIndex index);
+  void LoadRoot(Register destination, RootIndex index) final;
 
   // Indirect root-relative loads.
-  void LoadFromConstantsTable(Register destination,
-                              int constant_index) override;
-  void LoadRootRegisterOffset(Register destination, intptr_t offset) override;
-  void LoadRootRelative(Register destination, int32_t offset) override;
+  void LoadFromConstantsTable(Register destination, int constant_index) final;
+  void LoadRootRegisterOffset(Register destination, intptr_t offset) final;
+  void LoadRootRelative(Register destination, int32_t offset) final;
 
   void PushPC();
 
@@ -326,6 +323,7 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
     }                                                           \
   }
   AVX_OP3_WITH_MOVE(Cmpeqps, cmpeqps, XMMRegister, XMMRegister)
+  AVX_OP3_WITH_MOVE(Cmpeqps, cmpeqps, XMMRegister, Operand)
   AVX_OP3_WITH_MOVE(Movlps, movlps, XMMRegister, Operand)
   AVX_OP3_WITH_MOVE(Movhps, movhps, XMMRegister, Operand)
   AVX_OP3_WITH_MOVE(Pmaddwd, pmaddwd, XMMRegister, Operand)
@@ -394,21 +392,11 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
   }
   void Cvttsd2ui(Register dst, Operand src, XMMRegister tmp);
 
-  // Handles SSE and AVX. On SSE, moves src to dst if they are not equal.
-  void Pmulhrsw(XMMRegister dst, XMMRegister src1, XMMRegister src2);
-
   // These Wasm SIMD ops do not have direct lowerings on IA32. These
   // helpers are optimized to produce the fastest and smallest codegen.
   // Defined here to allow usage on both TurboFan and Liftoff.
-  void I16x8Q15MulRSatS(XMMRegister dst, XMMRegister src1, XMMRegister src2,
-                        XMMRegister scratch);
   void I8x16Popcnt(XMMRegister dst, XMMRegister src, XMMRegister tmp1,
                    XMMRegister tmp2, Register scratch);
-  void F64x2ConvertLowI32x4U(XMMRegister dst, XMMRegister src, Register tmp);
-  void I32x4TruncSatF64x2SZero(XMMRegister dst, XMMRegister src,
-                               XMMRegister scratch, Register tmp);
-  void I32x4TruncSatF64x2UZero(XMMRegister dst, XMMRegister src,
-                               XMMRegister scratch, Register tmp);
   void I16x8ExtAddPairwiseI8x16S(XMMRegister dst, XMMRegister src,
                                  XMMRegister tmp, Register scratch);
   void I16x8ExtAddPairwiseI8x16U(XMMRegister dst, XMMRegister src,
@@ -437,17 +425,20 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
     movd(dst, scratch);
   }
 
-  void SaveRegisters(RegList registers);
-  void RestoreRegisters(RegList registers);
+  void MaybeSaveRegisters(RegList registers);
+  void MaybeRestoreRegisters(RegList registers);
 
-  void CallRecordWriteStub(Register object, Register address,
-                           RememberedSetAction remembered_set_action,
-                           SaveFPRegsMode fp_mode);
-  void CallRecordWriteStub(Register object, Register address,
-                           RememberedSetAction remembered_set_action,
-                           SaveFPRegsMode fp_mode, Address wasm_target);
-  void CallEphemeronKeyBarrier(Register object, Register address,
+  void CallEphemeronKeyBarrier(Register object, Register slot_address,
                                SaveFPRegsMode fp_mode);
+
+  void CallRecordWriteStubSaveRegisters(
+      Register object, Register slot_address,
+      RememberedSetAction remembered_set_action, SaveFPRegsMode fp_mode,
+      StubCallMode mode = StubCallMode::kCallBuiltinPointer);
+  void CallRecordWriteStub(
+      Register object, Register slot_address,
+      RememberedSetAction remembered_set_action, SaveFPRegsMode fp_mode,
+      StubCallMode mode = StubCallMode::kCallBuiltinPointer);
 
   // Calculate how much stack space (in bytes) are required to store caller
   // registers excluding those specified in the arguments.
@@ -476,9 +467,6 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
   // This is an alternative to embedding the {CodeObject} handle as a reference.
   void ComputeCodeStartAddress(Register dst);
 
-  // TODO(860429): Remove remaining poisoning infrastructure on ia32.
-  void ResetSpeculationPoisonRegister() { UNREACHABLE(); }
-
   // Control-flow integrity:
 
   // Define a function entrypoint. This doesn't emit any code for this
@@ -489,10 +477,10 @@ class V8_EXPORT_PRIVATE TurboAssembler : public SharedTurboAssembler {
   // Define an exception handler and bind a label.
   void BindExceptionHandler(Label* label) { bind(label); }
 
-  void CallRecordWriteStub(Register object, Register address,
-                           RememberedSetAction remembered_set_action,
-                           SaveFPRegsMode fp_mode, int builtin_index,
-                           Address wasm_target);
+ protected:
+  // Drops arguments assuming that the return address was already popped.
+  void DropArguments(Register count, ArgumentsCountType type = kCountIsInteger,
+                     ArgumentsCountMode mode = kCountExcludesReceiver);
 };
 
 // MacroAssembler implements a collection of frequently used macros.
@@ -712,8 +700,16 @@ class V8_EXPORT_PRIVATE MacroAssembler : public TurboAssembler {
   // ---------------------------------------------------------------------------
   // StatsCounter support
 
-  void IncrementCounter(StatsCounter* counter, int value, Register scratch);
-  void DecrementCounter(StatsCounter* counter, int value, Register scratch);
+  void IncrementCounter(StatsCounter* counter, int value, Register scratch) {
+    if (!FLAG_native_code_counters) return;
+    EmitIncrementCounter(counter, value, scratch);
+  }
+  void EmitIncrementCounter(StatsCounter* counter, int value, Register scratch);
+  void DecrementCounter(StatsCounter* counter, int value, Register scratch) {
+    if (!FLAG_native_code_counters) return;
+    EmitDecrementCounter(counter, value, scratch);
+  }
+  void EmitDecrementCounter(StatsCounter* counter, int value, Register scratch);
 
   // ---------------------------------------------------------------------------
   // Stack limit utilities

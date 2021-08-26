@@ -235,6 +235,7 @@ class V8_EXPORT_PRIVATE Operand {
   }
 
   Operand(const Operand&) V8_NOEXCEPT = default;
+  Operand& operator=(const Operand&) V8_NOEXCEPT = default;
 
   const Data& data() const { return data_; }
 
@@ -421,6 +422,15 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
     GetCode(isolate, desc, kNoSafepointTable, kNoHandlerTable);
   }
 
+  // This function is called when on-heap-compilation invariants are
+  // invalidated. For instance, when the assembler buffer grows or a GC happens
+  // between Code object allocation and Code object finalization.
+  void FixOnHeapReferences(bool update_embedded_objects = true);
+
+  // This function is called when we fallback from on-heap to off-heap
+  // compilation and patch on-heap references to handles.
+  void FixOnHeapReferencesToHandles();
+
   void FinalizeJumpOptimizationInfo();
 
   // Unused on this architecture.
@@ -438,6 +448,7 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
   static inline void set_target_address_at(
       Address pc, Address constant_pool, Address target,
       ICacheFlushMode icache_flush_mode = FLUSH_ICACHE_IF_NEEDED);
+  static inline int32_t relative_target_offset(Address target, Address pc);
 
   // This sets the branch destination (which is in the instruction on x64).
   // This is for calls and branches within generated code.
@@ -550,6 +561,7 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
   void Nop(int bytes = 1);
   // Aligns code to something that's optimal for a jump target for the platform.
   void CodeTargetAlign();
+  void LoopHeaderAlign();
 
   // Stack
   void pushfq();
@@ -1245,14 +1257,15 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
 
   void pmovmskb(Register dst, XMMRegister src);
 
+  void pinsrw(XMMRegister dst, Register src, uint8_t imm8);
+  void pinsrw(XMMRegister dst, Operand src, uint8_t imm8);
+
   // SSE 4.1 instruction
   void insertps(XMMRegister dst, XMMRegister src, byte imm8);
   void insertps(XMMRegister dst, Operand src, byte imm8);
   void pextrq(Register dst, XMMRegister src, int8_t imm8);
   void pinsrb(XMMRegister dst, Register src, uint8_t imm8);
   void pinsrb(XMMRegister dst, Operand src, uint8_t imm8);
-  void pinsrw(XMMRegister dst, Register src, uint8_t imm8);
-  void pinsrw(XMMRegister dst, Operand src, uint8_t imm8);
   void pinsrd(XMMRegister dst, Register src, uint8_t imm8);
   void pinsrd(XMMRegister dst, Operand src, uint8_t imm8);
   void pinsrq(XMMRegister dst, Register src, uint8_t imm8);
@@ -1340,9 +1353,11 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
   void vmovsd(Operand dst, XMMRegister src) { vsd(0x11, src, xmm0, dst); }
   void vmovdqa(XMMRegister dst, Operand src);
   void vmovdqa(XMMRegister dst, XMMRegister src);
+  void vmovdqa(YMMRegister dst, YMMRegister src);
   void vmovdqu(XMMRegister dst, Operand src);
   void vmovdqu(Operand dst, XMMRegister src);
   void vmovdqu(XMMRegister dst, XMMRegister src);
+  void vmovdqu(YMMRegister dst, YMMRegister src);
 
   void vmovlps(XMMRegister dst, XMMRegister src1, Operand src2);
   void vmovlps(Operand dst, XMMRegister src);
@@ -1853,8 +1868,8 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
 
   // Record a deoptimization reason that can be used by a log or cpu profiler.
   // Use --trace-deopt to enable.
-  void RecordDeoptReason(DeoptimizeReason reason, SourcePosition position,
-                         int id);
+  void RecordDeoptReason(DeoptimizeReason reason, uint32_t node_id,
+                         SourcePosition position, int id);
 
   // Writes a single word of data in the code stream.
   // Used for inline tables, e.g., jump-tables.
@@ -1865,6 +1880,13 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
     dq(data, rmode);
   }
   void dq(Label* label);
+
+#ifdef DEBUG
+  bool EmbeddedObjectMatches(int pc_offset, Handle<Object> object) {
+    return *reinterpret_cast<uint64_t*>(buffer_->start() + pc_offset) ==
+           (IsOnHeap() ? object->ptr() : object.address());
+  }
+#endif
 
   // Patch entries for partial constant pool.
   void PatchConstPool();

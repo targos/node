@@ -8,6 +8,7 @@
 #include "src/base/platform/wrappers.h"
 #include "src/heap/memory-chunk.h"
 #include "src/wasm/baseline/liftoff-assembler.h"
+#include "src/wasm/wasm-objects.h"
 
 namespace v8 {
 namespace internal {
@@ -128,46 +129,33 @@ inline MemOperand GetMemOp(LiftoffAssembler* assm,
                            UseScratchRegisterScope* temps, Register addr,
                            Register offset, T offset_imm,
                            bool i64_offset = false) {
-  if (offset.is_valid()) {
-    if (offset_imm == 0) {
-      return i64_offset ? MemOperand(addr.X(), offset.X())
-                        : MemOperand(addr.X(), offset.W(), UXTW);
-    }
-    DCHECK_GE(kMaxUInt32, offset_imm);
-    if (i64_offset) {
-      Register tmp = temps->AcquireX();
-      assm->Add(tmp, offset.X(), offset_imm);
-      return MemOperand(addr.X(), tmp);
-    } else {
-      Register tmp = temps->AcquireW();
-      assm->Add(tmp, offset.W(), offset_imm);
-      return MemOperand(addr.X(), tmp, UXTW);
-    }
+  if (!offset.is_valid()) return MemOperand(addr.X(), offset_imm);
+  Register effective_addr = addr.X();
+  if (offset_imm) {
+    effective_addr = temps->AcquireX();
+    assm->Add(effective_addr, addr.X(), offset_imm);
   }
-  return MemOperand(addr.X(), offset_imm);
+  return i64_offset ? MemOperand(effective_addr, offset.X())
+                    : MemOperand(effective_addr, offset.W(), UXTW);
 }
 
-// Certain load instructions do not support offset (register or immediate).
-// This creates a MemOperand that is suitable for such instructions by adding
-// |addr|, |offset| (if needed), and |offset_imm| into a temporary.
-inline MemOperand GetMemOpWithImmOffsetZero(LiftoffAssembler* assm,
-                                            UseScratchRegisterScope* temps,
-                                            Register addr, Register offset,
-                                            uintptr_t offset_imm) {
+// Compute the effective address (sum of |addr|, |offset| (if given) and
+// |offset_imm|) into a temporary register. This is needed for certain load
+// instructions that do not support an offset (register or immediate).
+// Returns |addr| if both |offset| and |offset_imm| are zero.
+inline Register GetEffectiveAddress(LiftoffAssembler* assm,
+                                    UseScratchRegisterScope* temps,
+                                    Register addr, Register offset,
+                                    uintptr_t offset_imm) {
+  if (!offset.is_valid() && offset_imm == 0) return addr;
   Register tmp = temps->AcquireX();
   if (offset.is_valid()) {
-    // offset has passed BoundsCheckMem in liftoff-compiler, and been unsigned
-    // extended, so it is fine to use the full width of the register.
-    assm->Add(tmp, addr, offset);
-    if (offset_imm != 0) {
-      assm->Add(tmp, tmp, offset_imm);
-    }
-  } else {
-    if (offset_imm != 0) {
-      assm->Add(tmp, addr, offset_imm);
-    }
+    // TODO(clemensb): This needs adaption for memory64.
+    assm->Add(tmp, addr, Operand(offset, UXTW));
+    addr = tmp;
   }
-  return MemOperand(tmp.X(), 0);
+  if (offset_imm != 0) assm->Add(tmp, addr, offset_imm);
+  return tmp;
 }
 
 enum class ShiftDirection : bool { kLeft, kRight };
@@ -316,10 +304,11 @@ void LiftoffAssembler::AlignFrameSize() {
   }
 }
 
-void LiftoffAssembler::PatchPrepareStackFrame(int offset) {
-  // The frame_size includes the frame marker. The frame marker has already been
-  // pushed on the stack though, so we don't need to allocate memory for it
-  // anymore.
+void LiftoffAssembler::PatchPrepareStackFrame(
+    int offset, SafepointTableBuilder* safepoint_table_builder) {
+  // The frame_size includes the frame marker and the instance slot. Both are
+  // pushed as part of frame construction, so we don't need to allocate memory
+  // for them anymore.
   int frame_size = GetTotalFrameSize() - 2 * kSystemPointerSize;
 
   // The stack pointer is required to be quadword aligned.
@@ -327,39 +316,66 @@ void LiftoffAssembler::PatchPrepareStackFrame(int offset) {
   DCHECK_EQ(frame_size, RoundUp(frame_size, kQuadWordSizeInBytes));
   DCHECK(IsImmAddSub(frame_size));
 
-#ifdef USE_SIMULATOR
-  // When using the simulator, deal with Liftoff which allocates the stack
-  // before checking it.
-  // TODO(arm): Remove this when the stack check mechanism will be updated.
-  if (frame_size > KB / 2) {
-    bailout(kOtherReason,
-            "Stack limited to 512 bytes to avoid a bug in StackCheck");
-    return;
-  }
-#endif
   PatchingAssembler patching_assembler(AssemblerOptions{},
                                        buffer_start_ + offset, 1);
-#if V8_OS_WIN
-  if (frame_size > kStackPageSize) {
-    // Generate OOL code (at the end of the function, where the current
-    // assembler is pointing) to do the explicit stack limit check (see
-    // https://docs.microsoft.com/en-us/previous-versions/visualstudio/
-    // visual-studio-6.0/aa227153(v=vs.60)).
-    // At the function start, emit a jump to that OOL code (from {offset} to
-    // {pc_offset()}).
-    int ool_offset = pc_offset() - offset;
-    patching_assembler.b(ool_offset >> kInstrSizeLog2);
 
-    // Now generate the OOL code.
-    Claim(frame_size, 1);
-    // Jump back to the start of the function (from {pc_offset()} to {offset +
-    // kInstrSize}).
-    int func_start_offset = offset + kInstrSize - pc_offset();
-    b(func_start_offset >> kInstrSizeLog2);
+  if (V8_LIKELY(frame_size < 4 * KB)) {
+    // This is the standard case for small frames: just subtract from SP and be
+    // done with it.
+    patching_assembler.PatchSubSp(frame_size);
     return;
   }
-#endif
-  patching_assembler.PatchSubSp(frame_size);
+
+  // The frame size is bigger than 4KB, so we might overflow the available stack
+  // space if we first allocate the frame and then do the stack check (we will
+  // need some remaining stack space for throwing the exception). That's why we
+  // check the available stack space before we allocate the frame. To do this we
+  // replace the {__ sub(sp, sp, framesize)} with a jump to OOL code that does
+  // this "extended stack check".
+  //
+  // The OOL code can simply be generated here with the normal assembler,
+  // because all other code generation, including OOL code, has already finished
+  // when {PatchPrepareStackFrame} is called. The function prologue then jumps
+  // to the current {pc_offset()} to execute the OOL code for allocating the
+  // large frame.
+
+  // Emit the unconditional branch in the function prologue (from {offset} to
+  // {pc_offset()}).
+  patching_assembler.b((pc_offset() - offset) >> kInstrSizeLog2);
+
+  // If the frame is bigger than the stack, we throw the stack overflow
+  // exception unconditionally. Thereby we can avoid the integer overflow
+  // check in the condition code.
+  RecordComment("OOL: stack check for large frame");
+  Label continuation;
+  if (frame_size < FLAG_stack_size * 1024) {
+    UseScratchRegisterScope temps(this);
+    Register stack_limit = temps.AcquireX();
+    Ldr(stack_limit,
+        FieldMemOperand(kWasmInstanceRegister,
+                        WasmInstanceObject::kRealStackLimitAddressOffset));
+    Ldr(stack_limit, MemOperand(stack_limit));
+    Add(stack_limit, stack_limit, Operand(frame_size));
+    Cmp(sp, stack_limit);
+    B(hs /* higher or same */, &continuation);
+  }
+
+  Call(wasm::WasmCode::kWasmStackOverflow, RelocInfo::WASM_STUB_CALL);
+  // The call will not return; just define an empty safepoint.
+  safepoint_table_builder->DefineSafepoint(this);
+  if (FLAG_debug_code) Brk(0);
+
+  bind(&continuation);
+
+  // Now allocate the stack space. Note that this might do more than just
+  // decrementing the SP; consult {TurboAssembler::Claim}.
+  Claim(frame_size, 1);
+
+  // Jump back to the start of the function, from {pc_offset()} to
+  // right after the reserved space for the {__ sub(sp, sp, framesize)} (which
+  // is a branch now).
+  int func_start_offset = offset + kInstrSize;
+  b((func_start_offset - pc_offset()) >> kInstrSizeLog2);
 }
 
 void LiftoffAssembler::FinishCode() { ForceConstantPoolEmissionWithoutJump(); }
@@ -470,11 +486,18 @@ void LiftoffAssembler::StoreTaggedPointer(Register dst_addr,
                                           LiftoffRegister src,
                                           LiftoffRegList pinned,
                                           SkipWriteBarrier skip_write_barrier) {
-  // Store the value.
   UseScratchRegisterScope temps(this);
-  MemOperand dst_op =
-      liftoff::GetMemOp(this, &temps, dst_addr, offset_reg, offset_imm);
-  StoreTaggedField(src.gp(), dst_op);
+  Operand offset_op = offset_reg.is_valid() ? Operand(offset_reg.W(), UXTW)
+                                            : Operand(offset_imm);
+  // For the write barrier (below), we cannot have both an offset register and
+  // an immediate offset. Add them to a 32-bit offset initially, but in a 64-bit
+  // register, because that's needed in the MemOperand below.
+  if (offset_reg.is_valid() && offset_imm) {
+    Register effective_offset = temps.AcquireX();
+    Add(effective_offset.W(), offset_reg.W(), offset_imm);
+    offset_op = effective_offset;
+  }
+  StoreTaggedField(src.gp(), MemOperand(dst_addr.X(), offset_op));
 
   if (skip_write_barrier || FLAG_disable_write_barriers) return;
 
@@ -491,12 +514,9 @@ void LiftoffAssembler::StoreTaggedPointer(Register dst_addr,
   }
   CheckPageFlag(src.gp(), MemoryChunk::kPointersToHereAreInterestingMask, ne,
                 &exit);
-  CallRecordWriteStub(dst_addr,
-                      dst_op.IsRegisterOffset()
-                          ? Operand(dst_op.regoffset().X())
-                          : Operand(dst_op.offset()),
-                      RememberedSetAction::kEmit, SaveFPRegsMode::kSave,
-                      wasm::WasmCode::kRecordWrite);
+  CallRecordWriteStubSaveRegisters(
+      dst_addr, offset_op, RememberedSetAction::kEmit, SaveFPRegsMode::kSave,
+      StubCallMode::kCallWasmRuntimeStub);
   bind(&exit);
 }
 
@@ -1153,12 +1173,7 @@ void LiftoffAssembler::emit_i32_ctz(Register dst, Register src) {
 }
 
 bool LiftoffAssembler::emit_i32_popcnt(Register dst, Register src) {
-  UseScratchRegisterScope temps(this);
-  VRegister scratch = temps.AcquireV(kFormat8B);
-  Fmov(scratch.S(), src.W());
-  Cnt(scratch, scratch);
-  Addv(scratch.B(), scratch);
-  Fmov(dst.W(), scratch.S());
+  PopcntHelper(dst.W(), src.W());
   return true;
 }
 
@@ -1173,12 +1188,7 @@ void LiftoffAssembler::emit_i64_ctz(LiftoffRegister dst, LiftoffRegister src) {
 
 bool LiftoffAssembler::emit_i64_popcnt(LiftoffRegister dst,
                                        LiftoffRegister src) {
-  UseScratchRegisterScope temps(this);
-  VRegister scratch = temps.AcquireV(kFormat8B);
-  Fmov(scratch.D(), src.gp().X());
-  Cnt(scratch, scratch);
-  Addv(scratch.B(), scratch);
-  Fmov(dst.gp().X(), scratch.D());
+  PopcntHelper(dst.gp().X(), src.gp().X());
   return true;
 }
 
@@ -1505,11 +1515,11 @@ bool LiftoffAssembler::emit_type_conversion(WasmOpcode opcode,
 }
 
 void LiftoffAssembler::emit_i32_signextend_i8(Register dst, Register src) {
-  sxtb(dst, src);
+  sxtb(dst.W(), src.W());
 }
 
 void LiftoffAssembler::emit_i32_signextend_i16(Register dst, Register src) {
-  sxth(dst, src);
+  sxth(dst.W(), src.W());
 }
 
 void LiftoffAssembler::emit_i64_signextend_i8(LiftoffRegister dst,
@@ -1643,8 +1653,8 @@ void LiftoffAssembler::LoadTransform(LiftoffRegister dst, Register src_addr,
   UseScratchRegisterScope temps(this);
   MemOperand src_op =
       transform == LoadTransformationKind::kSplat
-          ? liftoff::GetMemOpWithImmOffsetZero(this, &temps, src_addr,
-                                               offset_reg, offset_imm)
+          ? MemOperand{liftoff::GetEffectiveAddress(this, &temps, src_addr,
+                                                    offset_reg, offset_imm)}
           : liftoff::GetMemOp(this, &temps, src_addr, offset_reg, offset_imm);
   *protected_load_pc = pc_offset();
   MachineType memtype = type.mem_type();
@@ -1695,8 +1705,8 @@ void LiftoffAssembler::LoadLane(LiftoffRegister dst, LiftoffRegister src,
                                 uintptr_t offset_imm, LoadType type,
                                 uint8_t laneidx, uint32_t* protected_load_pc) {
   UseScratchRegisterScope temps(this);
-  MemOperand src_op = liftoff::GetMemOpWithImmOffsetZero(
-      this, &temps, addr, offset_reg, offset_imm);
+  MemOperand src_op{
+      liftoff::GetEffectiveAddress(this, &temps, addr, offset_reg, offset_imm)};
   *protected_load_pc = pc_offset();
 
   MachineType mem_type = type.mem_type();
@@ -1722,8 +1732,8 @@ void LiftoffAssembler::StoreLane(Register dst, Register offset,
                                  StoreType type, uint8_t lane,
                                  uint32_t* protected_store_pc) {
   UseScratchRegisterScope temps(this);
-  MemOperand dst_op =
-      liftoff::GetMemOpWithImmOffsetZero(this, &temps, dst, offset, offset_imm);
+  MemOperand dst_op{
+      liftoff::GetEffectiveAddress(this, &temps, dst, offset, offset_imm)};
   if (protected_store_pc) *protected_store_pc = pc_offset();
 
   MachineRepresentation rep = type.mem_rep();
@@ -2848,7 +2858,7 @@ void LiftoffAssembler::emit_f64x2_le(LiftoffRegister dst, LiftoffRegister lhs,
 void LiftoffAssembler::emit_s128_const(LiftoffRegister dst,
                                        const uint8_t imms[16]) {
   uint64_t vals[2];
-  base::Memcpy(vals, imms, sizeof(vals));
+  memcpy(vals, imms, sizeof(vals));
   Movi(dst.fp().V16B(), vals[1], vals[0]);
 }
 
@@ -3236,6 +3246,18 @@ void LiftoffAssembler::DeallocateStackSlot(uint32_t size) {
 }
 
 void LiftoffAssembler::MaybeOSR() {}
+
+void LiftoffAssembler::emit_set_if_nan(Register dst, DoubleRegister src,
+                                       ValueKind kind) {
+  UNIMPLEMENTED();
+}
+
+void LiftoffAssembler::emit_s128_set_if_nan(Register dst, LiftoffRegister src,
+                                            Register tmp_gp,
+                                            LiftoffRegister tmp_s128,
+                                            ValueKind lane_kind) {
+  UNIMPLEMENTED();
+}
 
 void LiftoffStackSlots::Construct(int param_slots) {
   DCHECK_LT(0, slots_.size());

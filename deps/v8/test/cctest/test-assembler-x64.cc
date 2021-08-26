@@ -26,18 +26,19 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 
-#include "src/init/v8.h"
-
+#include "include/v8-function.h"
+#include "src/base/numbers/double.h"
 #include "src/base/platform/platform.h"
 #include "src/base/utils/random-number-generator.h"
 #include "src/codegen/macro-assembler.h"
 #include "src/execution/simulator.h"
 #include "src/heap/factory.h"
-#include "src/numbers/double.h"
-#include "src/utils/ostreams.h"
+#include "src/init/v8.h"
 #include "src/objects/objects-inl.h"
+#include "src/utils/ostreams.h"
 #include "test/cctest/cctest.h"
 #include "test/common/assembler-tester.h"
 
@@ -874,9 +875,9 @@ TEST(AssemblerX64Extractps) {
 
   auto f = GeneratedCode<F3>::FromCode(*code);
   uint64_t value1 = 0x1234'5678'8765'4321;
-  CHECK_EQ(0x12345678u, f.Call(uint64_to_double(value1)));
+  CHECK_EQ(0x12345678u, f.Call(base::uint64_to_double(value1)));
   uint64_t value2 = 0x8765'4321'1234'5678;
-  CHECK_EQ(0x87654321u, f.Call(uint64_to_double(value2)));
+  CHECK_EQ(0x87654321u, f.Call(base::uint64_to_double(value2)));
 }
 
 using F6 = int(float x, float y);
@@ -2519,6 +2520,34 @@ TEST(AssemblerX64vmovups) {
 
   auto f = GeneratedCode<F9>::FromCode(*code);
   CHECK_EQ(-1.5, f.Call(1.5, -1.5));
+}
+
+TEST(AssemblerX64Regmove256bit) {
+  if (!CpuFeatures::IsSupported(AVX)) return;
+  CcTest::InitializeVM();
+  v8::HandleScope scope(CcTest::isolate());
+  auto buffer = AllocateAssemblerBuffer();
+  Isolate* isolate = CcTest::i_isolate();
+  Assembler masm(AssemblerOptions{}, buffer->CreateView());
+  CpuFeatureScope fscope(&masm, AVX);
+
+  __ vmovdqa(ymm0, ymm1);
+  __ vmovdqu(ymm10, ymm11);
+
+  CodeDesc desc;
+  masm.GetCode(isolate, &desc);
+#ifdef OBJECT_PRINT
+  Handle<Code> code =
+      Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
+  StdoutStream os;
+  code->Print(os);
+#endif
+
+  byte expected[] = {// VMOVDQA
+                     0xC5, 0xFD, 0x6F, 0xC1,
+                     // VMOVDQU
+                     0xC4, 0x41, 0x7E, 0x7F, 0xDA};
+  CHECK_EQ(0, memcmp(expected, desc.buffer, sizeof(expected)));
 }
 
 TEST(CpuFeatures_ProbeImpl) {

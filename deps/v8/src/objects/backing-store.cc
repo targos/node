@@ -9,10 +9,11 @@
 #include "src/base/platform/wrappers.h"
 #include "src/execution/isolate.h"
 #include "src/handles/global-handles.h"
+#include "src/init/vm-cage.h"
 #include "src/logging/counters.h"
-#include "src/trap-handler/trap-handler.h"
 
 #if V8_ENABLE_WEBASSEMBLY
+#include "src/trap-handler/trap-handler.h"
 #include "src/wasm/wasm-constants.h"
 #include "src/wasm/wasm-engine.h"
 #include "src/wasm/wasm-limits.h"
@@ -30,13 +31,6 @@ namespace internal {
 namespace {
 
 #if V8_ENABLE_WEBASSEMBLY
-// Trying to allocate 4 GiB on a 32-bit platform is guaranteed to fail.
-// We don't lower the official max_mem_pages() limit because that would be
-// observable upon instantiation; this way the effective limit on 32-bit
-// platforms is defined by the allocator.
-constexpr size_t kPlatformMaxPages =
-    std::numeric_limits<size_t>::max() / wasm::kWasmPageSize;
-
 constexpr uint64_t kNegativeGuardSize = uint64_t{2} * GB;
 
 #if V8_TARGET_ARCH_64_BIT
@@ -45,8 +39,8 @@ constexpr uint64_t kFullGuardSize = uint64_t{10} * GB;
 
 #endif  // V8_ENABLE_WEBASSEMBLY
 
-#if V8_TARGET_ARCH_MIPS64
-// MIPS64 has a user space of 2^40 bytes on most processors,
+#if V8_TARGET_ARCH_MIPS64 || V8_TARGET_ARCH_LOONG64
+// MIPS64 and LOONG64 has a user space of 2^40 bytes on most processors,
 // address space limits needs to be smaller.
 constexpr size_t kAddressSpaceLimit = 0x8000000000L;  // 512 GiB
 #elif V8_TARGET_ARCH_RISCV64
@@ -159,6 +153,15 @@ BackingStore::~BackingStore() {
     return;
   }
 
+  PageAllocator* page_allocator = GetPlatformPageAllocator();
+#ifdef V8_VIRTUAL_MEMORY_CAGE
+  if (GetProcessWideVirtualMemoryCage()->Contains(buffer_start_)) {
+    page_allocator = GetPlatformDataCagePageAllocator();
+  } else {
+    DCHECK(kAllowBackingStoresOutsideDataCage);
+  }
+#endif
+
 #if V8_ENABLE_WEBASSEMBLY
   if (is_wasm_memory_) {
     // TODO(v8:11111): RAB / GSAB - Wasm integration.
@@ -183,8 +186,8 @@ BackingStore::~BackingStore() {
 
     bool pages_were_freed =
         region.size() == 0 /* no need to free any pages */ ||
-        FreePages(GetPlatformPageAllocator(),
-                  reinterpret_cast<void*>(region.begin()), region.size());
+        FreePages(page_allocator, reinterpret_cast<void*>(region.begin()),
+                  region.size());
     CHECK(pages_were_freed);
     BackingStore::ReleaseReservation(reservation_size);
     Clear();
@@ -202,8 +205,8 @@ BackingStore::~BackingStore() {
 
     bool pages_were_freed =
         region.size() == 0 /* no need to free any pages */ ||
-        FreePages(GetPlatformPageAllocator(),
-                  reinterpret_cast<void*>(region.begin()), region.size());
+        FreePages(page_allocator, reinterpret_cast<void*>(region.begin()),
+                  region.size());
     CHECK(pages_were_freed);
     BackingStore::ReleaseReservation(reservation_size);
     Clear();
@@ -270,10 +273,13 @@ std::unique_ptr<BackingStore> BackingStore::Allocate(
       counters->array_buffer_new_size_failures()->AddSample(mb_length);
       return {};
     }
+
+    DCHECK(IsValidBackingStorePointer(buffer_start));
   }
 
   auto result = new BackingStore(buffer_start,                  // start
                                  byte_length,                   // length
+                                 byte_length,                   // max length
                                  byte_length,                   // capacity
                                  shared,                        // shared
                                  ResizableFlag::kNotResizable,  // resizable
@@ -312,8 +318,9 @@ std::unique_ptr<BackingStore> BackingStore::TryAllocateWasmMemory(
   maximum_pages = std::min(engine_max_pages, maximum_pages);
 
   auto result = TryAllocateAndPartiallyCommitMemory(
-      isolate, initial_pages * wasm::kWasmPageSize, wasm::kWasmPageSize,
-      initial_pages, maximum_pages, true, shared);
+      isolate, initial_pages * wasm::kWasmPageSize,
+      maximum_pages * wasm::kWasmPageSize, wasm::kWasmPageSize, initial_pages,
+      maximum_pages, true, shared);
   // Shared Wasm memories need an anchor for the memory object list.
   if (result && shared == SharedFlag::kShared) {
     result->type_specific_data_.shared_wasm_memory_data =
@@ -343,9 +350,9 @@ void BackingStore::ReleaseReservation(uint64_t num_bytes) {
 }
 
 std::unique_ptr<BackingStore> BackingStore::TryAllocateAndPartiallyCommitMemory(
-    Isolate* isolate, size_t byte_length, size_t page_size,
-    size_t initial_pages, size_t maximum_pages, bool is_wasm_memory,
-    SharedFlag shared) {
+    Isolate* isolate, size_t byte_length, size_t max_byte_length,
+    size_t page_size, size_t initial_pages, size_t maximum_pages,
+    bool is_wasm_memory, SharedFlag shared) {
   // Enforce engine limitation on the maximum number of pages.
   if (maximum_pages > std::numeric_limits<size_t>::max() / page_size) {
     return nullptr;
@@ -356,7 +363,12 @@ std::unique_ptr<BackingStore> BackingStore::TryAllocateAndPartiallyCommitMemory(
 
   TRACE_BS("BSw:try   %zu pages, %zu max\n", initial_pages, maximum_pages);
 
+#if V8_ENABLE_WEBASSEMBLY
   bool guards = is_wasm_memory && trap_handler::IsTrapHandlerEnabled();
+#else
+  CHECK(!is_wasm_memory);
+  bool guards = false;
+#endif  // V8_ENABLE_WEBASSEMBLY
 
   // For accounting purposes, whether a GC was necessary.
   bool did_retry = false;
@@ -400,10 +412,24 @@ std::unique_ptr<BackingStore> BackingStore::TryAllocateAndPartiallyCommitMemory(
   // 2. Allocate pages (inaccessible by default).
   //--------------------------------------------------------------------------
   void* allocation_base = nullptr;
+  PageAllocator* page_allocator = GetPlatformPageAllocator();
   auto allocate_pages = [&] {
-    allocation_base =
-        AllocatePages(GetPlatformPageAllocator(), nullptr, reservation_size,
-                      page_size, PageAllocator::kNoAccess);
+#ifdef V8_VIRTUAL_MEMORY_CAGE
+    page_allocator = GetPlatformDataCagePageAllocator();
+    allocation_base = AllocatePages(page_allocator, nullptr, reservation_size,
+                                    page_size, PageAllocator::kNoAccess);
+    if (allocation_base) return true;
+    // We currently still allow falling back to the platform page allocator if
+    // the data cage page allocator fails. This will eventually be removed.
+    // TODO(chromium:1218005) once we forbid the fallback, we should have a
+    // single API, e.g. GetPlatformDataPageAllocator(), that returns the correct
+    // page allocator to use here depending on whether the virtual memory cage
+    // is enabled or not.
+    if (!kAllowBackingStoresOutsideDataCage) return false;
+    page_allocator = GetPlatformPageAllocator();
+#endif
+    allocation_base = AllocatePages(page_allocator, nullptr, reservation_size,
+                                    page_size, PageAllocator::kNoAccess);
     return allocation_base != nullptr;
   };
   if (!gc_retry(allocate_pages)) {
@@ -413,6 +439,8 @@ std::unique_ptr<BackingStore> BackingStore::TryAllocateAndPartiallyCommitMemory(
     TRACE_BS("BSw:try   failed to allocate pages\n");
     return {};
   }
+
+  DCHECK(IsValidBackingStorePointer(allocation_base));
 
   // Get a pointer to the start of the buffer, skipping negative guard region
   // if necessary.
@@ -429,8 +457,8 @@ std::unique_ptr<BackingStore> BackingStore::TryAllocateAndPartiallyCommitMemory(
   size_t committed_byte_length = initial_pages * page_size;
   auto commit_memory = [&] {
     return committed_byte_length == 0 ||
-           SetPermissions(GetPlatformPageAllocator(), buffer_start,
-                          committed_byte_length, PageAllocator::kReadWrite);
+           SetPermissions(page_allocator, buffer_start, committed_byte_length,
+                          PageAllocator::kReadWrite);
   };
   if (!gc_retry(commit_memory)) {
     TRACE_BS("BSw:try   failed to set permissions (%p, %zu)\n", buffer_start,
@@ -447,16 +475,17 @@ std::unique_ptr<BackingStore> BackingStore::TryAllocateAndPartiallyCommitMemory(
   ResizableFlag resizable =
       is_wasm_memory ? ResizableFlag::kNotResizable : ResizableFlag::kResizable;
 
-  auto result = new BackingStore(buffer_start,    // start
-                                 byte_length,     // length
-                                 byte_capacity,   // capacity
-                                 shared,          // shared
-                                 resizable,       // resizable
-                                 is_wasm_memory,  // is_wasm_memory
-                                 true,            // free_on_destruct
-                                 guards,          // has_guard_regions
-                                 false,           // custom_deleter
-                                 false);          // empty_deleter
+  auto result = new BackingStore(buffer_start,     // start
+                                 byte_length,      // length
+                                 max_byte_length,  // max_byte_length
+                                 byte_capacity,    // capacity
+                                 shared,           // shared
+                                 resizable,        // resizable
+                                 is_wasm_memory,   // is_wasm_memory
+                                 true,             // free_on_destruct
+                                 guards,           // has_guard_regions
+                                 false,            // custom_deleter
+                                 false);           // empty_deleter
 
   TRACE_BS(
       "BSw:alloc bs=%p mem=%p (length=%zu, capacity=%zu, reservation=%zu)\n",
@@ -476,8 +505,7 @@ std::unique_ptr<BackingStore> BackingStore::AllocateWasmMemory(
   DCHECK_EQ(0, wasm::kWasmPageSize % AllocatePageSize());
 
   // Enforce engine limitation on the maximum number of pages.
-  if (initial_pages > wasm::kV8MaxWasmMemoryPages) return nullptr;
-  if (initial_pages > kPlatformMaxPages) return nullptr;
+  if (initial_pages > wasm::max_mem_pages()) return nullptr;
 
   auto backing_store =
       TryAllocateWasmMemory(isolate, initial_pages, maximum_pages, shared);
@@ -518,8 +546,7 @@ std::unique_ptr<BackingStore> BackingStore::CopyWasmMemory(Isolate* isolate,
     // If the allocation was successful, then the new buffer must be at least
     // as big as the old one.
     DCHECK_GE(new_pages * wasm::kWasmPageSize, byte_length_);
-    base::Memcpy(new_backing_store->buffer_start(), buffer_start_,
-                 byte_length_);
+    memcpy(new_backing_store->buffer_start(), buffer_start_, byte_length_);
   }
 
   return new_backing_store;
@@ -709,8 +736,10 @@ BackingStore::ResizeOrGrowResult BackingStore::GrowInPlace(
 std::unique_ptr<BackingStore> BackingStore::WrapAllocation(
     Isolate* isolate, void* allocation_base, size_t allocation_length,
     SharedFlag shared, bool free_on_destruct) {
+  DCHECK(IsValidBackingStorePointer(allocation_base));
   auto result = new BackingStore(allocation_base,               // start
                                  allocation_length,             // length
+                                 allocation_length,             // max length
                                  allocation_length,             // capacity
                                  shared,                        // shared
                                  ResizableFlag::kNotResizable,  // resizable
@@ -729,9 +758,11 @@ std::unique_ptr<BackingStore> BackingStore::WrapAllocation(
     void* allocation_base, size_t allocation_length,
     v8::BackingStore::DeleterCallback deleter, void* deleter_data,
     SharedFlag shared) {
+  DCHECK(IsValidBackingStorePointer(allocation_base));
   bool is_empty_deleter = (deleter == v8::BackingStore::EmptyDeleter);
   auto result = new BackingStore(allocation_base,               // start
                                  allocation_length,             // length
+                                 allocation_length,             // max length
                                  allocation_length,             // capacity
                                  shared,                        // shared
                                  ResizableFlag::kNotResizable,  // resizable
@@ -750,6 +781,7 @@ std::unique_ptr<BackingStore> BackingStore::EmptyBackingStore(
     SharedFlag shared) {
   auto result = new BackingStore(nullptr,                       // start
                                  0,                             // length
+                                 0,                             // max length
                                  0,                             // capacity
                                  shared,                        // shared
                                  ResizableFlag::kNotResizable,  // resizable

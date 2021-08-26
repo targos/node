@@ -101,8 +101,9 @@ void BranchElimination::SimplifyBranchCondition(Node* branch) {
     Node* input = inputs[i];
     ControlPathConditions from_input = node_conditions_.Get(input);
     if (!from_input.LookupCondition(branch_condition, &previous_branch,
-                                    &condition_value))
+                                    &condition_value)) {
       return;
+    }
 
     if (phase_ == kEARLY) {
       phi_inputs.emplace_back(condition_value ? jsgraph()->TrueConstant()
@@ -128,12 +129,12 @@ void BranchElimination::SimplifyBranchCondition(Node* branch) {
 Reduction BranchElimination::ReduceBranch(Node* node) {
   Node* condition = node->InputAt(0);
   Node* control_input = NodeProperties::GetControlInput(node, 0);
+  if (!reduced_.Get(control_input)) return NoChange();
   ControlPathConditions from_input = node_conditions_.Get(control_input);
   Node* branch;
   bool condition_value;
   // If we know the condition we can discard the branch.
   if (from_input.LookupCondition(condition, &branch, &condition_value)) {
-    MarkAsSafetyCheckIfNeeded(branch, node);
     for (Node* const use : node->uses()) {
       switch (use->opcode()) {
         case IrOpcode::kIfTrue:
@@ -170,7 +171,6 @@ Reduction BranchElimination::ReduceTrapConditional(Node* node) {
     return NoChange();
   }
   ControlPathConditions from_input = node_conditions_.Get(control_input);
-
   Node* branch;
   bool condition_value;
 
@@ -190,7 +190,7 @@ Reduction BranchElimination::ReduceTrapConditional(Node* node) {
     }
   }
   return UpdateConditions(node, from_input, condition, node,
-                          !trapping_condition);
+                          !trapping_condition, false);
 }
 
 Reduction BranchElimination::ReduceDeoptimizeConditional(Node* node) {
@@ -214,7 +214,6 @@ Reduction BranchElimination::ReduceDeoptimizeConditional(Node* node) {
   Node* branch;
   // If we know the condition we can discard the branch.
   if (conditions.LookupCondition(condition, &branch, &condition_value)) {
-    MarkAsSafetyCheckIfNeeded(branch, node);
     if (condition_is_true == condition_value) {
       // We don't update the conditions here, because we're replacing {node}
       // with the {control} node that already contains the right information.
@@ -229,7 +228,8 @@ Reduction BranchElimination::ReduceDeoptimizeConditional(Node* node) {
     }
     return Replace(dead());
   }
-  return UpdateConditions(node, conditions, condition, node, condition_is_true);
+  return UpdateConditions(node, conditions, condition, node, condition_is_true,
+                          false);
 }
 
 Reduction BranchElimination::ReduceIf(Node* node, bool is_true_branch) {
@@ -243,7 +243,8 @@ Reduction BranchElimination::ReduceIf(Node* node, bool is_true_branch) {
     return NoChange();
   }
   Node* condition = branch->InputAt(0);
-  return UpdateConditions(node, from_branch, condition, branch, is_true_branch);
+  return UpdateConditions(node, from_branch, condition, branch, is_true_branch,
+                          true);
 }
 
 Reduction BranchElimination::ReduceLoop(Node* node) {
@@ -273,16 +274,16 @@ Reduction BranchElimination::ReduceMerge(Node* node) {
   // inputs.
   auto input_end = inputs.end();
   for (; input_it != input_end; ++input_it) {
-    // Change the current condition list to a longest common tail
-    // of this condition list and the other list. (The common tail
-    // should correspond to the list from the common dominator.)
+    // Change the current condition block list to a longest common tail of this
+    // condition list and the other list. (The common tail should correspond to
+    // the list from the common dominator.)
     conditions.ResetToCommonAncestor(node_conditions_.Get(*input_it));
   }
   return UpdateConditions(node, conditions);
 }
 
 Reduction BranchElimination::ReduceStart(Node* node) {
-  return UpdateConditions(node, {});
+  return UpdateConditions(node, ControlPathConditions(zone_));
 }
 
 Reduction BranchElimination::ReduceOtherControl(Node* node) {
@@ -310,13 +311,18 @@ Reduction BranchElimination::UpdateConditions(
 
 Reduction BranchElimination::UpdateConditions(
     Node* node, ControlPathConditions prev_conditions, Node* current_condition,
-    Node* current_branch, bool is_true_branch) {
-  ControlPathConditions original = node_conditions_.Get(node);
+    Node* current_branch, bool is_true_branch, bool in_new_block) {
   // The control path for the node is the path obtained by appending the
   // current_condition to the prev_conditions. Use the original control path as
   // a hint to avoid allocations.
-  prev_conditions.AddCondition(zone_, current_condition, current_branch,
-                               is_true_branch, original);
+  if (in_new_block || prev_conditions.blocks_.Size() == 0) {
+    prev_conditions.AddConditionInNewBlock(zone_, current_condition,
+                                           current_branch, is_true_branch);
+  } else {
+    ControlPathConditions original = node_conditions_.Get(node);
+    prev_conditions.AddCondition(zone_, current_condition, current_branch,
+                                 is_true_branch, original);
+  }
   return UpdateConditions(node, prev_conditions);
 }
 
@@ -324,44 +330,83 @@ void BranchElimination::ControlPathConditions::AddCondition(
     Zone* zone, Node* condition, Node* branch, bool is_true,
     ControlPathConditions hint) {
   if (!LookupCondition(condition)) {
-    PushFront({condition, branch, is_true}, zone, hint);
+    BranchCondition branch_condition(condition, branch, is_true);
+    FunctionalList<BranchCondition> prev_front = blocks_.Front();
+    if (hint.blocks_.Size() > 0) {
+      prev_front.PushFront(branch_condition, zone, hint.blocks_.Front());
+    } else {
+      prev_front.PushFront(branch_condition, zone);
+    }
+    blocks_.DropFront();
+    blocks_.PushFront(prev_front, zone);
+    conditions_.Set(condition, branch_condition);
+    SLOW_DCHECK(BlocksAndConditionsInvariant());
   }
+}
+
+void BranchElimination::ControlPathConditions::AddConditionInNewBlock(
+    Zone* zone, Node* condition, Node* branch, bool is_true) {
+  FunctionalList<BranchCondition> new_block;
+  if (!LookupCondition(condition)) {
+    BranchCondition branch_condition(condition, branch, is_true);
+    new_block.PushFront(branch_condition, zone);
+    conditions_.Set(condition, branch_condition);
+  }
+  blocks_.PushFront(new_block, zone);
+  SLOW_DCHECK(BlocksAndConditionsInvariant());
 }
 
 bool BranchElimination::ControlPathConditions::LookupCondition(
     Node* condition) const {
-  for (BranchCondition element : *this) {
-    if (element.condition == condition) return true;
-  }
-  return false;
+  return conditions_.Get(condition).IsSet();
 }
 
 bool BranchElimination::ControlPathConditions::LookupCondition(
     Node* condition, Node** branch, bool* is_true) const {
-  for (BranchCondition element : *this) {
-    if (element.condition == condition) {
-      *is_true = element.is_true;
-      *branch = element.branch;
-      return true;
-    }
+  const BranchCondition& element = conditions_.Get(condition);
+  if (element.IsSet()) {
+    *is_true = element.is_true;
+    *branch = element.branch;
+    return true;
   }
   return false;
 }
 
-void BranchElimination::MarkAsSafetyCheckIfNeeded(Node* branch, Node* node) {
-  // Check if {branch} is dead because we might have a stale side-table entry.
-  if (!branch->IsDead() && branch->opcode() != IrOpcode::kDead &&
-      branch->opcode() != IrOpcode::kTrapIf &&
-      branch->opcode() != IrOpcode::kTrapUnless) {
-    IsSafetyCheck branch_safety = IsSafetyCheckOf(branch->op());
-    IsSafetyCheck combined_safety =
-        CombineSafetyChecks(branch_safety, IsSafetyCheckOf(node->op()));
-    if (branch_safety != combined_safety) {
-      NodeProperties::ChangeOp(
-          branch, common()->MarkAsSafetyCheck(branch->op(), combined_safety));
+void BranchElimination::ControlPathConditions::ResetToCommonAncestor(
+    ControlPathConditions other) {
+  while (other.blocks_.Size() > blocks_.Size()) other.blocks_.DropFront();
+  while (blocks_.Size() > other.blocks_.Size()) {
+    for (BranchCondition branch_condition : blocks_.Front()) {
+      conditions_.Set(branch_condition.condition, {});
+    }
+    blocks_.DropFront();
+  }
+  while (blocks_ != other.blocks_) {
+    for (BranchCondition branch_condition : blocks_.Front()) {
+      conditions_.Set(branch_condition.condition, {});
+    }
+    blocks_.DropFront();
+    other.blocks_.DropFront();
+  }
+  SLOW_DCHECK(BlocksAndConditionsInvariant());
+}
+
+#if DEBUG
+bool BranchElimination::ControlPathConditions::BlocksAndConditionsInvariant() {
+  PersistentMap<Node*, BranchCondition> conditions_copy(conditions_);
+  for (auto block : blocks_) {
+    for (BranchCondition condition : block) {
+      // Every element of blocks_ has to be in conditions_.
+      if (conditions_copy.Get(condition.condition) != condition) return false;
+      conditions_copy.Set(condition.condition, {});
     }
   }
+  // Every element of {conditions_} has to be in {blocks_}. We removed all
+  // elements of blocks_ from condition_copy, so if it is not empty, the
+  // invariant fails.
+  return conditions_copy.begin() == conditions_copy.end();
 }
+#endif
 
 Graph* BranchElimination::graph() const { return jsgraph()->graph(); }
 

@@ -5,6 +5,7 @@
 #include "src/regexp/regexp-macro-assembler.h"
 
 #include "src/codegen/assembler.h"
+#include "src/codegen/label.h"
 #include "src/execution/isolate-inl.h"
 #include "src/execution/pointer-authentication.h"
 #include "src/execution/simulator.h"
@@ -22,11 +23,16 @@ namespace internal {
 
 RegExpMacroAssembler::RegExpMacroAssembler(Isolate* isolate, Zone* zone)
     : slow_safe_compiler_(false),
+      backtrack_limit_(JSRegExp::kNoBacktrackLimit),
       global_mode_(NOT_GLOBAL),
       isolate_(isolate),
       zone_(zone) {}
 
 RegExpMacroAssembler::~RegExpMacroAssembler() = default;
+
+bool RegExpMacroAssembler::has_backtrack_limit() const {
+  return backtrack_limit_ != JSRegExp::kNoBacktrackLimit;
+}
 
 int RegExpMacroAssembler::CaseInsensitiveCompareNonUnicode(Address byte_offset1,
                                                            Address byte_offset2,
@@ -39,8 +45,8 @@ int RegExpMacroAssembler::CaseInsensitiveCompareNonUnicode(Address byte_offset1,
   DisallowGarbageCollection no_gc;
   DCHECK_EQ(0, byte_length % 2);
   size_t length = byte_length / 2;
-  uc16* substring1 = reinterpret_cast<uc16*>(byte_offset1);
-  uc16* substring2 = reinterpret_cast<uc16*>(byte_offset2);
+  base::uc16* substring1 = reinterpret_cast<base::uc16*>(byte_offset1);
+  base::uc16* substring2 = reinterpret_cast<base::uc16*>(byte_offset2);
 
   for (size_t i = 0; i < length; i++) {
     UChar32 c1 = RegExpCaseFolding::Canonicalize(substring1[i]);
@@ -73,8 +79,8 @@ int RegExpMacroAssembler::CaseInsensitiveCompareUnicode(Address byte_offset1,
   return uni_str_1.caseCompare(reinterpret_cast<const char16_t*>(byte_offset2),
                                length, U_FOLD_CASE_DEFAULT) == 0;
 #else
-  uc16* substring1 = reinterpret_cast<uc16*>(byte_offset1);
-  uc16* substring2 = reinterpret_cast<uc16*>(byte_offset2);
+  base::uc16* substring1 = reinterpret_cast<base::uc16*>(byte_offset1);
+  base::uc16* substring2 = reinterpret_cast<base::uc16*>(byte_offset2);
   size_t length = byte_length >> 1;
   DCHECK_NOT_NULL(isolate);
   unibrow::Mapping<unibrow::Ecma262Canonicalize>* canonicalize =
@@ -129,7 +135,7 @@ void RegExpMacroAssembler::LoadCurrentCharacter(int cp_offset,
                            eats_at_least);
 }
 
-bool RegExpMacroAssembler::CheckSpecialCharacterClass(uc16 type,
+bool RegExpMacroAssembler::CheckSpecialCharacterClass(base::uc16 type,
                                                       Label* on_no_match) {
   return false;
 }
@@ -305,7 +311,7 @@ int NativeRegExpMacroAssembler::Execute(
   Address stack_base = stack_scope.stack()->stack_base();
 
   bool is_one_byte = String::IsOneByteRepresentationUnderneath(input);
-  Code code = Code::cast(regexp.Code(is_one_byte));
+  Code code = FromCodeT(CodeT::cast(regexp.Code(is_one_byte)));
   RegExp::CallOrigin call_origin = RegExp::CallOrigin::kFromRuntime;
 
   using RegexpMatcherSig = int(

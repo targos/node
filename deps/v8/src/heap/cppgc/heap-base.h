@@ -18,6 +18,7 @@
 #include "src/heap/cppgc/marker.h"
 #include "src/heap/cppgc/metric-recorder.h"
 #include "src/heap/cppgc/object-allocator.h"
+#include "src/heap/cppgc/platform.h"
 #include "src/heap/cppgc/process-heap-statistics.h"
 #include "src/heap/cppgc/process-heap.h"
 #include "src/heap/cppgc/raw-heap.h"
@@ -65,6 +66,7 @@ namespace testing {
 class TestWithHeap;
 }  // namespace testing
 
+class FatalOutOfMemoryHandler;
 class PageBackend;
 class PreFinalizerHandler;
 class StatsCollector;
@@ -83,8 +85,7 @@ class V8_EXPORT_PRIVATE HeapBase : public cppgc::HeapHandle {
 
   HeapBase(std::shared_ptr<cppgc::Platform> platform,
            const std::vector<std::unique_ptr<CustomSpaceBase>>& custom_spaces,
-           StackSupport stack_support,
-           std::unique_ptr<MetricRecorder> histogram_recorder);
+           StackSupport stack_support);
   virtual ~HeapBase();
 
   HeapBase(const HeapBase&) = delete;
@@ -95,6 +96,11 @@ class V8_EXPORT_PRIVATE HeapBase : public cppgc::HeapHandle {
 
   cppgc::Platform* platform() { return platform_.get(); }
   const cppgc::Platform* platform() const { return platform_.get(); }
+
+  FatalOutOfMemoryHandler& oom_handler() { return *oom_handler_.get(); }
+  const FatalOutOfMemoryHandler& oom_handler() const {
+    return *oom_handler_.get();
+  }
 
   PageBackend* page_backend() { return page_backend_.get(); }
   const PageBackend* page_backend() const { return page_backend_.get(); }
@@ -112,6 +118,9 @@ class V8_EXPORT_PRIVATE HeapBase : public cppgc::HeapHandle {
   heap::base::Stack* stack() { return stack_.get(); }
 
   PreFinalizerHandler* prefinalizer_handler() {
+    return prefinalizer_handler_.get();
+  }
+  const PreFinalizerHandler* prefinalizer_handler() const {
     return prefinalizer_handler_.get();
   }
 
@@ -193,6 +202,10 @@ class V8_EXPORT_PRIVATE HeapBase : public cppgc::HeapHandle {
   virtual void FinalizeIncrementalGarbageCollectionForTesting(
       EmbedderStackState) = 0;
 
+  void SetMetricRecorder(std::unique_ptr<MetricRecorder> histogram_recorder) {
+    stats_collector_->SetMetricRecorder(std::move(histogram_recorder));
+  }
+
  protected:
   // Used by the incremental scheduler to finalize a GC if supported.
   virtual void FinalizeIncrementalGarbageCollectionIfNeeded(
@@ -208,17 +221,19 @@ class V8_EXPORT_PRIVATE HeapBase : public cppgc::HeapHandle {
 
   RawHeap raw_heap_;
   std::shared_ptr<cppgc::Platform> platform_;
+  std::unique_ptr<FatalOutOfMemoryHandler> oom_handler_;
 
 #if defined(LEAK_SANITIZER)
   std::unique_ptr<v8::base::LsanPageAllocator> lsan_page_allocator_;
 #endif  // LEAK_SANITIZER
 
-  HeapRegistry::Subscription heap_registry_subscription_{*this};
-
 #if defined(CPPGC_CAGED_HEAP)
   CagedHeap caged_heap_;
 #endif  // CPPGC_CAGED_HEAP
   std::unique_ptr<PageBackend> page_backend_;
+
+  // HeapRegistry requires access to page_backend_.
+  HeapRegistry::Subscription heap_registry_subscription_{*this};
 
   std::unique_ptr<StatsCollector> stats_collector_;
   std::unique_ptr<heap::base::Stack> stack_;

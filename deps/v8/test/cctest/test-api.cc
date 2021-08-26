@@ -37,11 +37,20 @@
 #include <unistd.h>
 #endif
 
+#include "include/v8-date.h"
+#include "include/v8-extension.h"
 #include "include/v8-fast-api-calls.h"
+#include "include/v8-function.h"
+#include "include/v8-initialization.h"
+#include "include/v8-json.h"
+#include "include/v8-locker.h"
+#include "include/v8-primitive-object.h"
+#include "include/v8-regexp.h"
 #include "include/v8-util.h"
 #include "src/api/api-inl.h"
 #include "src/base/overflowing-math.h"
 #include "src/base/platform/platform.h"
+#include "src/base/strings.h"
 #include "src/codegen/compilation-cache.h"
 #include "src/debug/debug.h"
 #include "src/execution/arguments.h"
@@ -75,6 +84,7 @@
 
 #if V8_ENABLE_WEBASSEMBLY
 #include "test/cctest/wasm/wasm-run-utils.h"
+#include "test/common/wasm/test-signatures.h"
 #include "test/common/wasm/wasm-macro-gen.h"
 #endif  // V8_ENABLE_WEBASSEMBLY
 
@@ -214,12 +224,12 @@ THREADED_TEST(IsolateOfContext) {
 
 static void TestSignatureLooped(const char* operation, Local<Value> receiver,
                                 v8::Isolate* isolate) {
-  i::ScopedVector<char> source(200);
-  i::SNPrintF(source,
-              "for (var i = 0; i < 10; i++) {"
-              "  %s"
-              "}",
-              operation);
+  v8::base::ScopedVector<char> source(200);
+  v8::base::SNPrintF(source,
+                     "for (var i = 0; i < 10; i++) {"
+                     "  %s"
+                     "}",
+                     operation);
   signature_callback_count = 0;
   signature_expected_receiver = receiver;
   bool expected_to_throw = receiver.IsEmpty();
@@ -240,17 +250,17 @@ static void TestSignatureLooped(const char* operation, Local<Value> receiver,
 
 static void TestSignatureOptimized(const char* operation, Local<Value> receiver,
                                    v8::Isolate* isolate) {
-  i::ScopedVector<char> source(200);
-  i::SNPrintF(source,
-              "function test() {"
-              "  %s"
-              "};"
-              "%%PrepareFunctionForOptimization(test);"
-              "try { test() } catch(e) {}"
-              "try { test() } catch(e) {}"
-              "%%OptimizeFunctionOnNextCall(test);"
-              "test()",
-              operation);
+  v8::base::ScopedVector<char> source(200);
+  v8::base::SNPrintF(source,
+                     "function test() {"
+                     "  %s"
+                     "};"
+                     "%%PrepareFunctionForOptimization(test);"
+                     "try { test() } catch(e) {}"
+                     "try { test() } catch(e) {}"
+                     "%%OptimizeFunctionOnNextCall(test);"
+                     "test()",
+                     operation);
   signature_callback_count = 0;
   signature_expected_receiver = receiver;
   bool expected_to_throw = receiver.IsEmpty();
@@ -363,9 +373,9 @@ THREADED_TEST(ReceiverSignature) {
       "unrelated",    "inherited",        "inherited_direct"};
   unsigned bad_signature_start_offset = 3;
   for (unsigned i = 0; i < arraysize(test_objects); i++) {
-    i::ScopedVector<char> source(200);
-    i::SNPrintF(
-        source, "var test_object = %s; test_object", test_objects[i]);
+    v8::base::ScopedVector<char> source(200);
+    v8::base::SNPrintF(source, "var test_object = %s; test_object",
+                       test_objects[i]);
     Local<Value> test_object = CompileRun(source.begin());
     TestSignature("test_object.prop();", test_object, isolate);
     TestSignature("test_object.accessor;", test_object, isolate);
@@ -2992,8 +3002,8 @@ THREADED_TEST(InternalFieldsOfRegularObjects) {
 
   const char* sources[] = {"new Object()", "{ a: 'a property' }", "arguments"};
   for (size_t i = 0; i < arraysize(sources); ++i) {
-    i::ScopedVector<char> source(128);
-    i::SNPrintF(source, "(function() { return %s })()", sources[i]);
+    v8::base::ScopedVector<char> source(128);
+    v8::base::SNPrintF(source, "(function() { return %s })()", sources[i]);
     v8::Local<v8::Object> obj = CompileRun(source.begin()).As<v8::Object>();
     CHECK_EQ(0, obj->InternalFieldCount());
   }
@@ -4129,8 +4139,8 @@ class TwoPassCallbackData {
         trigger_gc_(false),
         metadata_(metadata) {
     HandleScope scope(isolate);
-    i::ScopedVector<char> buffer(40);
-    i::SNPrintF(buffer, "%p", static_cast<void*>(this));
+    v8::base::ScopedVector<char> buffer(40);
+    v8::base::SNPrintF(buffer, "%p", static_cast<void*>(this));
     auto string =
         v8::String::NewFromUtf8(isolate, buffer.begin()).ToLocalChecked();
     cell_.Reset(isolate, string);
@@ -4249,7 +4259,7 @@ TEST(TwoPassPhantomCallbacksTriggeredByStringAlloc) {
   data->SetWeak();
   CHECK_EQ(metadata.instance_counter, 1);
 
-  i::ScopedVector<uint8_t> source(200000);
+  v8::base::ScopedVector<uint8_t> source(200000);
   v8::HandleScope handle_scope(isolate);
   // Creating a few large strings suffices to trigger GC.
   while (metadata.instance_counter == 1) {
@@ -7280,8 +7290,8 @@ TEST(ExtensionWithSourceLength) {
   for (int source_len = kEmbeddedExtensionSourceValidLen - 1;
        source_len <= kEmbeddedExtensionSourceValidLen + 1; ++source_len) {
     v8::HandleScope handle_scope(CcTest::isolate());
-    i::ScopedVector<char> extension_name(32);
-    i::SNPrintF(extension_name, "ext #%d", source_len);
+    v8::base::ScopedVector<char> extension_name(32);
+    v8::base::SNPrintF(extension_name, "ext #%d", source_len);
     v8::RegisterExtension(std::make_unique<Extension>(extension_name.begin(),
                                                       kEmbeddedExtensionSource,
                                                       0, nullptr, source_len));
@@ -10939,9 +10949,9 @@ THREADED_TEST(Regress91517) {
   t4->InstanceTemplate()->Set(isolate, "baz", v8_num(4));
 
   // Force dictionary-based properties.
-  i::ScopedVector<char> name_buf(1024);
+  v8::base::ScopedVector<char> name_buf(1024);
   for (int i = 1; i <= 1000; i++) {
-    i::SNPrintF(name_buf, "sdf%d", i);
+    v8::base::SNPrintF(name_buf, "sdf%d", i);
     t2->InstanceTemplate()->Set(v8_str(name_buf.begin()), v8_num(2));
   }
 
@@ -13737,16 +13747,14 @@ static v8::base::HashMap* jitcode_line_info = nullptr;
 static int saw_bar = 0;
 static int move_events = 0;
 
-
 static bool FunctionNameIs(const char* expected,
                            const v8::JitCodeEvent* event) {
   // Log lines for functions are of the general form:
   // "LazyCompile:<type><function_name>" or Function:<type><function_name>,
   // where the type is one of "*", "~" or "".
-  static const char* kPreamble;
-  if (!i::FLAG_lazy) {
-    kPreamble = "Function:";
-  } else {
+  static const char* kPreamble = "Function:";
+  if (i::FLAG_lazy &&
+      event->code_type != v8::JitCodeEvent::CodeType::WASM_CODE) {
     kPreamble = "LazyCompile:";
   }
   static size_t kPreambleLen = strlen(kPreamble);
@@ -13778,7 +13786,6 @@ static bool FunctionNameIs(const char* expected,
 
   return strncmp(tail, expected, expected_len) == 0;
 }
-
 
 static void event_handler(const v8::JitCodeEvent* event) {
   CHECK_NOT_NULL(event);
@@ -13872,11 +13879,14 @@ static void event_handler(const v8::JitCodeEvent* event) {
   }
 }
 
-
 UNINITIALIZED_TEST(SetJitCodeEventHandler) {
   i::FLAG_stress_compaction = true;
   i::FLAG_incremental_marking = false;
   i::FLAG_stress_concurrent_allocation = false;  // For SimulateFullSpace.
+  // Batch compilation can cause different owning spaces for foo and bar.
+#if ENABLE_SPARKPLUG
+  i::FLAG_baseline_batch_compilation = false;
+#endif
   if (i::FLAG_never_compact) return;
   const char* script =
       "function bar() {"
@@ -13992,6 +14002,77 @@ UNINITIALIZED_TEST(SetJitCodeEventHandler) {
   isolate->Exit();
   isolate->Dispose();
 }
+
+#if V8_ENABLE_WEBASSEMBLY
+static bool saw_wasm_main = false;
+static void wasm_event_handler(const v8::JitCodeEvent* event) {
+  switch (event->type) {
+    case v8::JitCodeEvent::CODE_ADDED: {
+      if (FunctionNameIs("main-0-turbofan", event)) {
+        saw_wasm_main = true;
+        // Make sure main function has line info.
+        auto* entry = jitcode_line_info->Lookup(
+            event->code_start, i::ComputePointerHash(event->code_start));
+        CHECK_NOT_NULL(entry);
+      }
+      break;
+    }
+    case v8::JitCodeEvent::CODE_END_LINE_INFO_RECORDING: {
+      jitcode_line_info->LookupOrInsert(
+          event->code_start, i::ComputePointerHash(event->code_start));
+      break;
+    }
+    case v8::JitCodeEvent::CODE_ADD_LINE_POS_INFO: {
+      break;
+    }
+    default: {
+      // Ignore all other events;
+    }
+  }
+}
+
+namespace v8 {
+namespace internal {
+namespace wasm {
+TEST(WasmSetJitCodeEventHandler) {
+  v8::base::HashMap code;
+  code_map = &code;
+
+  v8::base::HashMap lineinfo;
+  jitcode_line_info = &lineinfo;
+
+  WasmRunner<int32_t, int32_t, int32_t> r(TestExecutionTier::kTurbofan);
+  i::Isolate* isolate = r.main_isolate();
+
+  v8::Isolate* v8_isolate = reinterpret_cast<v8::Isolate*>(isolate);
+  v8_isolate->SetJitCodeEventHandler(v8::kJitCodeEventDefault,
+                                     wasm_event_handler);
+
+  TestSignatures sigs;
+  auto& f = r.NewFunction(sigs.i_i(), "f");
+  BUILD(f, WASM_I32_ADD(WASM_LOCAL_GET(0), WASM_LOCAL_GET(0)));
+
+  LocalContext env;
+
+  BUILD(r,
+        WASM_I32_ADD(WASM_LOCAL_GET(0), WASM_CALL_FUNCTION(f.function_index(),
+                                                           WASM_LOCAL_GET(1))));
+
+  Handle<JSFunction> func = r.builder().WrapCode(0);
+  CHECK(env->Global()
+            ->Set(env.local(), v8_str("func"), v8::Utils::ToLocal(func))
+            .FromJust());
+  const char* script = R"(
+    func(1, 2);
+  )";
+  CompileRun(script);
+  CHECK(saw_wasm_main);
+  saw_wasm_main = false;
+}
+}  // namespace wasm
+}  // namespace internal
+}  // namespace v8
+#endif  // V8_ENABLE_WEBASSEMBLY
 
 TEST(ExternalAllocatedMemory) {
   v8::Isolate* isolate = CcTest::isolate();
@@ -14735,7 +14816,7 @@ TEST(ObjectClone) {
 
 class OneByteVectorResource : public v8::String::ExternalOneByteStringResource {
  public:
-  explicit OneByteVectorResource(i::Vector<const char> vector)
+  explicit OneByteVectorResource(v8::base::Vector<const char> vector)
       : data_(vector) {}
   ~OneByteVectorResource() override = default;
   size_t length() const override { return data_.length(); }
@@ -14743,21 +14824,21 @@ class OneByteVectorResource : public v8::String::ExternalOneByteStringResource {
   void Dispose() override {}
 
  private:
-  i::Vector<const char> data_;
+  v8::base::Vector<const char> data_;
 };
 
 
 class UC16VectorResource : public v8::String::ExternalStringResource {
  public:
-  explicit UC16VectorResource(i::Vector<const i::uc16> vector)
+  explicit UC16VectorResource(v8::base::Vector<const v8::base::uc16> vector)
       : data_(vector) {}
   ~UC16VectorResource() override = default;
   size_t length() const override { return data_.length(); }
-  const i::uc16* data() const override { return data_.begin(); }
+  const v8::base::uc16* data() const override { return data_.begin(); }
   void Dispose() override {}
 
  private:
-  i::Vector<const i::uc16> data_;
+  v8::base::Vector<const v8::base::uc16> data_;
 };
 
 static void MorphAString(i::String string,
@@ -14799,9 +14880,9 @@ THREADED_TEST(MorphCompositeStringTest) {
     i::Isolate* i_isolate = CcTest::i_isolate();
     v8::HandleScope scope(isolate);
     OneByteVectorResource one_byte_resource(
-        i::Vector<const char>(c_string, strlen(c_string)));
+        v8::base::Vector<const char>(c_string, strlen(c_string)));
     UC16VectorResource uc16_resource(
-        i::Vector<const uint16_t>(two_byte_string, strlen(c_string)));
+        v8::base::Vector<const uint16_t>(two_byte_string, strlen(c_string)));
 
     Local<String> lhs(v8::Utils::ToLocal(
         factory->NewExternalStringFromOneByte(&one_byte_resource)
@@ -15591,8 +15672,8 @@ TEST(ErrorLevelWarning) {
                                             v8::Isolate::kMessageAll);
   for (size_t i = 0; i < arraysize(levels); i++) {
     i::MessageLocation location(script, 0, 0);
-    i::Handle<i::String> msg(
-        i_isolate->factory()->InternalizeString(i::StaticCharVector("test")));
+    i::Handle<i::String> msg(i_isolate->factory()->InternalizeString(
+        v8::base::StaticCharVector("test")));
     i::Handle<i::JSMessageObject> message =
         i::MessageHandler::MakeMessageObject(
             i_isolate, i::MessageTemplate::kAsmJsInvalid, &location, msg,
@@ -18614,12 +18695,14 @@ static int CalcFibonacci(v8::Isolate* isolate, int limit) {
   v8::Isolate::Scope isolate_scope(isolate);
   v8::HandleScope scope(isolate);
   LocalContext context(isolate);
-  i::ScopedVector<char> code(1024);
-  i::SNPrintF(code, "function fib(n) {"
-                    "  if (n <= 2) return 1;"
-                    "  return fib(n-1) + fib(n-2);"
-                    "}"
-                    "fib(%d)", limit);
+  v8::base::ScopedVector<char> code(1024);
+  v8::base::SNPrintF(code,
+                     "function fib(n) {"
+                     "  if (n <= 2) return 1;"
+                     "  return fib(n-1) + fib(n-2);"
+                     "}"
+                     "fib(%d)",
+                     limit);
   Local<Value> value = CompileRun(code.begin());
   CHECK(value->IsNumber());
   return static_cast<int>(value->NumberValue(context.local()).FromJust());
@@ -18941,6 +19024,13 @@ TEST(RegExp) {
   CHECK(re->GetSource()->Equals(context.local(), v8_str("foo")).FromJust());
   CHECK_EQ(v8::RegExp::kNone, re->GetFlags());
 
+  re = v8::RegExp::New(context.local(), v8_str("foo/bar"), v8::RegExp::kNone)
+           .ToLocalChecked();
+  CHECK(re->IsRegExp());
+  CHECK(
+      re->GetSource()->Equals(context.local(), v8_str("foo\\/bar")).FromJust());
+  CHECK_EQ(v8::RegExp::kNone, re->GetFlags());
+
   re = v8::RegExp::New(context.local(), v8_str("bar"),
                        static_cast<v8::RegExp::Flags>(v8::RegExp::kIgnoreCase |
                                                       v8::RegExp::kGlobal))
@@ -18971,6 +19061,11 @@ TEST(RegExp) {
   re = CompileRun("/quux/").As<v8::RegExp>();
   CHECK(re->IsRegExp());
   CHECK(re->GetSource()->Equals(context.local(), v8_str("quux")).FromJust());
+  CHECK_EQ(v8::RegExp::kNone, re->GetFlags());
+
+  re = CompileRun("RegExp('qu/ux')").As<v8::RegExp>();
+  CHECK(re->IsRegExp());
+  CHECK(re->GetSource()->Equals(context.local(), v8_str("qu\\/ux")).FromJust());
   CHECK_EQ(v8::RegExp::kNone, re->GetFlags());
 
   re = CompileRun("/quux/gm").As<v8::RegExp>();
@@ -19912,8 +20007,8 @@ void RecursiveCall(const v8::FunctionCallbackInfo<v8::Value>& args) {
     level++;
     v8::base::OS::Print("Entering recursion level %d.\n", level);
     char script[64];
-    i::Vector<char> script_vector(script, sizeof(script));
-    i::SNPrintF(script_vector, "recursion(%d)", level);
+    v8::base::Vector<char> script_vector(script, sizeof(script));
+    v8::base::SNPrintF(script_vector, "recursion(%d)", level);
     CompileRun(script_vector.begin());
     v8::base::OS::Print("Leaving recursion level %d.\n", level);
     CHECK_EQ(0, callback_fired);
@@ -21365,8 +21460,8 @@ void CheckCorrectThrow(const char* script) {
   // The subsequent try-catch should run without any exception.
   access_check_fail_thrown = false;
   catch_callback_called = false;
-  i::ScopedVector<char> source(1024);
-  i::SNPrintF(source, "try { %s; } catch (e) { catcher(e); }", script);
+  v8::base::ScopedVector<char> source(1024);
+  v8::base::SNPrintF(source, "try { %s; } catch (e) { catcher(e); }", script);
   CompileRun(source.begin());
   CHECK(access_check_fail_thrown);
   CHECK(catch_callback_called);
@@ -21467,10 +21562,11 @@ const int kSubjectStringLength = arraysize(kOneByteSubjectString) - 1;
 STATIC_ASSERT(arraysize(kOneByteSubjectString) ==
               arraysize(kTwoByteSubjectString));
 
-OneByteVectorResource one_byte_string_resource(
-    i::Vector<const char>(&kOneByteSubjectString[0], kSubjectStringLength));
+OneByteVectorResource one_byte_string_resource(v8::base::Vector<const char>(
+    &kOneByteSubjectString[0], kSubjectStringLength));
 UC16VectorResource two_byte_string_resource(
-    i::Vector<const i::uc16>(&kTwoByteSubjectString[0], kSubjectStringLength));
+    v8::base::Vector<const v8::base::uc16>(&kTwoByteSubjectString[0],
+                                           kSubjectStringLength));
 
 class RegExpInterruptTest {
  public:
@@ -22358,16 +22454,15 @@ class ApiCallOptimizationChecker {
     // With no signature, the holder is not set.
     if (signature_type == kNoSignature) holder = receiver;
     // build wrap_function
-    i::ScopedVector<char> wrap_function(200);
+    v8::base::ScopedVector<char> wrap_function(200);
     if (global) {
-      i::SNPrintF(
-          wrap_function,
-          "function wrap_f_%d() { var f = g_f; return f(); }\n"
-          "function wrap_get_%d() { return this.g_acc; }\n"
-          "function wrap_set_%d() { return this.g_acc = 1; }\n",
-          key, key, key);
+      v8::base::SNPrintF(wrap_function,
+                         "function wrap_f_%d() { var f = g_f; return f(); }\n"
+                         "function wrap_get_%d() { return this.g_acc; }\n"
+                         "function wrap_set_%d() { return this.g_acc = 1; }\n",
+                         key, key, key);
     } else {
-      i::SNPrintF(
+      v8::base::SNPrintF(
           wrap_function,
           "function wrap_f_%d() { return receiver_subclass.f(); }\n"
           "function wrap_get_%d() { return receiver_subclass.acc; }\n"
@@ -22375,38 +22470,38 @@ class ApiCallOptimizationChecker {
           key, key, key);
     }
     // build source string
-    i::ScopedVector<char> source(1000);
-    i::SNPrintF(source,
-                "%s\n"  // wrap functions
-                "function wrap_f() { return wrap_f_%d(); }\n"
-                "function wrap_get() { return wrap_get_%d(); }\n"
-                "function wrap_set() { return wrap_set_%d(); }\n"
-                "check = function(returned) {\n"
-                "  if (returned !== 'returned') { throw returned; }\n"
-                "};\n"
-                "\n"
-                "%%PrepareFunctionForOptimization(wrap_f_%d);"
-                "check(wrap_f());\n"
-                "check(wrap_f());\n"
-                "%%OptimizeFunctionOnNextCall(wrap_f_%d);\n"
-                "check(wrap_f());\n"
-                "\n"
-                "%%PrepareFunctionForOptimization(wrap_get_%d);"
-                "check(wrap_get());\n"
-                "check(wrap_get());\n"
-                "%%OptimizeFunctionOnNextCall(wrap_get_%d);\n"
-                "check(wrap_get());\n"
-                "\n"
-                "check = function(returned) {\n"
-                "  if (returned !== 1) { throw returned; }\n"
-                "};\n"
-                "%%PrepareFunctionForOptimization(wrap_set_%d);"
-                "check(wrap_set());\n"
-                "check(wrap_set());\n"
-                "%%OptimizeFunctionOnNextCall(wrap_set_%d);\n"
-                "check(wrap_set());\n",
-                wrap_function.begin(), key, key, key, key, key, key, key, key,
-                key);
+    v8::base::ScopedVector<char> source(1000);
+    v8::base::SNPrintF(source,
+                       "%s\n"  // wrap functions
+                       "function wrap_f() { return wrap_f_%d(); }\n"
+                       "function wrap_get() { return wrap_get_%d(); }\n"
+                       "function wrap_set() { return wrap_set_%d(); }\n"
+                       "check = function(returned) {\n"
+                       "  if (returned !== 'returned') { throw returned; }\n"
+                       "};\n"
+                       "\n"
+                       "%%PrepareFunctionForOptimization(wrap_f_%d);"
+                       "check(wrap_f());\n"
+                       "check(wrap_f());\n"
+                       "%%OptimizeFunctionOnNextCall(wrap_f_%d);\n"
+                       "check(wrap_f());\n"
+                       "\n"
+                       "%%PrepareFunctionForOptimization(wrap_get_%d);"
+                       "check(wrap_get());\n"
+                       "check(wrap_get());\n"
+                       "%%OptimizeFunctionOnNextCall(wrap_get_%d);\n"
+                       "check(wrap_get());\n"
+                       "\n"
+                       "check = function(returned) {\n"
+                       "  if (returned !== 1) { throw returned; }\n"
+                       "};\n"
+                       "%%PrepareFunctionForOptimization(wrap_set_%d);"
+                       "check(wrap_set());\n"
+                       "check(wrap_set());\n"
+                       "%%OptimizeFunctionOnNextCall(wrap_set_%d);\n"
+                       "check(wrap_set());\n",
+                       wrap_function.begin(), key, key, key, key, key, key, key,
+                       key, key);
     v8::TryCatch try_catch(isolate);
     CompileRun(source.begin());
     CHECK(!try_catch.HasCaught());
@@ -22603,25 +22698,86 @@ TEST(ChainSignatureCheck) {
 
 
 static const char* last_event_message;
-static int last_event_status;
+// See v8::LogEventStatus
+static v8::LogEventStatus last_event_status;
+static int event_count = 0;
 void StoringEventLoggerCallback(const char* message, int status) {
     last_event_message = message;
-    last_event_status = status;
+    last_event_status = static_cast<v8::LogEventStatus>(status);
+    event_count++;
 }
 
 
 TEST(EventLogging) {
   v8::Isolate* isolate = CcTest::isolate();
   isolate->SetEventLogger(StoringEventLoggerCallback);
-  v8::internal::HistogramTimer histogramTimer(
-      "V8.Test", 0, 10000, v8::internal::HistogramTimerResolution::MILLISECOND,
+  v8::internal::NestedTimedHistogram histogram(
+      "V8.Test", 0, 10000, v8::internal::TimedHistogramResolution::MILLISECOND,
       50, reinterpret_cast<v8::internal::Isolate*>(isolate)->counters());
-  histogramTimer.Start();
+  event_count = 0;
+  int count = 0;
+  {
+    CHECK_EQ(0, event_count);
+    {
+      CHECK_EQ(0, event_count);
+      v8::internal::NestedTimedHistogramScope scope0(&histogram);
+      CHECK_EQ(0, strcmp("V8.Test", last_event_message));
+      CHECK_EQ(v8::LogEventStatus::kStart, last_event_status);
+      CHECK_EQ(++count, event_count);
+    }
+    CHECK_EQ(v8::LogEventStatus::kEnd, last_event_status);
+    CHECK_EQ(++count, event_count);
+
+    v8::internal::NestedTimedHistogramScope scope1(&histogram);
+    CHECK_EQ(0, strcmp("V8.Test", last_event_message));
+    CHECK_EQ(v8::LogEventStatus::kStart, last_event_status);
+    CHECK_EQ(++count, event_count);
+    {
+      CHECK_EQ(count, event_count);
+      v8::internal::NestedTimedHistogramScope scope2(&histogram);
+      CHECK_EQ(0, strcmp("V8.Test", last_event_message));
+      CHECK_EQ(v8::LogEventStatus::kStart, last_event_status);
+      CHECK_EQ(++count, event_count);
+      {
+        CHECK_EQ(count, event_count);
+        v8::internal::NestedTimedHistogramScope scope3(&histogram);
+        CHECK_EQ(++count, event_count);
+        v8::internal::PauseNestedTimedHistogramScope scope4(&histogram);
+        // The outer timer scope is just paused, no event is emited yet.
+        CHECK_EQ(count, event_count);
+        {
+          CHECK_EQ(count, event_count);
+          v8::internal::NestedTimedHistogramScope scope5(&histogram);
+          v8::internal::NestedTimedHistogramScope scope5_1(&histogram);
+          CHECK_EQ(0, strcmp("V8.Test", last_event_message));
+          CHECK_EQ(v8::LogEventStatus::kStart, last_event_status);
+          count++;
+          CHECK_EQ(++count, event_count);
+        }
+        CHECK_EQ(0, strcmp("V8.Test", last_event_message));
+        CHECK_EQ(v8::LogEventStatus::kEnd, last_event_status);
+        count++;
+        CHECK_EQ(++count, event_count);
+      }
+      CHECK_EQ(0, strcmp("V8.Test", last_event_message));
+      CHECK_EQ(v8::LogEventStatus::kEnd, last_event_status);
+      CHECK_EQ(++count, event_count);
+      v8::internal::PauseNestedTimedHistogramScope scope6(&histogram);
+      // The outer timer scope is just paused, no event is emited yet.
+      CHECK_EQ(count, event_count);
+      {
+        v8::internal::PauseNestedTimedHistogramScope scope7(&histogram);
+        CHECK_EQ(count, event_count);
+      }
+      CHECK_EQ(count, event_count);
+    }
+    CHECK_EQ(0, strcmp("V8.Test", last_event_message));
+    CHECK_EQ(v8::LogEventStatus::kEnd, last_event_status);
+    CHECK_EQ(++count, event_count);
+  }
   CHECK_EQ(0, strcmp("V8.Test", last_event_message));
-  CHECK_EQ(0, last_event_status);
-  histogramTimer.Stop();
-  CHECK_EQ(0, strcmp("V8.Test", last_event_message));
-  CHECK_EQ(1, last_event_status);
+  CHECK_EQ(v8::LogEventStatus::kEnd, last_event_status);
+  CHECK_EQ(++count, event_count);
 }
 
 TEST(PropertyDescriptor) {
@@ -24359,7 +24515,7 @@ TEST(CreateSyntheticModule) {
             .IsUndefined());
   CHECK_EQ(i_module->export_names().length(), 1);
   CHECK(i::String::cast(i_module->export_names().get(0)).Equals(*default_name));
-  CHECK_EQ(i_module->status(), i::Module::kInstantiated);
+  CHECK_EQ(i_module->status(), i::Module::kLinked);
   CHECK(module->IsSyntheticModule());
   CHECK(!module->IsSourceTextModule());
   CHECK_EQ(module->GetModuleRequests()->Length(), 0);
@@ -25662,28 +25818,28 @@ TEST(ObjectTemplateArrayProtoIntrinsics) {
   };
 
   for (unsigned i = 0; i < arraysize(intrinsics_comparisons); i++) {
-    i::ScopedVector<char> test_string(64);
+    v8::base::ScopedVector<char> test_string(64);
 
-    i::SNPrintF(test_string, "typeof obj1.%s",
-                intrinsics_comparisons[i].object_property_name);
+    v8::base::SNPrintF(test_string, "typeof obj1.%s",
+                       intrinsics_comparisons[i].object_property_name);
     ExpectString(test_string.begin(), "function");
 
-    i::SNPrintF(test_string, "obj1.%s === %s",
-                intrinsics_comparisons[i].object_property_name,
-                intrinsics_comparisons[i].array_property_name);
+    v8::base::SNPrintF(test_string, "obj1.%s === %s",
+                       intrinsics_comparisons[i].object_property_name,
+                       intrinsics_comparisons[i].array_property_name);
     ExpectTrue(test_string.begin());
 
-    i::SNPrintF(test_string, "obj1.%s = 42",
-                intrinsics_comparisons[i].object_property_name);
+    v8::base::SNPrintF(test_string, "obj1.%s = 42",
+                       intrinsics_comparisons[i].object_property_name);
     CompileRun(test_string.begin());
 
-    i::SNPrintF(test_string, "obj1.%s === %s",
-                intrinsics_comparisons[i].object_property_name,
-                intrinsics_comparisons[i].array_property_name);
+    v8::base::SNPrintF(test_string, "obj1.%s === %s",
+                       intrinsics_comparisons[i].object_property_name,
+                       intrinsics_comparisons[i].array_property_name);
     ExpectFalse(test_string.begin());
 
-    i::SNPrintF(test_string, "typeof obj1.%s",
-                intrinsics_comparisons[i].object_property_name);
+    v8::base::SNPrintF(test_string, "typeof obj1.%s",
+                       intrinsics_comparisons[i].object_property_name);
     ExpectString(test_string.begin(), "number");
   }
 }
@@ -26288,7 +26444,7 @@ HostImportModuleDynamicallyWithAssertionsCallbackResolve(
 }
 
 TEST(DynamicImportWithAssertions) {
-  FLAG_SCOPE_EXTERNAL(harmony_import_assertions);
+  FLAG_SCOPE(harmony_import_assertions);
 
   LocalContext context;
   v8::Isolate* isolate = context->GetIsolate();
@@ -27058,18 +27214,18 @@ TEST(GetJSEntryStubs) {
   v8::JSEntryStubs entry_stubs = isolate->GetJSEntryStubs();
 
   v8::JSEntryStub entry_stub = entry_stubs.js_entry_stub;
-  CHECK_EQ(i_isolate->heap()->builtin(i::Builtins::kJSEntry).InstructionStart(),
+  CHECK_EQ(i_isolate->heap()->builtin(i::Builtin::kJSEntry).InstructionStart(),
            reinterpret_cast<i::Address>(entry_stub.code.start));
 
   v8::JSEntryStub construct_stub = entry_stubs.js_construct_entry_stub;
   CHECK_EQ(i_isolate->heap()
-               ->builtin(i::Builtins::kJSConstructEntry)
+               ->builtin(i::Builtin::kJSConstructEntry)
                .InstructionStart(),
            reinterpret_cast<i::Address>(construct_stub.code.start));
 
   v8::JSEntryStub microtask_stub = entry_stubs.js_run_microtasks_entry_stub;
   CHECK_EQ(i_isolate->heap()
-               ->builtin(i::Builtins::kJSRunMicrotasksEntry)
+               ->builtin(i::Builtin::kJSRunMicrotasksEntry)
                .InstructionStart(),
            reinterpret_cast<i::Address>(microtask_stub.code.start));
 }
@@ -28114,8 +28270,8 @@ void CallWithLessArguments() {
             "%OptimizeFunctionOnNextCall(func);"
             "func();");
 
-  // Passing not enough arguments should go through the fast path.
-  CHECK(checker.DidCallFast());
+  // Passing not enough arguments should not go through the fast path.
+  CHECK(checker.DidCallSlow());
 }
 
 void CallWithMoreArguments() {
@@ -28204,6 +28360,7 @@ TEST(FastApiStackSlot) {
   // Disable --always_opt, otherwise we haven't generated the necessary
   // feedback to go down the "best optimization" path for the fast call.
   v8::internal::FLAG_always_opt = false;
+  v8::internal::FlagList::EnforceFlagImplications();
 
   v8::Isolate* isolate = CcTest::isolate();
   i::Isolate* i_isolate = reinterpret_cast<i::Isolate*>(isolate);
@@ -28255,6 +28412,7 @@ TEST(FastApiCalls) {
   // Disable --always_opt, otherwise we haven't generated the necessary
   // feedback to go down the "best optimization" path for the fast call.
   v8::internal::FLAG_always_opt = false;
+  v8::internal::FlagList::EnforceFlagImplications();
 
   v8::Isolate* isolate = CcTest::isolate();
   i::Isolate* i_isolate = reinterpret_cast<i::Isolate*>(isolate);
@@ -28713,6 +28871,110 @@ TEST(FastApiCalls) {
 #endif  // V8_LITE_MODE
 }
 
+#ifndef V8_LITE_MODE
+namespace {
+void FastCallback1TypedArray(v8::Local<v8::Object> receiver, int arg0,
+                             const v8::FastApiTypedArray<double>& arg1) {
+  // TODO(mslekova): Use the TypedArray parameter
+}
+
+void FastCallback2JSArray(v8::Local<v8::Object> receiver, int arg0,
+                          v8::Local<v8::Array> arg1) {
+  // TODO(mslekova): Use the JSArray parameter
+}
+
+void FastCallback3SwappedParams(v8::Local<v8::Object> receiver,
+                                v8::Local<v8::Array> arg0, int arg1) {}
+
+void FastCallback4Scalar(v8::Local<v8::Object> receiver, int arg0, float arg1) {
+}
+
+void FastCallback5DifferentArity(v8::Local<v8::Object> receiver, int arg0,
+                                 v8::Local<v8::Array> arg1, float arg2) {}
+}  // namespace
+#endif  // V8_LITE_MODE
+
+TEST(FastApiSequenceOverloads) {
+#ifndef V8_LITE_MODE
+  if (i::FLAG_jitless) return;
+
+  v8::internal::FLAG_opt = true;
+  v8::internal::FLAG_turbo_fast_api_calls = true;
+  v8::internal::FLAG_allow_natives_syntax = true;
+  // Disable --always_opt, otherwise we haven't generated the necessary
+  // feedback to go down the "best optimization" path for the fast call.
+  v8::internal::FLAG_always_opt = false;
+  v8::internal::FlagList::EnforceFlagImplications();
+
+  v8::CFunction typed_array_callback =
+      v8::CFunctionBuilder()
+          .Fn(FastCallback1TypedArray)
+          .Arg<0, v8::CTypeInfo::Flags::kNone>()
+          .Arg<1, v8::CTypeInfo::Flags::kNone>()
+          .Arg<2, v8::CTypeInfo::Flags::kAllowSharedBit>()
+          .Build();
+  v8::CFunction js_array_callback = v8::CFunctionBuilder()
+                                        .Fn(FastCallback2JSArray)
+                                        .Arg<0, v8::CTypeInfo::Flags::kNone>()
+                                        .Arg<1, v8::CTypeInfo::Flags::kNone>()
+                                        .Arg<2, v8::CTypeInfo::Flags::kNone>()
+                                        .Build();
+
+  // TODO(mslekova): Create a FunctionTemplate with the 2 overloads.
+  USE(typed_array_callback);
+  USE(js_array_callback);
+
+#endif  // V8_LITE_MODE
+}
+
+TEST(FastApiOverloadResolution) {
+#ifndef V8_LITE_MODE
+  if (i::FLAG_jitless) return;
+
+  v8::internal::FLAG_opt = true;
+  v8::internal::FLAG_turbo_fast_api_calls = true;
+  v8::internal::FLAG_allow_natives_syntax = true;
+  // Disable --always_opt, otherwise we haven't generated the necessary
+  // feedback to go down the "best optimization" path for the fast call.
+  v8::internal::FLAG_always_opt = false;
+  v8::internal::FlagList::EnforceFlagImplications();
+
+  v8::CFunction typed_array_callback =
+      v8::CFunctionBuilder().Fn(FastCallback1TypedArray).Build();
+  v8::CFunction js_array_callback =
+      v8::CFunctionBuilder().Fn(FastCallback2JSArray).Build();
+
+  // Check that a general runtime overload resolution is possible.
+  CHECK_EQ(v8::CFunction::OverloadResolution::kAtRuntime,
+           typed_array_callback.GetOverloadResolution(&js_array_callback));
+
+  v8::CFunction swapped_params_callback =
+      v8::CFunctionBuilder().Fn(FastCallback3SwappedParams).Build();
+
+  // Check that difference in > 1 position is not possible.
+  CHECK_EQ(
+      v8::CFunction::OverloadResolution::kImpossible,
+      typed_array_callback.GetOverloadResolution(&swapped_params_callback));
+
+  v8::CFunction scalar_callback =
+      v8::CFunctionBuilder().Fn(FastCallback4Scalar).Build();
+
+  // Check that resolving when there is a scalar at the difference position
+  // is not possible.
+  CHECK_EQ(v8::CFunction::OverloadResolution::kImpossible,
+           typed_array_callback.GetOverloadResolution(&scalar_callback));
+
+  v8::CFunction diff_arity_callback =
+      v8::CFunctionBuilder().Fn(FastCallback5DifferentArity).Build();
+
+  // Check that overload resolution between different number of arguments
+  // is possible.
+  CHECK_EQ(v8::CFunction::OverloadResolution::kAtCompileTime,
+           typed_array_callback.GetOverloadResolution(&diff_arity_callback));
+
+#endif  // V8_LITE_MODE
+}
+
 THREADED_TEST(Recorder_GetContext) {
   using v8::Context;
   using v8::Local;
@@ -29125,4 +29387,58 @@ TEST(TestSetSabConstructorEnabledCallback) {
 
   sab_constructor_enabled_value = true;
   CHECK(i_isolate->IsSharedArrayBufferConstructorEnabled(i_context));
+}
+
+namespace {
+void NodeTypeCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  v8::Isolate* isolate = args.GetIsolate();
+  args.GetReturnValue().Set(v8::Number::New(isolate, 1));
+}
+}  // namespace
+
+TEST(EmbedderInstanceTypes) {
+  LocalContext env;
+  v8::Isolate* isolate = env->GetIsolate();
+  v8::HandleScope scope(isolate);
+  i::FLAG_embedder_instance_types = true;
+  Local<FunctionTemplate> node = FunctionTemplate::New(isolate);
+  Local<ObjectTemplate> proto_template = node->PrototypeTemplate();
+  Local<FunctionTemplate> nodeType = v8::FunctionTemplate::New(
+      isolate, NodeTypeCallback, Local<Value>(),
+      v8::Signature::New(isolate, node), 0, v8::ConstructorBehavior::kThrow,
+      v8::SideEffectType::kHasSideEffect, nullptr, 0, 1, 3);
+  proto_template->SetAccessorProperty(
+      String::NewFromUtf8Literal(isolate, "nodeType"), nodeType);
+
+  Local<FunctionTemplate> element = FunctionTemplate::New(
+      isolate, nullptr, Local<Value>(), Local<v8::Signature>(), 0,
+      v8::ConstructorBehavior::kAllow, v8::SideEffectType::kHasSideEffect,
+      nullptr, 1);
+  element->Inherit(node);
+
+  Local<FunctionTemplate> html_element = FunctionTemplate::New(
+      isolate, nullptr, Local<Value>(), Local<v8::Signature>(), 0,
+      v8::ConstructorBehavior::kAllow, v8::SideEffectType::kHasSideEffect,
+      nullptr, 2);
+  html_element->Inherit(element);
+
+  Local<FunctionTemplate> div_element = FunctionTemplate::New(
+      isolate, nullptr, Local<Value>(), Local<v8::Signature>(), 0,
+      v8::ConstructorBehavior::kAllow, v8::SideEffectType::kHasSideEffect,
+      nullptr, 3);
+  div_element->Inherit(html_element);
+
+  CHECK(env->Global()
+            ->Set(env.local(), v8_str("div"),
+                  div_element->GetFunction(env.local())
+                      .ToLocalChecked()
+                      ->NewInstance(env.local())
+                      .ToLocalChecked())
+            .FromJust());
+
+  CompileRun("var x = div.nodeType;");
+
+  Local<Value> res =
+      env->Global()->Get(env.local(), v8_str("x")).ToLocalChecked();
+  CHECK_EQ(1, res->ToInt32(env.local()).ToLocalChecked()->Value());
 }
