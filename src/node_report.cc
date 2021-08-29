@@ -8,6 +8,17 @@
 #include "node_mutex.h"
 #include "node_worker.h"
 #include "util.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-exception.h"
+#include "v8-initialization.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-statistics.h"
+#include "v8-value.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -50,6 +61,7 @@ using v8::MaybeLocal;
 using v8::Nothing;
 using v8::Object;
 using v8::String;
+using v8::Symbol;
 using v8::TryCatch;
 using v8::V8;
 using v8::Value;
@@ -523,7 +535,7 @@ static Maybe<std::string> ErrorToString(Isolate* isolate,
   MaybeLocal<String> maybe_str;
   // `ToString` is not available to Symbols.
   if (error->IsSymbol()) {
-    maybe_str = error.As<v8::Symbol>()->ToDetailString(context);
+    maybe_str = error.As<Symbol>()->ToDetailString(context);
   } else if (!error->IsObject()) {
     maybe_str = error->ToString(context);
   } else if (error->IsObject()) {

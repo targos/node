@@ -2,6 +2,21 @@
 #include "node_errors.h"
 #include "node_external_reference.h"
 #include "util-inl.h"
+#include "v8-array-buffer.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-external.h"
+#include "v8-function.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-persistent-handle.h"
+#include "v8-primitive.h"
+#include "v8-promise.h"
+#include "v8-proxy.h"
+#include "v8-template.h"
+#include "v8-value.h"
 
 namespace node {
 namespace util {
@@ -13,6 +28,7 @@ using v8::BigInt;
 using v8::Boolean;
 using v8::Context;
 using v8::External;
+using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
 using v8::Global;
@@ -279,7 +295,7 @@ static void GuessHandleType(const FunctionCallbackInfo<Value>& args) {
 
 static void IsConstructor(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsFunction());
-  args.GetReturnValue().Set(args[0].As<v8::Function>()->IsConstructor());
+  args.GetReturnValue().Set(args[0].As<Function>()->IsConstructor());
 }
 
 void RegisterExternalReferences(ExternalReferenceRegistry* registry) {

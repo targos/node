@@ -6,6 +6,18 @@
 #include "js_native_api_v8.h"
 #include "js_native_api.h"
 #include "util-inl.h"
+#include "v8-context.h"
+#include "v8-external.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-persistent-handle.h"
+#include "v8-primitive.h"
+#include "v8-promise.h"
+#include "v8-script.h"
+#include "v8-typed-array.h"
+#include "v8-value.h"
 
 #define CHECK_MAYBE_NOTHING(env, maybe, status) \
   RETURN_STATUS_IF_FALSE((env), !((maybe).IsNothing()), (status))

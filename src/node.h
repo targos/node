@@ -60,6 +60,7 @@
 # define SIGKILL 9
 #endif
 
+#include "v8.h"
 #include "v8-array-buffer.h"
 #include "v8-callbacks.h"
 #include "v8-container.h"

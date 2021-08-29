@@ -44,6 +44,13 @@
 
 #include "env-inl.h"
 #include "node_errors.h"
+#include "v8-callbacks.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 #include <cstring>
 

@@ -33,6 +33,7 @@
 #include "v8-isolate.h"
 #include "v8-local-handle.h"
 #include "v8-maybe.h"
+#include "v8-microtask-queue.h"
 #include "v8-object.h"
 #include "v8-persistent-handle.h"
 #include "v8-primitive.h"

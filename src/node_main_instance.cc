@@ -7,6 +7,10 @@
 #include "node_snapshotable.h"
 #include "node_v8_platform-inl.h"
 #include "util-inl.h"
+#include "v8-context.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-locker.h"
 #if defined(LEAK_SANITIZER)
 #include <sanitizer/lsan_interface.h>
 #endif

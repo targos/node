@@ -14,6 +14,9 @@
 #include "tracing/trace_event.h"
 #include "tracing/traced_value.h"
 #include "util.h"
+#include "v8-initialization.h"
+#include "v8-isolate.h"
+#include "v8-platform.h"
 
 namespace node {
 

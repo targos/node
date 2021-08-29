@@ -5,6 +5,7 @@
 #include "v8-function.h"
 #include "v8-isolate.h"
 #include "v8-local-handle.h"
+#include "v8-microtask-queue.h"
 #include "v8-object.h"
 #include "v8-primitive.h"
 #include "v8-value.h"

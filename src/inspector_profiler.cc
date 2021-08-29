@@ -8,7 +8,16 @@
 #include "node_file.h"
 #include "node_internals.h"
 #include "util-inl.h"
+#include "v8-context.h"
+#include "v8-function.h"
+#include "v8-function-callback.h"
 #include "v8-inspector.h"
+#include "v8-isolate.h"
+#include "v8-json.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 #include <cinttypes>
 #include <sstream>
@@ -22,11 +31,13 @@ using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::HandleScope;
 using v8::Isolate;
+using v8::JSON;
 using v8::Local;
 using v8::MaybeLocal;
 using v8::NewStringType;
 using v8::Object;
 using v8::String;
+using v8::Uint32;
 using v8::Value;
 
 using v8_inspector::StringView;
@@ -105,7 +116,7 @@ void V8ProfilerConnection::V8ProfilerSessionDelegate::SendMessageToFrontend(
         type);
 
   Local<Value> parsed;
-  if (!v8::JSON::Parse(context, message_str).ToLocal(&parsed) ||
+  if (!JSON::Parse(context, message_str).ToLocal(&parsed) ||
       !parsed->IsObject()) {
     fprintf(stderr, "Failed to parse %s profile result as JSON object\n", type);
     return;
@@ -121,7 +132,7 @@ void V8ProfilerConnection::V8ProfilerSessionDelegate::SendMessageToFrontend(
         stderr, "Cannot retrieve id from the response message:\n%s\n", *str);
     return;
   }
-  uint32_t id = id_v.As<v8::Uint32>()->Value();
+  uint32_t id = id_v.As<Uint32>()->Value();
 
   if (!connection_->HasProfileId(id)) {
     Utf8Value str(isolate, message_str);
@@ -194,7 +205,7 @@ void V8ProfilerConnection::WriteProfile(Local<Object> result) {
   }
 
   Local<String> result_s;
-  if (!v8::JSON::Stringify(context, profile).ToLocal(&result_s)) {
+  if (!JSON::Stringify(context, profile).ToLocal(&result_s)) {
     fprintf(stderr, "Failed to stringify %s profile result\n", type());
     return;
   }
@@ -259,7 +270,7 @@ void V8CoverageConnection::WriteProfile(Local<Object> result) {
   }
 
   Local<String> result_s;
-  if (!v8::JSON::Stringify(context, profile).ToLocal(&result_s)) {
+  if (!JSON::Stringify(context, profile).ToLocal(&result_s)) {
     fprintf(stderr, "Failed to stringify %s profile result\n", type());
     return;
   }

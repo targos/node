@@ -1,6 +1,12 @@
 #include "node.h"
 #include "env-inl.h"
 #include "debug_utils-inl.h"
+#include "v8-context.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-locker.h"
+#include "v8-maybe.h"
+#include "v8-persistent-handle.h"
 
 using v8::Context;
 using v8::Global;
@@ -164,7 +170,7 @@ Environment* CommonEnvironmentSetup::env() const {
   return impl_->env.get();
 }
 
-v8::Local<v8::Context> CommonEnvironmentSetup::context() const {
+Local<Context> CommonEnvironmentSetup::context() const {
   return impl_->context.Get(impl_->isolate);
 }
 
