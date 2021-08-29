@@ -51,7 +51,14 @@
 #include "node_errors.h"
 #include "node_internals.h"
 #include "util-inl.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+#include "v8-typed-array.h"
+#include "v8-value.h"
 
 #include <unicode/utypes.h>
 #include <unicode/putil.h>

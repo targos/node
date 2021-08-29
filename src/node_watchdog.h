@@ -29,7 +29,11 @@
 #include "memory_tracker-inl.h"
 #include "node_mutex.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-isolate.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 #ifdef __POSIX__
 #include <pthread.h>

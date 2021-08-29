@@ -5,7 +5,9 @@
 
 #include <cinttypes>
 #include <vector>
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-object.h"
+#include "v8-template.h"
 
 namespace node {
 

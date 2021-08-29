@@ -9,7 +9,8 @@
 #include "node.h"
 #include "util.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-isolate.h"
+#include "v8-snapshot.h"
 
 namespace node {
 

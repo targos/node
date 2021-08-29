@@ -25,7 +25,9 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "node.h"
-#include "v8.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
 
 #if HAVE_OPENSSL
 

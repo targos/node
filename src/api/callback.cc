@@ -1,7 +1,13 @@
 #include "node.h"
 #include "async_wrap-inl.h"
 #include "env-inl.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-function.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 namespace node {
 

@@ -5,7 +5,8 @@
 
 #include "async_wrap.h"
 #include "util.h"
-#include "v8.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
 
 namespace node {
 

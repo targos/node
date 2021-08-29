@@ -10,7 +10,13 @@
 #include "node_internals.h"
 #include "node_snapshotable.h"
 #include "node_worker.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-template.h"
+#include "v8-value.h"
 
 #include <string>
 #include <unordered_map>

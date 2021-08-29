@@ -27,7 +27,6 @@
 #include "node_crypto.h"
 #include "openssl/bio.h"
 #include "util.h"
-#include "v8.h"
 
 namespace node {
 

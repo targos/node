@@ -2,7 +2,10 @@
 #include "crypto/crypto_util.h"
 #include "env-inl.h"
 #include "node_errors.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-value.h"
 #include "node.h"
 
 #include <openssl/crypto.h>

@@ -25,7 +25,15 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "base_object.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-function.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+#include "v8-value.h"
+#include "v8-weak-callback-info.h"
 
 #include <cstdint>
 

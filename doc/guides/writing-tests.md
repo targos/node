@@ -387,7 +387,8 @@ would be placed in `test/cctest/test_env.cc`:
 #include "node_test_fixture.h"
 #include "env.h"
 #include "node.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-local-handle.h"
 
 static bool called_cb = false;
 static void at_exit_callback(void* arg);

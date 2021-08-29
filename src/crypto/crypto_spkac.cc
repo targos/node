@@ -5,7 +5,10 @@
 #include "env-inl.h"
 #include "memory_tracker-inl.h"
 #include "node.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 namespace node {
 

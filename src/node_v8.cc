@@ -26,7 +26,18 @@
 #include "node.h"
 #include "node_external_reference.h"
 #include "util-inl.h"
-#include "v8.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-initialization.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-script.h"
+#include "v8-snapshot.h"
+#include "v8-statistics.h"
+#include "v8-value.h"
 
 namespace node {
 namespace v8_utils {

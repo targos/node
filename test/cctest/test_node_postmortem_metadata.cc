@@ -4,7 +4,9 @@
 #include "node_test_fixture.h"
 #include "req_wrap-inl.h"
 #include "tracing/agent.h"
-#include "v8.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-template.h"
 #include "v8abbr.h"
 
 extern "C" {

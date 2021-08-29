@@ -7,7 +7,8 @@
 #include "base_object.h"
 #include "node_snapshotable.h"
 #include "util.h"
-#include "v8.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
 
 namespace node {
 class Environment;

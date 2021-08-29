@@ -24,7 +24,11 @@
 #include "debug_utils-inl.h"
 #include "threadpoolwork-inl.h"
 #include "memory_tracker-inl.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-exception.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 namespace node {
 

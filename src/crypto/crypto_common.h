@@ -4,7 +4,11 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "node_crypto.h"
-#include "v8.h"
+#include "v8-container.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 

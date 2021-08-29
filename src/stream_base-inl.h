@@ -8,7 +8,8 @@
 #include "base_object-inl.h"
 #include "node.h"
 #include "stream_base.h"
-#include "v8.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
 
 namespace node {
 

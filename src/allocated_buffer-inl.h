@@ -6,7 +6,10 @@
 #include "node_buffer.h"
 #include "env-inl.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-typed-array.h"
 #include "util-inl.h"
 #include "node_internals.h"
 

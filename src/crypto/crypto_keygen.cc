@@ -6,7 +6,12 @@
 #include "env-inl.h"
 #include "memory_tracker-inl.h"
 #include "threadpoolwork-inl.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 #include <cmath>
 

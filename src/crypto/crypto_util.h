@@ -9,7 +9,16 @@
 #include "node_errors.h"
 #include "node_internals.h"
 #include "util.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+#include "v8-value.h"
 #include "string_bytes.h"
 
 #include <openssl/err.h>

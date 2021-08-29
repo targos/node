@@ -6,7 +6,10 @@
 #include "aliased_buffer.h"
 #include "node.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-snapshot.h"
 
 #include <algorithm>
 #include <iostream>

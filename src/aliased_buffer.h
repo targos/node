@@ -5,7 +5,12 @@
 
 #include <cinttypes>
 #include "util-inl.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-persistent-handle.h"
+#include "v8-snapshot.h"
+#include "v8-typed-array.h"
 
 namespace node {
 

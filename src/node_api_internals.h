@@ -1,7 +1,10 @@
 #ifndef SRC_NODE_API_INTERNALS_H_
 #define SRC_NODE_API_INTERNALS_H_
 
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-context.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
 #define NAPI_EXPERIMENTAL
 #include "env-inl.h"
 #include "js_native_api_v8.h"

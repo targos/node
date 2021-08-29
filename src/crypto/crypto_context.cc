@@ -9,7 +9,17 @@
 #include "node_buffer.h"
 #include "node_options.h"
 #include "util.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-exception.h"
+#include "v8-external.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+#include "v8-value.h"
 
 #include <openssl/x509.h>
 #include <openssl/pkcs12.h>

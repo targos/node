@@ -7,7 +7,13 @@
 #include "node_buffer.h"
 #include "node_internals.h"
 #include "node_process-inl.h"
-#include "v8.h"
+#include "v8-container.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+#include "v8-value.h"
 
 namespace node {
 

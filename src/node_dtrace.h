@@ -24,8 +24,6 @@
 
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
-#include "v8.h"
-
 extern "C" {
 /*
  * The following structures are passed directly to DTrace when probes are fired.

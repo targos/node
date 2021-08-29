@@ -9,7 +9,7 @@
 #include "node_internals.h"
 #include "node_snapshotable.h"
 #include "util-inl.h"
-#include "v8.h"
+#include "v8-initialization.h"
 
 #ifdef _WIN32
 #include <windows.h>

@@ -8,7 +8,11 @@
 #include "crypto/crypto_util.h"
 #include "allocated_buffer.h"
 #include "env.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 namespace node {
 namespace crypto {

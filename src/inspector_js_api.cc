@@ -5,7 +5,16 @@
 #include "node_external_reference.h"
 #include "util-inl.h"
 #include "v8-inspector.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-function.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-persistent-handle.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+#include "v8-value.h"
 
 #include <memory>
 

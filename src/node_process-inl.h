@@ -4,7 +4,7 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "node_process.h"
-#include "v8.h"
+#include "v8-maybe.h"
 #include "debug_utils-inl.h"
 
 namespace node {

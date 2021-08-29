@@ -2,7 +2,7 @@
 #define TOOLS_CODE_CACHE_CACHE_BUILDER_H_
 
 #include <string>
-#include "v8.h"
+#include "v8-context.h"
 
 namespace node {
 namespace native_module {

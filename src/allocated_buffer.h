@@ -5,7 +5,9 @@
 
 #include "base_object.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
 #include "env.h"
 
 namespace node {

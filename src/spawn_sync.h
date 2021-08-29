@@ -26,7 +26,13 @@
 
 #include "node_buffer.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 namespace node {
 

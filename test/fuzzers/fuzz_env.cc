@@ -10,10 +10,13 @@
 #include "node_internals.h"
 #include "env-inl.h"
 #include "util-inl.h"
-#include "v8.h"
 #include "libplatform/libplatform.h"
 #include "aliased_buffer.h"
 #include "fuzz_helper.h"
+#include "v8-context.h"
+#include "v8-initialization.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
 
 using node::AliasedBufferBase;
 

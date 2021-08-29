@@ -27,7 +27,10 @@
 #include "node.h"
 #include "handle_wrap.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 namespace node {
 namespace fs {

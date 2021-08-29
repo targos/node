@@ -5,7 +5,11 @@
 #include "node.h"
 #include "node_mem-inl.h"
 #include "env-inl.h"
-#include "v8.h"
+#include "v8-container.h"
+#include "v8-local-handle.h"
+#include "v8-persistent-handle.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 #include <algorithm>
 

@@ -13,7 +13,12 @@
 #include "node.h"
 
 #include "ares.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-primitive.h"
+#include "v8-object.h"
+#include "v8-value.h"
 #include "uv.h"
 
 #include <unordered_set>

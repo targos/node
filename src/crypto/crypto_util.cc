@@ -10,7 +10,17 @@
 #include "string_bytes.h"
 #include "threadpoolwork-inl.h"
 #include "util-inl.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-context.h"
+#include "v8-exception.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-typed-array.h"
+#include "v8-value.h"
 
 #include "math.h"
 

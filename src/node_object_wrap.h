@@ -22,7 +22,11 @@
 #ifndef SRC_NODE_OBJECT_WRAP_H_
 #define SRC_NODE_OBJECT_WRAP_H_
 
-#include "v8.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-persistent-handle.h"
+#include "v8-weak-callback-info.h"
 #include <cassert>
 
 

@@ -1,7 +1,9 @@
 #include "node.h"
 #include "string_bytes.h"
 #include "util-inl.h"
-#include "v8.h"
+#include "v8-local-handle.h"
+#include "v8-isolate.h"
+#include "v8-value.h"
 
 namespace node {
 

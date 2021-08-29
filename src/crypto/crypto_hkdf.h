@@ -8,7 +8,10 @@
 #include "allocated_buffer.h"
 #include "async_wrap.h"
 #include "base_object.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-value.h"
 
 namespace node {
 namespace crypto {

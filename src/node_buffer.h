@@ -23,7 +23,13 @@
 #define SRC_NODE_BUFFER_H_
 
 #include "node.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-typed-array.h"
+#include "v8-value.h"
 
 namespace node {
 

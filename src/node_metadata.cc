@@ -6,7 +6,7 @@
 #include "node.h"
 #include "util.h"
 #include "uv.h"
-#include "v8.h"
+#include "v8-initialization.h"
 #include "zlib.h"
 
 #if HAVE_OPENSSL

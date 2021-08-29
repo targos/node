@@ -7,7 +7,12 @@
 #endif
 
 #include "node_options.h"
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-function.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-message.h"
+#include "v8-value.h"
 
 #include <cstddef>
 #include <memory>

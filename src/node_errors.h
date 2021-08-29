@@ -5,7 +5,14 @@
 
 #include "debug_utils-inl.h"
 #include "env.h"
-#include "v8.h"
+#include "v8-exception.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-message.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-typed-array.h"
+#include "v8-value.h"
 
 // Use ostringstream to print exact-width integer types
 // because the format specifiers are not available on AIX.

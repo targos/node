@@ -9,7 +9,11 @@
 #include "env.h"
 #include "memory_tracker.h"
 #include "node_internals.h"
-#include "v8.h"
+#include "v8-function-callback.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-value.h"
 
 namespace node {
 namespace crypto {

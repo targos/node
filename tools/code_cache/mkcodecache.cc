@@ -7,7 +7,12 @@
 #include "cache_builder.h"
 #include "debug_utils-inl.h"
 #include "libplatform/libplatform.h"
-#include "v8.h"
+#include "v8-array-buffer.h"
+#include "v8-context.h"
+#include "v8-initialization.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-platform.h"
 
 using node::native_module::CodeCacheBuilder;
 using v8::ArrayBuffer;
