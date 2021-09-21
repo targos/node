@@ -155,6 +155,7 @@
         'run_torque',
         'v8_base_without_compiler',
         'torque_runtime_support',
+        'v8_abseil',
         'v8_maybe_icu',
       ],
       'direct_dependent_settings': {
@@ -182,6 +183,7 @@
         'run_torque',
         'v8_internal_headers',
         'v8_libbase',
+        'v8_abseil',
         'v8_maybe_icu',
       ],
       'direct_dependent_settings': {
@@ -252,6 +254,7 @@
         'run_torque',
         'v8_base_without_compiler',
         'v8_initializers',
+        'v8_abseil',
         'v8_maybe_icu',
       ],
       'sources': [
@@ -367,6 +370,7 @@
             'generate_bytecode_builtins_list',
             'run_torque',
             'mksnapshot#host',
+            'v8_abseil',
             'v8_maybe_icu',
             # [GYP] added explicitly, instead of inheriting from the other deps
             'v8_base_without_compiler',
@@ -690,6 +694,7 @@
       'dependencies': [
         'generate_bytecode_builtins_list',
         'run_torque',
+        'v8_abseil',
         'v8_maybe_icu',
         'v8_base_without_compiler',
         'v8_internal_headers',
@@ -717,6 +722,7 @@
       'dependencies': [
         'generate_bytecode_builtins_list',
         'run_torque',
+        'v8_abseil',
         'v8_internal_headers',
         'v8_maybe_icu',
         'v8_base_without_compiler',
@@ -782,6 +788,7 @@
         'cppgc_base',
         'generate_bytecode_builtins_list',
         'run_torque',
+        'v8_abseil',
         'v8_internal_headers',
         'v8_maybe_icu',
         'v8_zlib',
@@ -1055,6 +1062,7 @@
 
       'dependencies': [
         'v8_headers',
+        'v8_abseil',
       ],
 
       'conditions': [
