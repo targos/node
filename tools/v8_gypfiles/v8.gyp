@@ -1555,7 +1555,7 @@
       'toolsets': ['host', 'target'],
       'direct_dependent_settings': {
         'sources': [
-          '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_source_set.\\"v8_heap_base_headers.*?sources = ")',
+          '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_heap_base_headers.*?sources = ")',
         ],
       },
     },  # v8_heap_base_headers
