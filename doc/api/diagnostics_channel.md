@@ -151,7 +151,11 @@ const channel = diagnostics_channel.channel('my-channel');
 
 <!-- YAML
 added:
+<<<<<<< HEAD
  - v18.7.0
+=======
+ - v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `name` {string|symbol} The channel name
@@ -183,7 +187,11 @@ diagnostics_channel.subscribe('my-channel', (message, name) => {
 
 <!-- YAML
 added:
+<<<<<<< HEAD
  - v18.7.0
+=======
+ - v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `name` {string|symbol} The channel name
@@ -308,7 +316,11 @@ channel.publish({
 added:
  - v15.1.0
  - v14.17.0
+<<<<<<< HEAD
 deprecated: v18.7.0
+=======
+deprecated: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 > Stability: 0 - Deprecated: Use [`diagnostics_channel.subscribe(name, onMessage)`][]
@@ -347,7 +359,11 @@ channel.subscribe((message, name) => {
 added:
  - v15.1.0
  - v14.17.0
+<<<<<<< HEAD
 deprecated: v18.7.0
+=======
+deprecated: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 changes:
   - version:
     - v17.1.0

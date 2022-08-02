@@ -599,7 +599,11 @@ the stream has not been destroyed, errored or ended.
 ##### `writable.writableAborted`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.0.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 > Stability: 1 - Experimental
@@ -1986,7 +1990,11 @@ console.log('done'); // Stream has finished
 ##### `readable.find(fn[, options])`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v17.5.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 > Stability: 1 - Experimental

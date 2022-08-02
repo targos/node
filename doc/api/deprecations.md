@@ -3149,7 +3149,11 @@ Convert them to primitive strings.
 
 <!-- YAML
 changes:
+<<<<<<< HEAD
   - version: v18.7.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42714
     description: Documentation-only deprecation.
 -->
@@ -3167,7 +3171,11 @@ thing instead.
 
 <!-- YAML
 changes:
+<<<<<<< HEAD
   - version: v18.7.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/43738
     description: Documentation-only deprecation.
 -->

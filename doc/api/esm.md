@@ -8,7 +8,11 @@
 added: v8.5.0
 changes:
   - version:
+<<<<<<< HEAD
     - v18.6.0
+=======
+    - v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42623
     description: Add support for chaining loaders.
   - version:
@@ -681,7 +685,11 @@ of Node.js applications.
 added: v8.8.0
 changes:
   - version:
+<<<<<<< HEAD
     - v18.6.0
+=======
+    - v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42623
     description: Add support for chaining loaders.
   - version: v16.12.0
@@ -731,7 +739,12 @@ prevent unintentional breaks in the chain.
 
 <!-- YAML
 changes:
+<<<<<<< HEAD
   - version: v18.6.0
+=======
+  - version:
+    - v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42623
     description: Add support for chaining resolve hooks. Each hook must either
       call `nextResolve()` or include a `shortCircuit` property set to `true`
@@ -823,7 +836,11 @@ export async function resolve(specifier, context, nextResolve) {
 
 <!-- YAML
 changes:
+<<<<<<< HEAD
   - version: v18.6.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42623
     description: Add support for chaining load hooks. Each hook must either
       call `nextLoad()` or include a `shortCircuit` property set to `true` in
@@ -921,7 +938,11 @@ source to a supported one (see [Examples](#examples) below).
 
 <!-- YAML
 changes:
+<<<<<<< HEAD
   - version: v18.6.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42623
     description: Add support for chaining globalPreload hooks.
 -->

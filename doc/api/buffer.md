@@ -457,7 +457,11 @@ added:
   - v15.7.0
   - v14.18.0
 changes:
+<<<<<<< HEAD
   - version: v18.0.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/41270
     description: No longer experimental.
 -->

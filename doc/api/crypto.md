@@ -2966,7 +2966,11 @@ Checks the primality of the `candidate`.
 added: v0.1.94
 deprecated: v10.0.0
 changes:
+<<<<<<< HEAD
   - version: v17.9.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42427
     description: The `authTagLength` option is now optional when using the
                  `chacha20-poly1305` cipher and defaults to 16 bytes.
@@ -3030,7 +3034,11 @@ Adversaries][] for details.
 <!-- YAML
 added: v0.1.94
 changes:
+<<<<<<< HEAD
   - version: v17.9.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42427
     description: The `authTagLength` option is now optional when using the
                  `chacha20-poly1305` cipher and defaults to 16 bytes.
@@ -3103,7 +3111,11 @@ given IV will be.
 added: v0.1.94
 deprecated: v10.0.0
 changes:
+<<<<<<< HEAD
   - version: v17.9.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42427
     description: The `authTagLength` option is now optional when using the
                  `chacha20-poly1305` cipher and defaults to 16 bytes.
@@ -3145,7 +3157,11 @@ to create the `Decipher` object.
 <!-- YAML
 added: v0.1.94
 changes:
+<<<<<<< HEAD
   - version: v17.9.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42427
     description: The `authTagLength` option is now optional when using the
                  `chacha20-poly1305` cipher and defaults to 16 bytes.

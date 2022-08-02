@@ -344,7 +344,11 @@ of `--enable-source-maps`.
 ### `--experimental-global-customevent`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.7.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 Expose the [CustomEvent Web API][] on the global scope.
@@ -512,7 +516,11 @@ To allow polyfills to be added,
 ### `--force-node-api-uncaught-exceptions-policy`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.3.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 Enforces `uncaughtException` event on Node-API asynchronous callbacks.
@@ -872,7 +880,11 @@ against FIPS-enabled OpenSSL.
 ### `--openssl-shared-config`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.5.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 Enable OpenSSL default configuration section, `openssl_conf` to be read from
@@ -887,7 +899,11 @@ Node.js which is `nodejs_conf` and is default when this option is not used.
 ### `--openssl-legacy-provider`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v17.0.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 Enable OpenSSL 3.0 legacy provider. For more information please see
@@ -1185,7 +1201,7 @@ The value given must be a power of two.
 ### `--snapshot-blob=path`
 
 <!-- YAML
-added: REPLACEME
+added: v16.17.0
 -->
 
 > Stability: 1 - Experimental
@@ -1220,7 +1236,11 @@ on [running tests from the command line][] for more details.
 ### `--test-only`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.0.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 Configures the test runner to only execute top level tests that have the `only`

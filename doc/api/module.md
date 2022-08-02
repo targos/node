@@ -65,7 +65,11 @@ const siblingModule = require('./sibling-module');
 ### `module.isBuiltin(moduleName)`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.6.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `moduleName` {string} name of the module

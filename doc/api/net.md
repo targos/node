@@ -284,7 +284,11 @@ Emitted when the server has been bound after calling [`server.listen()`][].
 ### Event: `'drop'`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.6.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 When the number of connections reaches the threshold of `server.maxConnections`,
@@ -1126,7 +1130,11 @@ The numeric representation of the remote port. For example, `80` or `21`.
 ### `socket.resetAndDestroy()`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.3.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * Returns: {net.Socket}

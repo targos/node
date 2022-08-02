@@ -2,6 +2,7 @@
 
 <!-- YAML
 changes:
+<<<<<<< HEAD
   - version: v18.4.0
     pr-url: https://github.com/nodejs/node/pull/43310
     description: Removed proprietary `'node.keyObject'` import/export format.
@@ -18,6 +19,24 @@ changes:
     description: Removed proprietary `'NODE-ED25519'` and `'NODE-ED448'`
       algorithms.
   - version: v18.4.0
+=======
+  - version: v16.17.0
+    pr-url: https://github.com/nodejs/node/pull/43310
+    description: Removed proprietary `'node.keyObject'` import/export format.
+  - version: v16.17.0
+    pr-url: https://github.com/nodejs/node/pull/43310
+    description: Removed proprietary `'NODE-DSA'`, `'NODE-DH'`,
+      and `'NODE-SCRYPT'` algorithms.
+  - version: v16.17.0
+    pr-url: https://github.com/nodejs/node/pull/42507
+    description: Added `'Ed25519'`, `'Ed448'`, `'X25519'`, and `'X448'`
+      algorithms.
+  - version: v16.17.0
+    pr-url: https://github.com/nodejs/node/pull/42507
+    description: Removed proprietary `'NODE-ED25519'` and `'NODE-ED448'`
+      algorithms.
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42507
     description: Removed proprietary `'NODE-X25519'` and `'NODE-X448'` named
       curves from the `'ECDH'` algorithm.
@@ -553,7 +572,11 @@ The algorithms currently supported include:
 <!-- YAML
 added: v15.0.0
 changes:
+<<<<<<< HEAD
   - version: v18.4.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42507
     description: Added `'X25519'`, and `'X448'` algorithms.
 -->
@@ -584,7 +607,11 @@ The algorithms currently supported include:
 <!-- YAML
 added: v15.0.0
 changes:
+<<<<<<< HEAD
   - version: v18.4.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42507
     description: Added `'X25519'`, and `'X448'` algorithms.
 -->
@@ -666,7 +693,11 @@ The algorithms currently supported include:
 <!-- YAML
 added: v15.0.0
 changes:
+<<<<<<< HEAD
   - version: v18.4.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42507
     description: Added `'Ed25519'`, `'Ed448'`, `'X25519'`, and `'X448'`
       algorithms.
@@ -754,7 +785,11 @@ The {CryptoKey} (secret key) generating algorithms supported include:
 <!-- YAML
 added: v15.0.0
 changes:
+<<<<<<< HEAD
   - version: v18.4.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42507
     description: Added `'Ed25519'`, `'Ed448'`, `'X25519'`, and `'X448'`
       algorithms.
@@ -809,7 +844,11 @@ The algorithms currently supported include:
 <!-- YAML
 added: v15.0.0
 changes:
+<<<<<<< HEAD
   - version: v18.4.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42507
     description: Added `'Ed25519'`, and `'Ed448'` algorithms.
 -->
@@ -893,7 +932,11 @@ The unwrapped key algorithms supported include:
 <!-- YAML
 added: v15.0.0
 changes:
+<<<<<<< HEAD
   - version: v18.4.0
+=======
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/42507
     description: Added `'Ed25519'`, and `'Ed448'` algorithms.
 -->
@@ -965,13 +1008,21 @@ are simple JavaScript dictionary objects.
 ### Class: `AlgorithmIdentifier`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.4.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 #### `algorithmIdentifier.name`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.4.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * Type: {string}
@@ -1228,7 +1279,11 @@ added: v15.0.0
 #### `ed448Params.name`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.4.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * Type: {string} Must be `'Ed448'`.
@@ -1236,7 +1291,11 @@ added: v18.4.0
 #### `ed448Params.context`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.4.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * Type: {ArrayBuffer|TypedArray|DataView|Buffer|undefined}

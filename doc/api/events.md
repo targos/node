@@ -1990,7 +1990,11 @@ Removes the `listener` from the list of handlers for event `type`.
 ### Class: `CustomEvent`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.7.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 > Stability: 1 - Experimental.
@@ -2003,7 +2007,11 @@ Instances are created internally by Node.js.
 #### `event.detail`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.7.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 > Stability: 1 - Experimental.

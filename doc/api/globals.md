@@ -202,7 +202,11 @@ console.log(ac.signal.reason);  // Error('boom!');
 #### `abortSignal.throwIfAborted()`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v17.3.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 If `abortSignal.aborted` is `true`, throws `abortSignal.reason`.
@@ -383,7 +387,11 @@ only if the Node.js binary was compiled with including support for the
 ## `CustomEvent`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.7.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 > Stability: 1 - Experimental. Enable this API with the

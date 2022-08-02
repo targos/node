@@ -70,7 +70,11 @@ Performance Timeline. If `name` is provided, removes only the named measure.
 ### `performance.clearResourceTimings([name])`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `name` {string}
@@ -213,7 +217,11 @@ Performance Timeline manually with `performance.clearMarks`.
 ### `performance.markResourceTiming(timingInfo, requestedUrl, initiatorType, global, cacheMode)`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `timingInfo` {Object} [Fetch Timing Info][]
@@ -713,7 +721,11 @@ initialized.
 ## Class: `PerformanceResourceTiming`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * Extends: {PerformanceEntry}
@@ -726,7 +738,11 @@ The constructor of this class is not exposed to users directly.
 ### `performanceResourceTiming.workerStart`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -738,7 +754,11 @@ will always return 0.
 ### `performanceResourceTiming.redirectStart`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -749,7 +769,11 @@ of the fetch which initiates the redirect.
 ### `performanceResourceTiming.redirectEnd`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -760,7 +784,11 @@ receiving the last byte of the response of the last redirect.
 ### `performanceResourceTiming.fetchStart`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -771,7 +799,11 @@ to fetch the resource.
 ### `performanceResourceTiming.domainLookupStart`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -782,7 +814,11 @@ the domain name lookup for the resource.
 ### `performanceResourceTiming.domainLookupEnd`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -793,7 +829,11 @@ after the Node.js finished the domain name lookup for the resource.
 ### `performanceResourceTiming.connectStart`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -805,7 +845,11 @@ the resource.
 ### `performanceResourceTiming.connectEnd`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -817,7 +861,11 @@ the resource.
 ### `performanceResourceTiming.secureConnectionStart`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -828,7 +876,11 @@ before Node.js starts the handshake process to secure the current connection.
 ### `performanceResourceTiming.requestStart`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -839,7 +891,11 @@ before Node.js receives the first byte of the response from the server.
 ### `performanceResourceTiming.responseEnd`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -851,7 +907,11 @@ the transport connection is closed, whichever comes first.
 ### `performanceResourceTiming.transferSize`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -862,7 +922,11 @@ includes the response header fields plus the response payload body.
 ### `performanceResourceTiming.encodedBodySize`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -874,7 +938,11 @@ content-codings.
 ### `performanceResourceTiming.decodedBodySize`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {number}
@@ -886,7 +954,11 @@ content-codings.
 ### `performanceResourceTiming.toJSON()`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.2.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 Returns a `object` that is the JSON representation of the

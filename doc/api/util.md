@@ -1027,9 +1027,15 @@ equality.
 ## `util.parseArgs([config])`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.3.0
 changes:
   - version: v18.7.0
+=======
+added: v16.17.0
+changes:
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/43459
     description: add support for returning detailed parse information
                  using `tokens` in input `config` and returned properties.

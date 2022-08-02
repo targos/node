@@ -1,6 +1,10 @@
 # Test runner
 
+<<<<<<< HEAD
 <!--introduced_in=v18.0.0-->
+=======
+<!--introduced_in=v16.17.0-->
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 
 > Stability: 1 - Experimental
 
@@ -319,12 +323,18 @@ internally.
 ## `test([name][, options][, fn])`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.0.0
 changes:
   - version: REPLACEME
     pr-url: https://github.com/nodejs/node/pull/43554
     description: Add a `signal` option.
   - version: v18.7.0
+=======
+added: v16.17.0
+changes:
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/43505
     description: Add a `timeout` option.
 -->
@@ -449,7 +459,7 @@ same as [`it([name], { todo: true }[, fn])`][it options].
 ### `before([, fn][, options])`
 
 <!-- YAML
-added: REPLACEME
+added: v16.17.0
 -->
 
 * `fn` {Function|AsyncFunction} The hook function.
@@ -573,7 +583,7 @@ exposed as part of the API.
 ### `context.beforeEach([, fn][, options])`
 
 <!-- YAML
-added: REPLACEME
+added: v16.17.0
 -->
 
 * `fn` {Function|AsyncFunction} The hook function. The first argument
@@ -655,7 +665,7 @@ test('top level test', (t) => {
 ### `context.name`
 
 <!-- YAML
-added: REPLACEME
+added: v16.17.0
 -->
 
 The name of the test.
@@ -687,7 +697,11 @@ test('top level test', (t) => {
 ### `context.signal`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.7.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {AbortSignal} Can be used to abort test subtasks when the test has been
@@ -702,7 +716,11 @@ test('top level test', async (t) => {
 ### `context.skip([message])`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.0.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `message` {string} Optional skip message to be displayed in TAP output.
@@ -722,7 +740,11 @@ test('top level test', (t) => {
 ### `context.todo([message])`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.0.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `message` {string} Optional `TODO` message to be displayed in TAP output.
@@ -741,12 +763,18 @@ test('top level test', (t) => {
 ### `context.test([name][, options][, fn])`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.0.0
 changes:
   - version: REPLACEME
     pr-url: https://github.com/nodejs/node/pull/43554
     description: Add a `signal` option.
   - version: v18.7.0
+=======
+added: v16.17.0
+changes:
+  - version: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
     pr-url: https://github.com/nodejs/node/pull/43505
     description: Add a `timeout` option.
 -->
@@ -796,7 +824,11 @@ test('top level test', async (t) => {
 ## Class: `SuiteContext`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.7.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 An instance of `SuiteContext` is passed to each suite function in order to
@@ -806,7 +838,7 @@ exposed as part of the API.
 ### `context.name`
 
 <!-- YAML
-added: REPLACEME
+added: v16.17.0
 -->
 
 The name of the suite.

@@ -1409,7 +1409,11 @@ type other than {net.Socket}.
 ### Event: `'dropRequest'`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.7.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `request` {http.IncomingMessage} Arguments for the HTTP request, as it is in
@@ -2395,7 +2399,11 @@ header name:
 ### `message.headersDistinct`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.3.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {Object}
@@ -2547,7 +2555,11 @@ The request/response trailers object. Only populated at the `'end'` event.
 ### `message.trailersDistinct`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.3.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * {Object}
@@ -2670,7 +2682,11 @@ will result in a `TypeError` being thrown.
 ### `outgoingMessage.appendHeader(name, value)`
 
 <!-- YAML
+<<<<<<< HEAD
 added: v18.3.0
+=======
+added: v16.17.0
+>>>>>>> 30187baf20 (2022-08-16, Version 16.17.0 'Gallium' (LTS))
 -->
 
 * `name` {string} Header name
