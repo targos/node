@@ -292,7 +292,7 @@
         }],
         ['v8_target_arch=="riscv64" or v8_target_arch=="riscv64"', {
           'sources': [
-            '<(V8_ROOT)/src/builtins/riscv64/builtins-riscv64.cc',
+            '<(V8_ROOT)/src/builtins/riscv/builtins-riscv.cc',
           ],
         }],        
         ['v8_target_arch=="loong64" or v8_target_arch=="loong64"', {
@@ -558,6 +558,11 @@
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?sources \\+= ")',
             ],
           }],
+          ['v8_enable_snapshot_compression==1', {
+            'sources': [
+              '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_snapshot_compression.*?sources \\+= ")',
+            ],
+          }],
           ['v8_control_flow_integrity==0', {
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?!v8_control_flow_integrity.*?sources \\+= ")',
@@ -793,6 +798,11 @@
             '<(V8_ROOT)/src/heap/third-party/heap-api-stub.cc',
           ],
         }],
+        ['v8_enable_snapshot_compression==1', {
+          'sources': [
+            '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?v8_enable_snapshot_compression.*?sources \\+= ")',
+          ],
+        }],
         ['v8_enable_maglev==1', {
           'sources': [
             '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?v8_enable_maglev.*?sources \\+= ")',
@@ -931,9 +941,9 @@
             },
           },
           'conditions': [
-            ['v8_enable_system_instrumentation==1', {
+            ['v8_enable_etw_stack_walking==1', {
               'sources': [
-                '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?is_win.*?v8_enable_system_instrumentation.*?sources \\+= ")',
+                '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?is_win.*?v8_enable_etw_stack_walking.*?sources \\+= ")',
               ],
             }],
           ],
@@ -1174,7 +1184,7 @@
               }
             },
             'conditions': [
-              ['v8_enable_system_instrumentation==1', {
+              ['v8_enable_etw_stack_walking==1', {
                 'msvs_settings': {
                   'VCLinkerTool': {
                     'AdditionalDependencies': [
