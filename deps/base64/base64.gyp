@@ -79,7 +79,7 @@
       'sources': [ 'base64/lib/arch/ssse3/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_SSSE3=1' ],
       'conditions': [
-        [ 'OS!="win"', {
+        [ 'OS!="win" or True', {
           'cflags': [ '-mssse3' ],
           'xcode_settings': {
             'OTHER_CFLAGS': [ '-mssse3' ]
@@ -95,7 +95,7 @@
       'sources': [ 'base64/lib/arch/sse41/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_SSE41=1' ],
       'conditions': [
-        [ 'OS!="win"', {
+        [ 'OS!="win" or True', {
           'cflags': [ '-msse4.1' ],
           'xcode_settings': {
             'OTHER_CFLAGS': [ '-msse4.1' ]
@@ -111,7 +111,7 @@
       'sources': [ 'base64/lib/arch/sse42/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_SSE42=1' ],
       'conditions': [
-        [ 'OS!="win"', {
+        [ 'OS!="win" or True', {
           'cflags': [ '-msse4.2' ],
           'xcode_settings': {
             'OTHER_CFLAGS': [ '-msse4.2' ]
