@@ -26,19 +26,20 @@ class V8_NODISCARD IncrementalMarkingScope {
   explicit IncrementalMarkingScope(MarkerBase* marker) : marker_(marker) {}
 
   ~IncrementalMarkingScope() V8_NOEXCEPT {
+    marker_->heap().stack()->SaveContext();
     marker_->FinishMarking(kIncrementalConfig.stack_state);
+    marker_->heap().stack()->ClearContext();
   }
 
-  static constexpr Marker::MarkingConfig kIncrementalConfig{
-      Marker::MarkingConfig::CollectionType::kMajor,
-      Marker::MarkingConfig::StackState::kNoHeapPointers,
-      Marker::MarkingConfig::MarkingType::kIncremental};
+  static constexpr MarkingConfig kIncrementalConfig{
+      CollectionType::kMajor, StackState::kNoHeapPointers,
+      MarkingConfig::MarkingType::kIncremental};
 
  private:
   MarkerBase* marker_;
 };
 
-constexpr Marker::MarkingConfig IncrementalMarkingScope::kIncrementalConfig;
+constexpr MarkingConfig IncrementalMarkingScope::kIncrementalConfig;
 
 class V8_NODISCARD ExpectWriteBarrierFires final
     : private IncrementalMarkingScope {

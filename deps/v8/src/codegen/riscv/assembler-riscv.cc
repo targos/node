@@ -132,8 +132,10 @@ Register ToRegister(int num) {
 
 const int RelocInfo::kApplyMask =
     RelocInfo::ModeMask(RelocInfo::INTERNAL_REFERENCE) |
+    RelocInfo::ModeMask(RelocInfo::NEAR_BUILTIN_ENTRY) |
     RelocInfo::ModeMask(RelocInfo::INTERNAL_REFERENCE_ENCODED) |
-    RelocInfo::ModeMask(RelocInfo::RELATIVE_CODE_TARGET);
+    RelocInfo::ModeMask(RelocInfo::RELATIVE_CODE_TARGET) |
+    RelocInfo::ModeMask(RelocInfo::CODE_TARGET);
 
 bool RelocInfo::IsCodedSpecially() {
   // The deserializer needs to know whether a pointer is specially coded.  Being
@@ -499,7 +501,7 @@ void Assembler::target_at_put(int pos, int target_pos, bool is_internal,
     *reinterpret_cast<uintptr_t*>(buffer_start_ + pos) = imm;
     return;
   }
-  DEBUG_PRINTF("target_at_put: %p (%d) to %p (%d)\n",
+  DEBUG_PRINTF("\ttarget_at_put: %p (%d) to %p (%d)\n",
                reinterpret_cast<Instr*>(buffer_start_ + pos), pos,
                reinterpret_cast<Instr*>(buffer_start_ + target_pos),
                target_pos);
@@ -595,7 +597,7 @@ void Assembler::print(const Label* L) {
 
 void Assembler::bind_to(Label* L, int pos) {
   DCHECK(0 <= pos && pos <= pc_offset());  // Must have valid binding position.
-  DEBUG_PRINTF("binding %d to label %p\n", pos, L);
+  DEBUG_PRINTF("\tbinding %d to label %p\n", pos, L);
   int trampoline_pos = kInvalidSlotPos;
   bool is_internal = false;
   if (L->is_linked() && !trampoline_emitted_) {
@@ -664,7 +666,7 @@ void Assembler::next(Label* L, bool is_internal) {
     L->Unuse();
   } else {
     DCHECK_GE(link, 0);
-    DEBUG_PRINTF("next: %p to %p (%d)\n", L,
+    DEBUG_PRINTF("\tnext: %p to %p (%d)\n", L,
                  reinterpret_cast<Instr*>(buffer_start_ + link), link);
     L->link_to(link);
   }
@@ -738,7 +740,7 @@ int32_t Assembler::get_trampoline_entry(int32_t pos) {
 
 uintptr_t Assembler::jump_address(Label* L) {
   intptr_t target_pos;
-  DEBUG_PRINTF("jump_address: %p to %p (%d)\n", L,
+  DEBUG_PRINTF("\tjump_address: %p to %p (%d)\n", L,
                reinterpret_cast<Instr*>(buffer_start_ + pc_offset()),
                pc_offset());
   if (L->is_bound()) {
@@ -769,7 +771,7 @@ uintptr_t Assembler::jump_address(Label* L) {
 int32_t Assembler::branch_long_offset(Label* L) {
   intptr_t target_pos;
 
-  DEBUG_PRINTF("branch_long_offset: %p to %p (%d)\n", L,
+  DEBUG_PRINTF("\tbranch_long_offset: %p to %p (%d)\n", L,
                reinterpret_cast<Instr*>(buffer_start_ + pc_offset()),
                pc_offset());
   if (L->is_bound()) {
@@ -794,13 +796,14 @@ int32_t Assembler::branch_long_offset(Label* L) {
   else
     DCHECK_EQ(offset & 3, 0);
   DCHECK(is_int32(offset));
+  VU.clear();
   return static_cast<int32_t>(offset);
 }
 
 int32_t Assembler::branch_offset_helper(Label* L, OffsetSize bits) {
   int32_t target_pos;
 
-  DEBUG_PRINTF("branch_offset_helper: %p to %p (%d)\n", L,
+  DEBUG_PRINTF("\tbranch_offset_helper: %p to %p (%d)\n", L,
                reinterpret_cast<Instr*>(buffer_start_ + pc_offset()),
                pc_offset());
   if (L->is_bound()) {
@@ -826,12 +829,13 @@ int32_t Assembler::branch_offset_helper(Label* L, OffsetSize bits) {
   DCHECK(is_intn(offset, bits));
   DCHECK_EQ(offset & 1, 0);
   DEBUG_PRINTF("\toffset = %d\n", offset);
+  VU.clear();
   return offset;
 }
 
 void Assembler::label_at_put(Label* L, int at_offset) {
   int target_pos;
-  DEBUG_PRINTF("label_at_put: %p @ %p (%d)\n", L,
+  DEBUG_PRINTF("\tlabel_at_put: %p @ %p (%d)\n", L,
                reinterpret_cast<Instr*>(buffer_start_ + at_offset), at_offset);
   if (L->is_bound()) {
     target_pos = L->pos();
@@ -1175,7 +1179,7 @@ void Assembler::li_ptr(Register rd, int64_t imm) {
 }
 
 void Assembler::li_constant(Register rd, int64_t imm) {
-  DEBUG_PRINTF("li_constant(%d, %lx <%ld>)\n", ToNumber(rd), imm, imm);
+  DEBUG_PRINTF("\tli_constant(%d, %lx <%ld>)\n", ToNumber(rd), imm, imm);
   lui(rd, (imm + (1LL << 47) + (1LL << 35) + (1LL << 23) + (1LL << 11)) >>
               48);  // Bits 63:48
   addiw(rd, rd,
@@ -1232,7 +1236,7 @@ void Assembler::li_ptr(Register rd, int32_t imm) {
 }
 
 void Assembler::li_constant(Register rd, int32_t imm) {
-  DEBUG_PRINTF("li_constant(%d, %x <%d>)\n", ToNumber(rd), imm, imm);
+  DEBUG_PRINTF("\tli_constant(%d, %x <%d>)\n", ToNumber(rd), imm, imm);
   int32_t high_20 = ((imm + 0x800) >> 12);  // bits31:12
   int32_t low_12 = imm & 0xfff;             // bits11:0
   lui(rd, high_20);
@@ -1331,7 +1335,7 @@ int Assembler::RelocateInternalReference(RelocInfo::Mode rmode, Address pc,
   DCHECK(RelocInfo::IsInternalReferenceEncoded(rmode));
   if (IsLui(instr)) {
     uintptr_t target_address = target_address_at(pc) + pc_delta;
-    DEBUG_PRINTF("target_address 0x%" PRIxPTR "\n", target_address);
+    DEBUG_PRINTF("\ttarget_address 0x%" PRIxPTR "\n", target_address);
     set_target_value_at(pc, target_address);
 #if V8_TARGET_ARCH_RISCV64
     return 8;  // Number of instructions patched.
@@ -1414,8 +1418,7 @@ void Assembler::db(uint8_t data) {
 
 void Assembler::dd(uint32_t data, RelocInfo::Mode rmode) {
   if (!RelocInfo::IsNoInfo(rmode)) {
-    DCHECK(RelocInfo::IsDataEmbeddedObject(rmode) ||
-           RelocInfo::IsLiteralConstant(rmode));
+    DCHECK(RelocInfo::IsLiteralConstant(rmode));
     RecordRelocInfo(rmode);
   }
   if (!is_buffer_growth_blocked()) CheckBuffer();
@@ -1425,8 +1428,7 @@ void Assembler::dd(uint32_t data, RelocInfo::Mode rmode) {
 
 void Assembler::dq(uint64_t data, RelocInfo::Mode rmode) {
   if (!RelocInfo::IsNoInfo(rmode)) {
-    DCHECK(RelocInfo::IsDataEmbeddedObject(rmode) ||
-           RelocInfo::IsLiteralConstant(rmode));
+    DCHECK(RelocInfo::IsLiteralConstant(rmode));
     RecordRelocInfo(rmode);
   }
   if (!is_buffer_growth_blocked()) CheckBuffer();

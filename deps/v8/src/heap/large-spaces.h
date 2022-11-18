@@ -13,6 +13,7 @@
 #include "src/base/macros.h"
 #include "src/base/platform/mutex.h"
 #include "src/common/globals.h"
+#include "src/heap/heap-verifier.h"
 #include "src/heap/heap.h"
 #include "src/heap/memory-chunk.h"
 #include "src/heap/spaces.h"
@@ -116,7 +117,7 @@ class V8_EXPORT_PRIVATE LargeObjectSpace : public Space {
   virtual bool is_off_thread() const { return false; }
 
 #ifdef VERIFY_HEAP
-  virtual void Verify(Isolate* isolate);
+  virtual void Verify(Isolate* isolate, SpaceVerificationVisitor* visitor);
 #endif
 
 #ifdef DEBUG
@@ -188,6 +189,14 @@ class OldLargeObjectSpace : public LargeObjectSpace {
                                                      Executability executable);
   V8_WARN_UNUSED_RESULT AllocationResult AllocateRawBackground(
       LocalHeap* local_heap, int object_size, Executability executable);
+};
+
+class SharedLargeObjectSpace : public OldLargeObjectSpace {
+ public:
+  explicit SharedLargeObjectSpace(Heap* heap);
+
+  V8_EXPORT_PRIVATE V8_WARN_UNUSED_RESULT AllocationResult
+  AllocateRawBackground(LocalHeap* local_heap, int object_size);
 };
 
 class NewLargeObjectSpace : public LargeObjectSpace {

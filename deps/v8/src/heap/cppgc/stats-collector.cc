@@ -107,10 +107,18 @@ StatsCollector::Event::Event() {
   epoch = epoch_counter.fetch_add(1);
 }
 
+void StatsCollector::NotifyUnmarkingStarted(CollectionType collection_type) {
+  DCHECK_EQ(GarbageCollectionState::kNotRunning, gc_state_);
+  DCHECK_EQ(CollectionType::kMajor, collection_type);
+  gc_state_ = GarbageCollectionState::kUnmarking;
+}
+
 void StatsCollector::NotifyMarkingStarted(CollectionType collection_type,
                                           MarkingType marking_type,
                                           IsForcedGC is_forced_gc) {
-  DCHECK_EQ(GarbageCollectionState::kNotRunning, gc_state_);
+  DCHECK_IMPLIES(gc_state_ != GarbageCollectionState::kNotRunning,
+                 (gc_state_ == GarbageCollectionState::kUnmarking &&
+                  collection_type == CollectionType::kMajor));
   current_.collection_type = collection_type;
   current_.is_forced_gc = is_forced_gc;
   current_.marking_type = marking_type;
@@ -171,8 +179,7 @@ int64_t SumPhases(const MetricRecorder::GCCycle::Phases& phases) {
 }
 
 MetricRecorder::GCCycle GetCycleEventForMetricRecorder(
-    StatsCollector::CollectionType type,
-    StatsCollector::MarkingType marking_type,
+    CollectionType type, StatsCollector::MarkingType marking_type,
     StatsCollector::SweepingType sweeping_type, int64_t atomic_mark_us,
     int64_t atomic_weak_us, int64_t atomic_compact_us, int64_t atomic_sweep_us,
     int64_t incremental_mark_us, int64_t incremental_sweep_us,
@@ -181,7 +188,7 @@ MetricRecorder::GCCycle GetCycleEventForMetricRecorder(
     int64_t objects_freed_bytes, int64_t memory_before_bytes,
     int64_t memory_after_bytes, int64_t memory_freed_bytes) {
   MetricRecorder::GCCycle event;
-  event.type = (type == StatsCollector::CollectionType::kMajor)
+  event.type = (type == CollectionType::kMajor)
                    ? MetricRecorder::GCCycle::Type::kMajor
                    : MetricRecorder::GCCycle::Type::kMinor;
   // MainThread.Incremental:

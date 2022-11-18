@@ -616,13 +616,8 @@ Maybe<bool> ValueSerializer::WriteJSReceiver(Handle<JSReceiver> receiver) {
 #if V8_ENABLE_WEBASSEMBLY
     case WASM_MODULE_OBJECT_TYPE:
       return WriteWasmModule(Handle<WasmModuleObject>::cast(receiver));
-    case WASM_MEMORY_OBJECT_TYPE: {
-      auto enabled_features = wasm::WasmFeatures::FromIsolate(isolate_);
-      if (enabled_features.has_threads()) {
-        return WriteWasmMemory(Handle<WasmMemoryObject>::cast(receiver));
-      }
-      break;
-    }
+    case WASM_MEMORY_OBJECT_TYPE:
+      return WriteWasmMemory(Handle<WasmMemoryObject>::cast(receiver));
 #endif  // V8_ENABLE_WEBASSEMBLY
     default:
       break;
@@ -1096,7 +1091,7 @@ Maybe<bool> ValueSerializer::WriteWasmMemory(Handle<WasmMemoryObject> object) {
 #endif  // V8_ENABLE_WEBASSEMBLY
 
 Maybe<bool> ValueSerializer::WriteSharedObject(Handle<HeapObject> object) {
-  if (!delegate_ || isolate_->shared_isolate() == nullptr) {
+  if (!delegate_ || !isolate_->has_shared_heap()) {
     return ThrowDataCloneError(MessageTemplate::kDataCloneError, object);
   }
 
@@ -1282,9 +1277,8 @@ Maybe<T> ValueDeserializer::ReadVarint() {
   // same end state and result.
   auto previous_position = position_;
   Maybe<T> maybe_expected_value = ReadVarintLoop<T>();
-  if (FLAG_fuzzing && maybe_expected_value.IsNothing()) {
-    return maybe_expected_value;
-  }
+  // ReadVarintLoop can't return Nothing here; all such conditions have been
+  // checked above.
   T expected_value = maybe_expected_value.ToChecked();
   auto expected_position = position_;
   position_ = previous_position;
@@ -1336,10 +1330,12 @@ Maybe<T> ValueDeserializer::ReadVarintLoop() {
       value |= static_cast<T>(byte & 0x7F) << shift;
       shift += 7;
     } else {
-      // We allow arbitrary data to be deserialized when fuzzing.
-      // Since {value} is not modified in this branch we can safely skip the
-      // DCHECK when fuzzing.
-      DCHECK_IMPLIES(!v8_flags.fuzzing, !has_another_byte);
+      // For consistency with the fast unrolled loop in ReadVarint we return
+      // after we have read size(T) + 1 bytes.
+#ifdef V8_VALUE_DESERIALIZER_HARD_FAIL
+      CHECK(!has_another_byte);
+#endif  // V8_VALUE_DESERIALIZER_HARD_FAIL
+      return Just(value);
     }
     position_++;
   } while (has_another_byte);
@@ -1476,6 +1472,12 @@ MaybeHandle<Object> ValueDeserializer::ReadObject() {
     isolate_->Throw(*isolate_->factory()->NewError(
         MessageTemplate::kDataCloneDeserializationError));
   }
+#if defined(DEBUG) && defined(VERIFY_HEAP)
+  if (!result.is_null() && v8_flags.enable_slow_asserts &&
+      v8_flags.verify_heap) {
+    object->ObjectVerify(isolate_);
+  }
+#endif
 
   return result;
 }
@@ -1662,9 +1664,10 @@ bool ValueDeserializer::ReadExpectedString(Handle<String> expected) {
     return {};
   }
   // Length is also checked in ReadRawBytes.
-  DCHECK_IMPLIES(!FLAG_fuzzing,
-                 byte_length <= static_cast<uint32_t>(
-                                    std::numeric_limits<int32_t>::max()));
+#ifdef V8_VALUE_DESERIALIZER_HARD_FAIL
+  CHECK_LE(byte_length,
+           static_cast<uint32_t>(std::numeric_limits<int32_t>::max()));
+#endif  // V8_VALUE_DESERIALIZER_HARD_FAIL
   if (!ReadRawBytes(byte_length).To(&bytes)) {
     position_ = original_position;
     return false;
@@ -2100,7 +2103,7 @@ bool ValueDeserializer::ValidateAndSetJSArrayBufferViewFlags(
     if (!v8_flags.harmony_rab_gsab) {
       return false;
     }
-    if (!buffer.is_resizable()) {
+    if (!buffer.is_resizable_by_js()) {
       return false;
     }
     if (is_backed_by_rab && buffer.is_shared()) {
@@ -2218,11 +2221,6 @@ MaybeHandle<JSObject> ValueDeserializer::ReadWasmModuleTransfer() {
 
 MaybeHandle<WasmMemoryObject> ValueDeserializer::ReadWasmMemory() {
   uint32_t id = next_id_++;
-
-  auto enabled_features = wasm::WasmFeatures::FromIsolate(isolate_);
-  if (!enabled_features.has_threads()) {
-    return MaybeHandle<WasmMemoryObject>();
-  }
 
   int32_t maximum_pages;
   if (!ReadZigZag<int32_t>().To(&maximum_pages)) {

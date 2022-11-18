@@ -43,6 +43,8 @@
 #include "src/objects/tagged-impl-inl.h"
 #include "src/objects/tagged-index.h"
 #include "src/objects/templates.h"
+#include "src/roots/roots.h"
+#include "src/sandbox/bounded-size-inl.h"
 #include "src/sandbox/external-pointer-inl.h"
 #include "src/sandbox/sandboxed-pointer-inl.h"
 
@@ -262,26 +264,22 @@ DEF_GETTER(HeapObject, IsSeqString, bool) {
 
 DEF_GETTER(HeapObject, IsSeqOneByteString, bool) {
   if (!IsString(cage_base)) return false;
-  return StringShape(String::cast(*this).map(cage_base)).IsSequential() &&
-         String::cast(*this).IsOneByteRepresentation(cage_base);
+  return StringShape(String::cast(*this).map(cage_base)).IsSequentialOneByte();
 }
 
 DEF_GETTER(HeapObject, IsSeqTwoByteString, bool) {
   if (!IsString(cage_base)) return false;
-  return StringShape(String::cast(*this).map(cage_base)).IsSequential() &&
-         String::cast(*this).IsTwoByteRepresentation(cage_base);
+  return StringShape(String::cast(*this).map(cage_base)).IsSequentialTwoByte();
 }
 
 DEF_GETTER(HeapObject, IsExternalOneByteString, bool) {
   if (!IsString(cage_base)) return false;
-  return StringShape(String::cast(*this).map(cage_base)).IsExternal() &&
-         String::cast(*this).IsOneByteRepresentation(cage_base);
+  return StringShape(String::cast(*this).map(cage_base)).IsExternalOneByte();
 }
 
 DEF_GETTER(HeapObject, IsExternalTwoByteString, bool) {
   if (!IsString(cage_base)) return false;
-  return StringShape(String::cast(*this).map(cage_base)).IsExternal() &&
-         String::cast(*this).IsTwoByteRepresentation(cage_base);
+  return StringShape(String::cast(*this).map(cage_base)).IsExternalTwoByte();
 }
 
 bool Object::IsNumber() const {
@@ -305,6 +303,10 @@ bool Object::IsNumeric() const {
 
 bool Object::IsNumeric(PtrComprCageBase cage_base) const {
   return IsNumber(cage_base) || IsBigInt(cage_base);
+}
+
+DEF_GETTER(HeapObject, IsTemplateLiteralObject, bool) {
+  return IsJSArray(cage_base);
 }
 
 DEF_GETTER(HeapObject, IsArrayList, bool) {
@@ -663,6 +665,14 @@ void Object::WriteSandboxedPointerField(size_t offset, Isolate* isolate,
                                 PtrComprCageBase(isolate), value);
 }
 
+size_t Object::ReadBoundedSizeField(size_t offset) const {
+  return i::ReadBoundedSizeField(field_address(offset));
+}
+
+void Object::WriteBoundedSizeField(size_t offset, size_t value) {
+  i::WriteBoundedSizeField(field_address(offset), value);
+}
+
 template <ExternalPointerTag tag>
 void Object::InitExternalPointerField(size_t offset, Isolate* isolate,
                                       Address value) {
@@ -715,32 +725,44 @@ Map MapWord::ToMap() const {
 }
 
 bool MapWord::IsForwardingAddress() const {
+#ifdef V8_EXTERNAL_CODE_SPACE
+  // When external code space is enabled forwarding pointers are encoded as
+  // Smi representing a diff from the source object address in kObjectAlignment
+  // chunks.
+  return HAS_SMI_TAG(value_);
+#else
   return (value_ & kForwardingTagMask) == kForwardingTag;
+#endif  // V8_EXTERNAL_CODE_SPACE
 }
 
-MapWord MapWord::FromForwardingAddress(HeapObject object) {
+MapWord MapWord::FromForwardingAddress(HeapObject map_word_host,
+                                       HeapObject object) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+  // When external code space is enabled forwarding pointers are encoded as
+  // Smi representing a diff from the source object address in kObjectAlignment
+  // chunks.
+  intptr_t diff = static_cast<intptr_t>(object.ptr() - map_word_host.ptr());
+  DCHECK(IsAligned(diff, kObjectAlignment));
+  MapWord map_word(Smi::FromIntptr(diff / kObjectAlignment).ptr());
+  DCHECK(map_word.IsForwardingAddress());
+  return map_word;
+#else
   return MapWord(object.ptr() - kHeapObjectTag);
+#endif  // V8_EXTERNAL_CODE_SPACE
 }
 
-HeapObject MapWord::ToForwardingAddress() {
+HeapObject MapWord::ToForwardingAddress(HeapObject map_word_host) {
   DCHECK(IsForwardingAddress());
-  HeapObject obj = HeapObject::FromAddress(value_);
-  // For objects allocated outside of the main pointer compression cage the
-  // variant with explicit cage base must be used.
-  DCHECK_IMPLIES(V8_EXTERNAL_CODE_SPACE_BOOL, !IsCodeSpaceObject(obj));
-  return obj;
-}
-
-HeapObject MapWord::ToForwardingAddress(PtrComprCageBase host_cage_base) {
-  DCHECK(IsForwardingAddress());
-  if (V8_EXTERNAL_CODE_SPACE_BOOL) {
-    // Recompress value_ using proper host_cage_base since the map word
-    // has the upper 32 bits that correspond to the main cage base value.
-    Address value =
-        DecompressTaggedPointer(host_cage_base, CompressTagged(value_));
-    return HeapObject::FromAddress(value);
-  }
+#ifdef V8_EXTERNAL_CODE_SPACE
+  // When external code space is enabled forwarding pointers are encoded as
+  // Smi representing a diff from the source object address in kObjectAlignment
+  // chunks.
+  intptr_t diff = static_cast<intptr_t>(Smi(value_).value()) * kObjectAlignment;
+  Address address = map_word_host.address() + diff;
+  return HeapObject::FromAddress(address);
+#else
   return HeapObject::FromAddress(value_);
+#endif  // V8_EXTERNAL_CODE_SPACE
 }
 
 #ifdef VERIFY_HEAP
@@ -807,6 +829,18 @@ void HeapObject::set_map_safe_transition(Map value, ReleaseStoreTag tag) {
                                   VerificationMode::kSafeMapTransition);
 }
 
+void HeapObject::set_map_safe_transition_no_write_barrier(Map value,
+                                                          RelaxedStoreTag tag) {
+  set_map<EmitWriteBarrier::kNo>(value, kRelaxedStore,
+                                 VerificationMode::kSafeMapTransition);
+}
+
+void HeapObject::set_map_safe_transition_no_write_barrier(Map value,
+                                                          ReleaseStoreTag tag) {
+  set_map<EmitWriteBarrier::kNo>(value, kReleaseStore,
+                                 VerificationMode::kSafeMapTransition);
+}
+
 // Unsafe accessor omitting write barrier.
 void HeapObject::set_map_no_write_barrier(Map value, RelaxedStoreTag tag) {
   set_map<EmitWriteBarrier::kNo>(value, kRelaxedStore,
@@ -839,7 +873,7 @@ void HeapObject::set_map(Map value, MemoryOrder order, VerificationMode mode) {
       HeapVerifier::VerifyObjectLayoutChange(heap, *this, value);
     }
   }
-  set_map_word(MapWord::FromMap(value), order);
+  set_map_word(value, order);
 #ifndef V8_DISABLE_WRITE_BARRIERS
   if (!value.is_null()) {
     if (emit_write_barrier == EmitWriteBarrier::kYes) {
@@ -853,8 +887,7 @@ void HeapObject::set_map(Map value, MemoryOrder order, VerificationMode mode) {
 }
 
 void HeapObject::set_map_after_allocation(Map value, WriteBarrierMode mode) {
-  MapWord mapword = MapWord::FromMap(value);
-  set_map_word(mapword, kRelaxedStore);
+  set_map_word(value, kRelaxedStore);
 #ifndef V8_DISABLE_WRITE_BARRIERS
   if (mode != SKIP_WRITE_BARRIER) {
     DCHECK(!value.is_null());
@@ -886,8 +919,14 @@ MapWord HeapObject::map_word(PtrComprCageBase cage_base,
   return MapField::Relaxed_Load_Map_Word(cage_base, *this);
 }
 
-void HeapObject::set_map_word(MapWord map_word, RelaxedStoreTag) {
-  MapField::Relaxed_Store_Map_Word(*this, map_word);
+void HeapObject::set_map_word(Map map, RelaxedStoreTag) {
+  MapField::Relaxed_Store_Map_Word(*this, MapWord::FromMap(map));
+}
+
+void HeapObject::set_map_word_forwarded(HeapObject target_object,
+                                        RelaxedStoreTag) {
+  MapField::Relaxed_Store_Map_Word(
+      *this, MapWord::FromForwardingAddress(*this, target_object));
 }
 
 MapWord HeapObject::map_word(AcquireLoadTag tag) const {
@@ -903,14 +942,21 @@ MapWord HeapObject::map_word(PtrComprCageBase cage_base,
   return MapField::Acquire_Load_No_Unpack(cage_base, *this);
 }
 
-void HeapObject::set_map_word(MapWord map_word, ReleaseStoreTag) {
-  MapField::Release_Store_Map_Word(*this, map_word);
+void HeapObject::set_map_word(Map map, ReleaseStoreTag) {
+  MapField::Release_Store_Map_Word(*this, MapWord::FromMap(map));
 }
 
-bool HeapObject::release_compare_and_swap_map_word(MapWord old_map_word,
-                                                   MapWord new_map_word) {
-  Tagged_t result =
-      MapField::Release_CompareAndSwap(*this, old_map_word, new_map_word);
+void HeapObject::set_map_word_forwarded(HeapObject target_object,
+                                        ReleaseStoreTag) {
+  MapField::Release_Store_Map_Word(
+      *this, MapWord::FromForwardingAddress(*this, target_object));
+}
+
+bool HeapObject::release_compare_and_swap_map_word_forwarded(
+    MapWord old_map_word, HeapObject new_target_object) {
+  Tagged_t result = MapField::Release_CompareAndSwap(
+      *this, old_map_word,
+      MapWord::FromForwardingAddress(*this, new_target_object));
   return result == static_cast<Tagged_t>(old_map_word.ptr());
 }
 
@@ -1135,6 +1181,12 @@ Object Object::GetSimpleHash(Object object) {
   } else if (InstanceTypeChecker::IsSharedFunctionInfo(instance_type)) {
     uint32_t hash = SharedFunctionInfo::cast(object).Hash();
     return Smi::FromInt(hash & Smi::kMaxValue);
+  } else if (InstanceTypeChecker::IsScopeInfo(instance_type)) {
+    uint32_t hash = ScopeInfo::cast(object).Hash();
+    return Smi::FromInt(hash & Smi::kMaxValue);
+  } else if (InstanceTypeChecker::IsScript(instance_type)) {
+    int id = Script::cast(object).id();
+    return Smi::FromInt(ComputeUnseededHash(id) & Smi::kMaxValue);
   }
   DCHECK(object.IsJSReceiver());
   return object;
@@ -1196,6 +1248,23 @@ MaybeHandle<Object> Object::Share(Isolate* isolate, Handle<Object> value,
   if (value->IsShared()) return value;
   return ShareSlow(isolate, Handle<HeapObject>::cast(value),
                    throw_if_cannot_be_shared);
+}
+
+// https://tc39.es/proposal-symbols-as-weakmap-keys/#sec-canbeheldweakly-abstract-operation
+bool Object::CanBeHeldWeakly() const {
+  if (IsJSReceiver()) {
+    // TODO(v8:12547) Shared structs and arrays should only be able to point
+    // to shared values in weak collections. For now, disallow them as weak
+    // collection keys.
+    if (v8_flags.harmony_struct) {
+      return !IsJSSharedStruct() && !IsJSSharedArray();
+    }
+    return true;
+  }
+  if (v8_flags.harmony_symbol_as_weakmap_key) {
+    return IsSymbol() && !Symbol::cast(*this).is_in_public_symbol_table();
+  }
+  return false;
 }
 
 Handle<Object> ObjectHashTableShape::AsHandle(Handle<Object> key) {

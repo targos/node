@@ -175,22 +175,6 @@ class FrameWriter {
   unsigned top_offset_;
 };
 
-Code Deoptimizer::FindDeoptimizingCode(Address addr) {
-  if (function_.IsHeapObject()) {
-    // Search all deoptimizing code in the native context of the function.
-    Isolate* isolate = isolate_;
-    NativeContext native_context = function_.native_context();
-    Object element = native_context.DeoptimizedCodeListHead();
-    while (!element.IsUndefined(isolate)) {
-      CodeT code = CodeT::cast(element);
-      CHECK(CodeKindCanDeoptimize(code.kind()));
-      if (code.contains(isolate, addr)) return FromCodeT(code);
-      element = code.next_code_link();
-    }
-  }
-  return Code();
-}
-
 // We rely on this function not causing a GC. It is called from generated code
 // without having a real stack frame in place.
 Deoptimizer* Deoptimizer::New(Address raw_function, DeoptimizeKind kind,
@@ -299,8 +283,8 @@ class ActivationsFinder : public ThreadVisitor {
 };
 }  // namespace
 
-// Move marked code from the optimized code list to the deoptimized code list,
-// and replace pc on the stack for codes marked for deoptimization.
+// Move marked code out of the optimized code list, and replace pc on the stack
+// for codes marked for deoptimization.
 // static
 void Deoptimizer::DeoptimizeMarkedCodeForContext(NativeContext native_context) {
   DisallowGarbageCollection no_gc;
@@ -346,8 +330,8 @@ void Deoptimizer::DeoptimizeMarkedCodeForContext(NativeContext native_context) {
   // deoptimization and have not been found in stack frames.
   std::set<CodeT> codes;
 
-  // Move marked code from the optimized code list to the deoptimized code list.
-  // Walk over all optimized code objects in this native context.
+  // Move marked code out of the optimized code list. Walk over all optimized
+  // code objects in this native context.
   CodeT prev;
   Object element = native_context.OptimizedCodeListHead();
   while (!element.IsUndefined(isolate)) {
@@ -368,10 +352,7 @@ void Deoptimizer::DeoptimizeMarkedCodeForContext(NativeContext native_context) {
         // There was no previous node, the next node is the new head.
         native_context.SetOptimizedCodeListHead(next);
       }
-
-      // Move the code to the _deoptimized_ code list.
-      code.set_next_code_link(native_context.DeoptimizedCodeListHead());
-      native_context.SetDeoptimizedCodeListHead(code);
+      code.set_next_code_link(ReadOnlyRoots(isolate).undefined_value());
     } else {
       // Not marked; preserve this element.
       prev = code;
@@ -432,7 +413,7 @@ void Deoptimizer::MarkAllCodeForContext(NativeContext native_context) {
   Object element = native_context.OptimizedCodeListHead();
   Isolate* isolate = native_context.GetIsolate();
   while (!element.IsUndefined(isolate)) {
-    Code code = FromCodeT(CodeT::cast(element));
+    CodeT code = CodeT::cast(element);
     CHECK(CodeKindCanDeoptimize(code.kind()));
     code.set_marked_for_deoptimization(true);
     element = code.next_code_link();
@@ -494,7 +475,7 @@ Deoptimizer::Deoptimizer(Isolate* isolate, JSFunction function,
       caller_constant_pool_(0),
       actual_argument_count_(0),
       stack_fp_(0),
-      trace_scope_(FLAG_trace_deopt || FLAG_log_deopt
+      trace_scope_(v8_flags.trace_deopt || v8_flags.log_deopt
                        ? new CodeTracer::Scope(isolate->GetCodeTracer())
                        : nullptr) {
   if (isolate->deoptimizer_lazy_throw()) {
@@ -563,8 +544,6 @@ Deoptimizer::Deoptimizer(Isolate* isolate, JSFunction function,
 }
 
 Code Deoptimizer::FindOptimizedCode() {
-  Code compiled_code = FindDeoptimizingCode(from_);
-  if (!compiled_code.is_null()) return compiled_code;
   CodeLookupResult lookup_result = isolate_->FindCodeObject(from_);
   return lookup_result.code();
 }
@@ -627,26 +606,6 @@ bool Deoptimizer::IsDeoptimizationEntry(Isolate* isolate, Address addr,
   UNREACHABLE();
 }
 
-int Deoptimizer::GetDeoptimizedCodeCount(Isolate* isolate) {
-  int length = 0;
-  // Count all entries in the deoptimizing code list of every context.
-  Object context = isolate->heap()->native_contexts_list();
-  while (!context.IsUndefined(isolate)) {
-    NativeContext native_context = NativeContext::cast(context);
-    Object element = native_context.DeoptimizedCodeListHead();
-    while (!element.IsUndefined(isolate)) {
-      Code code = FromCodeT(CodeT::cast(element));
-      DCHECK(CodeKindCanDeoptimize(code.kind()));
-      if (!code.marked_for_deoptimization()) {
-        length++;
-      }
-      element = code.next_code_link();
-    }
-    context = Context::cast(context).next_context_link();
-  }
-  return length;
-}
-
 namespace {
 
 int LookupCatchHandler(Isolate* isolate, TranslatedFrame* translated_frame,
@@ -678,9 +637,9 @@ void Deoptimizer::TraceDeoptBegin(int optimization_id,
          MessageFor(deopt_kind_), DeoptimizeReasonToString(info.deopt_reason));
   if (function_.IsJSFunction()) {
     function_.ShortPrint(file);
-  } else {
-    PrintF(file, "%s", CodeKindToString(compiled_code_.kind()));
+    PrintF(file, ", ");
   }
+  compiled_code_.ShortPrint(file);
   PrintF(file,
          ", opt id %d, "
 #ifdef DEBUG
@@ -711,7 +670,7 @@ void Deoptimizer::TraceDeoptEnd(double deopt_duration) {
 
 // static
 void Deoptimizer::TraceMarkForDeoptimization(Code code, const char* reason) {
-  if (!FLAG_trace_deopt && !FLAG_log_deopt) return;
+  if (!v8_flags.trace_deopt && !v8_flags.log_deopt) return;
 
   DisallowGarbageCollection no_gc;
   Isolate* isolate = code.GetIsolate();
@@ -720,14 +679,15 @@ void Deoptimizer::TraceMarkForDeoptimization(Code code, const char* reason) {
 
   DeoptimizationData deopt_data = DeoptimizationData::cast(maybe_data);
   CodeTracer::Scope scope(isolate->GetCodeTracer());
-  if (FLAG_trace_deopt) {
-    PrintF(scope.file(), "[marking dependent code " V8PRIxPTR_FMT " (",
-           code.ptr());
+  if (v8_flags.trace_deopt) {
+    PrintF(scope.file(), "[marking dependent code ");
+    code.ShortPrint(scope.file());
+    PrintF(scope.file(), " (");
     deopt_data.SharedFunctionInfo().ShortPrint(scope.file());
     PrintF(") (opt id %d) for deoptimization, reason: %s]\n",
            deopt_data.OptimizationId().value(), reason);
   }
-  if (!FLAG_log_deopt) return;
+  if (!v8_flags.log_deopt) return;
   no_gc.Release();
   {
     HandleScope handle_scope(isolate);
@@ -744,7 +704,7 @@ void Deoptimizer::TraceMarkForDeoptimization(Code code, const char* reason) {
 // static
 void Deoptimizer::TraceEvictFromOptimizedCodeCache(SharedFunctionInfo sfi,
                                                    const char* reason) {
-  if (!FLAG_trace_deopt_verbose) return;
+  if (!v8_flags.trace_deopt_verbose) return;
 
   DisallowGarbageCollection no_gc;
   CodeTracer::Scope scope(sfi.GetIsolate()->GetCodeTracer());
@@ -758,7 +718,7 @@ void Deoptimizer::TraceEvictFromOptimizedCodeCache(SharedFunctionInfo sfi,
 #ifdef DEBUG
 // static
 void Deoptimizer::TraceFoundActivation(Isolate* isolate, JSFunction function) {
-  if (!FLAG_trace_deopt_verbose) return;
+  if (!v8_flags.trace_deopt_verbose) return;
   CodeTracer::Scope scope(isolate->GetCodeTracer());
   PrintF(scope.file(), "[deoptimizer found activation of function: ");
   function.PrintName(scope.file());
@@ -768,14 +728,14 @@ void Deoptimizer::TraceFoundActivation(Isolate* isolate, JSFunction function) {
 
 // static
 void Deoptimizer::TraceDeoptAll(Isolate* isolate) {
-  if (!FLAG_trace_deopt_verbose) return;
+  if (!v8_flags.trace_deopt_verbose) return;
   CodeTracer::Scope scope(isolate->GetCodeTracer());
   PrintF(scope.file(), "[deoptimize all code in all contexts]\n");
 }
 
 // static
 void Deoptimizer::TraceDeoptMarked(Isolate* isolate) {
-  if (!FLAG_trace_deopt_verbose) return;
+  if (!v8_flags.trace_deopt_verbose) return;
   CodeTracer::Scope scope(isolate->GetCodeTracer());
   PrintF(scope.file(), "[deoptimize marked code in all contexts]\n");
 }
@@ -812,7 +772,7 @@ void Deoptimizer::DoComputeOutputFrames() {
     actual_argument_count_ = static_cast<int>(
         Memory<intptr_t>(fp_address + StandardFrameConstants::kArgCOffset));
 
-    if (FLAG_enable_embedded_constant_pool) {
+    if (V8_EMBEDDED_CONSTANT_POOL_BOOL) {
       caller_constant_pool_ = Memory<intptr_t>(
           fp_address + CommonFrameConstants::kConstantPoolOffset);
     }
@@ -1018,7 +978,7 @@ void Deoptimizer::DoComputeUnoptimizedFrame(TranslatedFrame* translated_frame,
       (!is_topmost || (deopt_kind_ == DeoptimizeKind::kLazy)) &&
       !goto_catch_handler;
   const bool deopt_to_baseline =
-      shared.HasBaselineCode() && FLAG_deopt_to_baseline;
+      shared.HasBaselineCode() && v8_flags.deopt_to_baseline;
   const bool restart_frame = goto_catch_handler && is_restart_frame();
   CodeT dispatch_builtin = builtins->code(
       DispatchBuiltinFor(deopt_to_baseline, advance_bc, restart_frame));
@@ -1094,7 +1054,7 @@ void Deoptimizer::DoComputeUnoptimizedFrame(TranslatedFrame* translated_frame,
     output_frame->SetRegister(fp_reg.code(), fp_value);
   }
 
-  if (FLAG_enable_embedded_constant_pool) {
+  if (V8_EMBEDDED_CONSTANT_POOL_BOOL) {
     // For the bottommost output frame the constant pool pointer can be gotten
     // from the input frame. For subsequent output frames, it can be read from
     // the previous frame.
@@ -1242,7 +1202,7 @@ void Deoptimizer::DoComputeUnoptimizedFrame(TranslatedFrame* translated_frame,
   }
 
   // Update constant pool.
-  if (FLAG_enable_embedded_constant_pool) {
+  if (V8_EMBEDDED_CONSTANT_POOL_BOOL) {
     intptr_t constant_pool_value =
         static_cast<intptr_t>(dispatch_builtin.constant_pool());
     output_frame->SetConstantPool(constant_pool_value);
@@ -1407,7 +1367,7 @@ void Deoptimizer::DoComputeConstructStubFrame(TranslatedFrame* translated_frame,
     output_frame->SetRegister(fp_reg.code(), fp_value);
   }
 
-  if (FLAG_enable_embedded_constant_pool) {
+  if (V8_EMBEDDED_CONSTANT_POOL_BOOL) {
     // Read the caller's constant pool from the previous frame.
     const intptr_t caller_cp = output_[frame_index - 1]->GetConstantPool();
     frame_writer.PushCallerConstantPool(caller_cp);
@@ -1472,7 +1432,7 @@ void Deoptimizer::DoComputeConstructStubFrame(TranslatedFrame* translated_frame,
   }
 
   // Update constant pool.
-  if (FLAG_enable_embedded_constant_pool) {
+  if (V8_EMBEDDED_CONSTANT_POOL_BOOL) {
     intptr_t constant_pool_value =
         static_cast<intptr_t>(construct_stub.constant_pool());
     output_frame->SetConstantPool(constant_pool_value);
@@ -1821,7 +1781,7 @@ void Deoptimizer::DoComputeBuiltinContinuation(
 
   DCHECK_EQ(output_frame_size_above_fp, frame_writer.top_offset());
 
-  if (FLAG_enable_embedded_constant_pool) {
+  if (V8_EMBEDDED_CONSTANT_POOL_BOOL) {
     // Read the caller's constant pool from the previous frame.
     const intptr_t caller_cp =
         is_bottommost ? caller_constant_pool_
@@ -1943,7 +1903,7 @@ void Deoptimizer::DoComputeBuiltinContinuation(
 
 void Deoptimizer::MaterializeHeapObjects() {
   translated_state_.Prepare(static_cast<Address>(stack_fp_));
-  if (FLAG_deopt_every_n_times > 0) {
+  if (v8_flags.deopt_every_n_times > 0) {
     // Doing a GC here will find problems with the deoptimized frames.
     isolate_->heap()->CollectAllGarbage(Heap::kNoGCFlags,
                                         GarbageCollectionReason::kTesting);

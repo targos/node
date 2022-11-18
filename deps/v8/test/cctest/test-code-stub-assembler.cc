@@ -493,7 +493,7 @@ TEST(ComputeIntegerHash) {
 
   FunctionTester ft(asm_tester.GenerateCode(), kNumParams);
 
-  base::RandomNumberGenerator rand_gen(FLAG_random_seed);
+  base::RandomNumberGenerator rand_gen(v8_flags.random_seed);
 
   for (int i = 0; i < 1024; i++) {
     int k = rand_gen.NextInt(Smi::kMaxValue);
@@ -976,7 +976,7 @@ TEST(NumberDictionaryLookup) {
   Handle<Object> fake_value(Smi::FromInt(42), isolate);
   PropertyDetails fake_details = PropertyDetails::Empty();
 
-  base::RandomNumberGenerator rand_gen(FLAG_random_seed);
+  base::RandomNumberGenerator rand_gen(v8_flags.random_seed);
 
   for (int i = 0; i < kKeysCount; i++) {
     int random_key = rand_gen.NextInt(Smi::kMaxValue);
@@ -1065,7 +1065,7 @@ TEST(TransitionLookup) {
   Handle<Map> root_map = Map::Create(isolate, 0);
   Handle<Name> keys[kKeysCount];
 
-  base::RandomNumberGenerator rand_gen(FLAG_random_seed);
+  base::RandomNumberGenerator rand_gen(v8_flags.random_seed);
 
   Factory* factory = isolate->factory();
   Handle<FieldType> any = FieldType::Any(isolate);
@@ -1457,7 +1457,7 @@ TEST(TryGetOwnProperty) {
   };
   static_assert(arraysize(values) < arraysize(names));
 
-  base::RandomNumberGenerator rand_gen(FLAG_random_seed);
+  base::RandomNumberGenerator rand_gen(v8_flags.random_seed);
 
   std::vector<Handle<JSObject>> objects;
 
@@ -1750,7 +1750,7 @@ TEST(TryLookupElement) {
     {
       std::shared_ptr<v8::BackingStore> backing_store =
           buffer->GetBackingStore();
-      buffer->Detach();
+      buffer->Detach(v8::Local<v8::Value>()).Check();
     }
     CHECK_ABSENT(object, 0);
     CHECK_ABSENT(object, 1);
@@ -3952,22 +3952,39 @@ TEST(IsDoubleElementsKind) {
            0);
 }
 
-TEST(TestCallBuiltinAbsolute) {
+namespace {
+
+enum CallJumpMode { kCall, kTailCall };
+
+void TestCallJumpBuiltin(CallJumpMode mode,
+                         BuiltinCallJumpMode builtin_call_jump_mode) {
   Isolate* isolate(CcTest::InitIsolateOnce());
+  if (builtin_call_jump_mode == BuiltinCallJumpMode::kPCRelative &&
+      !isolate->is_short_builtin_calls_enabled()) {
+    // PC-relative mode requires short builtin calls to be enabled.
+    return;
+  }
+
   const int kNumParams = 1;
   CodeAssemblerTester asm_tester(isolate, kNumParams + 1);  // Include receiver.
   CodeStubAssembler m(asm_tester.state());
 
-  const int kContextOffset = 3;
-  auto str = m.Parameter<String>(1);
-  auto context = m.Parameter<Context>(kNumParams + kContextOffset);
+  {
+    auto str = m.Parameter<String>(1);
+    auto context = m.GetJSContextParameter();
 
-  TNode<Smi> index = m.SmiConstant(2);
+    TNode<Smi> index = m.SmiConstant(2);
 
-  m.Return(m.CallStub(Builtins::CallableFor(isolate, Builtin::kStringRepeat),
-                      context, str, index));
+    Callable callable = Builtins::CallableFor(isolate, Builtin::kStringRepeat);
+    if (mode == kCall) {
+      m.Return(m.CallStub(callable, context, str, index));
+    } else {
+      DCHECK_EQ(mode, kTailCall);
+      m.TailCallStub(callable, context, str, index);
+    }
+  }
   AssemblerOptions options = AssemblerOptions::Default(isolate);
-  options.builtin_call_jump_mode = BuiltinCallJumpMode::kAbsolute;
+  options.builtin_call_jump_mode = builtin_call_jump_mode;
   options.isolate_independent_code = false;
   FunctionTester ft(asm_tester.GenerateCode(options), kNumParams);
   MaybeHandle<Object> result = ft.Call(CcTest::MakeString("abcdef"));
@@ -3975,62 +3992,38 @@ TEST(TestCallBuiltinAbsolute) {
                        Handle<String>::cast(result.ToHandleChecked())));
 }
 
-DISABLED_TEST(TestCallBuiltinPCRelative) {
-  Isolate* isolate(CcTest::InitIsolateOnce());
-  if (!isolate->is_short_builtin_calls_enabled()) return;
+}  // namespace
 
-  const int kNumParams = 1;
-  CodeAssemblerTester asm_tester(isolate, kNumParams);
-  CodeStubAssembler m(asm_tester.state());
-
-  const int kContextOffset = 2;
-  auto str = m.Parameter<String>(0);
-  auto context = m.Parameter<Context>(kNumParams + kContextOffset);
-
-  TNode<Smi> index = m.SmiConstant(2);
-
-  m.Return(m.CallStub(Builtins::CallableFor(isolate, Builtin::kStringRepeat),
-                      context, str, index));
-  AssemblerOptions options = AssemblerOptions::Default(isolate);
-  options.builtin_call_jump_mode = BuiltinCallJumpMode::kPCRelative;
-  options.isolate_independent_code = false;
-  FunctionTester ft(asm_tester.GenerateCode(options), kNumParams);
-  MaybeHandle<Object> result = ft.Call(CcTest::MakeString("abcdef"));
-  CHECK(String::Equals(isolate, CcTest::MakeString("abcdefabcdef"),
-                       Handle<String>::cast(result.ToHandleChecked())));
+TEST(TestCallBuiltinAbsolute) {
+  TestCallJumpBuiltin(kCall, BuiltinCallJumpMode::kAbsolute);
 }
 
-// TODO(v8:9821): Remove the option to disable inlining off-heap trampolines
-// along with this test.
-DISABLED_TEST(TestCallBuiltinIndirect) {
-  Isolate* isolate(CcTest::InitIsolateOnce());
-  const int kNumParams = 1;
-  CodeAssemblerTester asm_tester(isolate, kNumParams);
-  CodeStubAssembler m(asm_tester.state());
+TEST(TestCallBuiltinPCRelative) {
+  TestCallJumpBuiltin(kCall, BuiltinCallJumpMode::kPCRelative);
+}
 
-  const int kContextOffset = 2;
-  auto str = m.Parameter<String>(0);
-  auto context = m.Parameter<Context>(kNumParams + kContextOffset);
+TEST(TestCallBuiltinIndirect) {
+  TestCallJumpBuiltin(kCall, BuiltinCallJumpMode::kIndirect);
+}
 
-  TNode<Smi> index = m.SmiConstant(2);
+TEST(TestTailCallBuiltinAbsolute) {
+  TestCallJumpBuiltin(kTailCall, BuiltinCallJumpMode::kAbsolute);
+}
 
-  m.Return(m.CallStub(Builtins::CallableFor(isolate, Builtin::kStringRepeat),
-                      context, str, index));
-  AssemblerOptions options = AssemblerOptions::Default(isolate);
-  options.builtin_call_jump_mode = BuiltinCallJumpMode::kIndirect;
-  options.isolate_independent_code = true;
-  FunctionTester ft(asm_tester.GenerateCode(options), kNumParams);
-  MaybeHandle<Object> result = ft.Call(CcTest::MakeString("abcdef"));
-  CHECK(String::Equals(isolate, CcTest::MakeString("abcdefabcdef"),
-                       Handle<String>::cast(result.ToHandleChecked())));
+TEST(TestTailCallBuiltinPCRelative) {
+  TestCallJumpBuiltin(kTailCall, BuiltinCallJumpMode::kPCRelative);
+}
+
+TEST(TestTailCallBuiltinIndirect) {
+  TestCallJumpBuiltin(kTailCall, BuiltinCallJumpMode::kIndirect);
 }
 
 TEST(InstructionSchedulingCallerSavedRegisters) {
   // This is a regression test for v8:9775, where TF's instruction scheduler
   // incorrectly moved pure operations in between a ArchSaveCallerRegisters and
   // a ArchRestoreCallerRegisters instruction.
-  bool old_turbo_instruction_scheduling = FLAG_turbo_instruction_scheduling;
-  FLAG_turbo_instruction_scheduling = true;
+  bool old_turbo_instruction_scheduling = v8_flags.turbo_instruction_scheduling;
+  v8_flags.turbo_instruction_scheduling = true;
 
   Isolate* isolate(CcTest::InitIsolateOnce());
   const int kNumParams = 1;
@@ -4059,7 +4052,7 @@ TEST(InstructionSchedulingCallerSavedRegisters) {
   CHECK(result.ToHandleChecked()->IsSmi());
   CHECK_EQ(result.ToHandleChecked()->Number(), 13);
 
-  FLAG_turbo_instruction_scheduling = old_turbo_instruction_scheduling;
+  v8_flags.turbo_instruction_scheduling = old_turbo_instruction_scheduling;
 }
 
 #if V8_ENABLE_WEBASSEMBLY
@@ -4415,6 +4408,143 @@ TEST(CountTrailingZeros) {
 
   FunctionTester ft(asm_tester.GenerateCode());
   ft.Call();
+}
+
+TEST(IntPtrMulHigh) {
+  Isolate* isolate(CcTest::InitIsolateOnce());
+
+  const int kNumParams = 1;
+  CodeAssemblerTester asm_tester(isolate, kNumParams + 1);  // Include receiver.
+  CodeStubAssembler m(asm_tester.state());
+
+  TNode<IntPtrT> a = m.IntPtrConstant(std::numeric_limits<intptr_t>::min());
+  TNode<IntPtrT> b = m.SmiUntag(m.Parameter<Smi>(1));
+  TNode<IntPtrT> res = m.IntPtrMulHigh(a, b);
+  m.Return(m.SmiTag(res));
+
+  FunctionTester ft(asm_tester.GenerateCode());
+  CHECK_EQ(-147694,
+           ft.CallChecked<Smi>(handle(Smi::FromInt(295387), isolate))->value());
+  CHECK_EQ(-147694, base::bits::SignedMulHigh32(
+                        std::numeric_limits<int32_t>::min(), 295387));
+  CHECK_EQ(-147694, base::bits::SignedMulHigh64(
+                        std::numeric_limits<int64_t>::min(), 295387));
+}
+
+TEST(IntPtrMulHighConstantFoldable) {
+  Isolate* isolate(CcTest::InitIsolateOnce());
+  CodeAssemblerTester asm_tester(isolate);
+  CodeStubAssembler m(asm_tester.state());
+
+  TNode<IntPtrT> a = m.IntPtrConstant(std::numeric_limits<intptr_t>::min());
+  TNode<IntPtrT> b = m.IntPtrConstant(295387);
+  TNode<IntPtrT> res = m.IntPtrMulHigh(a, b);
+  m.Return(m.SmiTag(res));
+
+  FunctionTester ft(asm_tester.GenerateCode());
+  CHECK_EQ(-147694, ft.CallChecked<Smi>()->value());
+  CHECK_EQ(-147694, base::bits::SignedMulHigh32(
+                        std::numeric_limits<int32_t>::min(), 295387));
+  CHECK_EQ(-147694, base::bits::SignedMulHigh64(
+                        std::numeric_limits<int64_t>::min(), 295387));
+}
+
+TEST(UintPtrMulHigh) {
+  Isolate* isolate(CcTest::InitIsolateOnce());
+
+  const int kNumParams = 1;
+  CodeAssemblerTester asm_tester(isolate, kNumParams + 1);  // Include receiver.
+  CodeStubAssembler m(asm_tester.state());
+
+  TNode<IntPtrT> a = m.IntPtrConstant(std::numeric_limits<intptr_t>::min());
+  TNode<IntPtrT> b = m.SmiUntag(m.Parameter<Smi>(1));
+  TNode<IntPtrT> res = m.Signed(m.UintPtrMulHigh(m.Unsigned(a), m.Unsigned(b)));
+  m.Return(m.SmiTag(res));
+
+  FunctionTester ft(asm_tester.GenerateCode());
+  CHECK_EQ(147693,
+           ft.CallChecked<Smi>(handle(Smi::FromInt(295387), isolate))->value());
+  CHECK_EQ(147693, base::bits::UnsignedMulHigh32(
+                       std::numeric_limits<int32_t>::min(), 295387));
+  CHECK_EQ(147693, base::bits::UnsignedMulHigh64(
+                       std::numeric_limits<int64_t>::min(), 295387));
+}
+
+TEST(UintPtrMulHighConstantFoldable) {
+  Isolate* isolate(CcTest::InitIsolateOnce());
+  CodeAssemblerTester asm_tester(isolate);
+  CodeStubAssembler m(asm_tester.state());
+
+  TNode<IntPtrT> a = m.IntPtrConstant(std::numeric_limits<intptr_t>::min());
+  TNode<IntPtrT> b = m.IntPtrConstant(295387);
+  TNode<IntPtrT> res = m.Signed(m.UintPtrMulHigh(m.Unsigned(a), m.Unsigned(b)));
+  m.Return(m.SmiTag(res));
+
+  FunctionTester ft(asm_tester.GenerateCode());
+  CHECK_EQ(147693, ft.CallChecked<Smi>()->value());
+  CHECK_EQ(
+      147693,
+      base::bits::UnsignedMulHigh32(
+          static_cast<uint32_t>(std::numeric_limits<int32_t>::min()), 295387));
+  CHECK_EQ(
+      147693,
+      base::bits::UnsignedMulHigh64(
+          static_cast<uint64_t>(std::numeric_limits<int64_t>::min()), 295387));
+}
+
+TEST(IntPtrMulWithOverflow) {
+  Isolate* isolate(CcTest::InitIsolateOnce());
+
+  const int kNumParams = 1;
+
+  {
+    CodeAssemblerTester asm_tester(isolate,
+                                   kNumParams + 1);  // Include receiver.
+    CodeStubAssembler m(asm_tester.state());
+
+    TNode<IntPtrT> a = m.IntPtrConstant(std::numeric_limits<intptr_t>::min());
+    TNode<IntPtrT> b = m.SmiUntag(m.Parameter<Smi>(1));
+    TNode<PairT<IntPtrT, BoolT>> pair = m.IntPtrMulWithOverflow(a, b);
+    TNode<BoolT> overflow = m.Projection<1>(pair);
+    m.Return(m.SelectBooleanConstant(overflow));
+
+    FunctionTester ft(asm_tester.GenerateCode());
+    CHECK(ft.Call(handle(Smi::FromInt(-1), isolate))
+              .ToHandleChecked()
+              ->IsTrue(isolate));
+    CHECK(ft.Call(handle(Smi::FromInt(1), isolate))
+              .ToHandleChecked()
+              ->IsFalse(isolate));
+    CHECK(ft.Call(handle(Smi::FromInt(2), isolate))
+              .ToHandleChecked()
+              ->IsTrue(isolate));
+    CHECK(ft.Call(handle(Smi::FromInt(0), isolate))
+              .ToHandleChecked()
+              ->IsFalse(isolate));
+  }
+
+  {
+    CodeAssemblerTester asm_tester(isolate,
+                                   kNumParams + 1);  // Include receiver.
+    CodeStubAssembler m(asm_tester.state());
+
+    TNode<IntPtrT> a = m.IntPtrConstant(std::numeric_limits<intptr_t>::max());
+    TNode<IntPtrT> b = m.SmiUntag(m.Parameter<Smi>(1));
+    TNode<PairT<IntPtrT, BoolT>> pair = m.IntPtrMulWithOverflow(a, b);
+    TNode<BoolT> overflow = m.Projection<1>(pair);
+    m.Return(m.SelectBooleanConstant(overflow));
+
+    FunctionTester ft(asm_tester.GenerateCode());
+    CHECK(ft.Call(handle(Smi::FromInt(-1), isolate))
+              .ToHandleChecked()
+              ->IsFalse(isolate));
+    CHECK(ft.Call(handle(Smi::FromInt(1), isolate))
+              .ToHandleChecked()
+              ->IsFalse(isolate));
+    CHECK(ft.Call(handle(Smi::FromInt(2), isolate))
+              .ToHandleChecked()
+              ->IsTrue(isolate));
+  }
 }
 
 }  // namespace compiler

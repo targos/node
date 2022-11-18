@@ -137,6 +137,8 @@ class BasicMemoryChunk {
 
   static constexpr MainThreadFlags kInSharedHeap = IN_SHARED_HEAP;
 
+  static constexpr MainThreadFlags kIncrementalMarking = INCREMENTAL_MARKING;
+
   static constexpr MainThreadFlags kSkipEvacuationSlotsRecordingMask =
       MainThreadFlags(kEvacuationCandidateMask) |
       MainThreadFlags(kIsInYoungGenerationMask);
@@ -353,7 +355,7 @@ class BasicMemoryChunk {
   size_t size_;
 
   // Flags that are only mutable from the main thread when no concurrent
-  // component (e.g. marker, sweeper) is running.
+  // component (e.g. marker, sweeper, compilation, allocation) is running.
   MainThreadFlags main_thread_flags_{NO_FLAGS};
 
   // TODO(v8:7464): Find a way to remove this.

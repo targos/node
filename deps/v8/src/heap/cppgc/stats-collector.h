@@ -33,6 +33,7 @@ namespace internal {
   V(IncrementalSweep)
 
 #define CPPGC_FOR_ALL_SCOPES(V)             \
+  V(Unmark)                                 \
   V(MarkIncrementalStart)                   \
   V(MarkIncrementalFinalize)                \
   V(MarkAtomicPrologue)                     \
@@ -52,9 +53,10 @@ namespace internal {
   V(MarkVisitCrossThreadPersistents)        \
   V(MarkVisitStack)                         \
   V(MarkVisitRememberedSets)                \
+  V(SweepFinishIfOutOfWork)                 \
   V(SweepInvokePreFinalizers)               \
-  V(SweepIdleStep)                          \
   V(SweepInTask)                            \
+  V(SweepInTaskForStatistics)               \
   V(SweepOnAllocation)                      \
   V(SweepFinalize)
 
@@ -67,12 +69,11 @@ namespace internal {
 
 // Sink for various time and memory statistics.
 class V8_EXPORT_PRIVATE StatsCollector final {
-  using IsForcedGC = GarbageCollector::Config::IsForcedGC;
+  using IsForcedGC = GCConfig::IsForcedGC;
 
  public:
-  using CollectionType = GarbageCollector::Config::CollectionType;
-  using MarkingType = GarbageCollector::Config::MarkingType;
-  using SweepingType = GarbageCollector::Config::SweepingType;
+  using MarkingType = GCConfig::MarkingType;
+  using SweepingType = GCConfig::SweepingType;
 
 #if defined(CPPGC_DECLARE_ENUM)
   static_assert(false, "CPPGC_DECLARE_ENUM macro is already defined");
@@ -273,7 +274,11 @@ class V8_EXPORT_PRIVATE StatsCollector final {
 
   void NotifySafePointForTesting();
 
-  // Indicates a new garbage collection cycle.
+  // Indicates a new garbage collection cycle. The phase is optional and is only
+  // used for major GC when generational GC is enabled.
+  void NotifyUnmarkingStarted(CollectionType);
+  // Indicates a new minor garbage collection cycle or a major, if generational
+  // GC is not enabled.
   void NotifyMarkingStarted(CollectionType, MarkingType, IsForcedGC);
   // Indicates that marking of the current garbage collection cycle is
   // completed.
@@ -322,6 +327,7 @@ class V8_EXPORT_PRIVATE StatsCollector final {
  private:
   enum class GarbageCollectionState : uint8_t {
     kNotRunning,
+    kUnmarking,
     kMarking,
     kSweeping
   };

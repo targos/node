@@ -43,11 +43,12 @@ CppHeap::GarbageCollectionFlags ConvertTraceFlags(
 }  // namespace
 
 void LocalEmbedderHeapTracer::PrepareForTrace(
-    EmbedderHeapTracer::TraceFlags flags) {
+    EmbedderHeapTracer::TraceFlags flags, CollectionType type) {
   if (cpp_heap_)
-    cpp_heap()->InitializeTracing(
-        cppgc::internal::GarbageCollector::Config::CollectionType::kMajor,
-        ConvertTraceFlags(flags));
+    cpp_heap()->InitializeTracing(type == CollectionType::kMajor
+                                      ? cppgc::internal::CollectionType::kMajor
+                                      : cppgc::internal::CollectionType::kMinor,
+                                  ConvertTraceFlags(flags));
 }
 
 void LocalEmbedderHeapTracer::TracePrologue(

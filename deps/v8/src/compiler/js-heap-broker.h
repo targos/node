@@ -40,16 +40,16 @@ class ObjectRef;
 
 std::ostream& operator<<(std::ostream& os, const ObjectRef& ref);
 
-#define TRACE_BROKER(broker, x)                                      \
-  do {                                                               \
-    if (broker->tracing_enabled() && FLAG_trace_heap_broker_verbose) \
-      StdoutStream{} << broker->Trace() << x << '\n';                \
+#define TRACE_BROKER(broker, x)                                          \
+  do {                                                                   \
+    if (broker->tracing_enabled() && v8_flags.trace_heap_broker_verbose) \
+      StdoutStream{} << broker->Trace() << x << '\n';                    \
   } while (false)
 
-#define TRACE_BROKER_MEMORY(broker, x)                              \
-  do {                                                              \
-    if (broker->tracing_enabled() && FLAG_trace_heap_broker_memory) \
-      StdoutStream{} << broker->Trace() << x << std::endl;          \
+#define TRACE_BROKER_MEMORY(broker, x)                                  \
+  do {                                                                  \
+    if (broker->tracing_enabled() && v8_flags.trace_heap_broker_memory) \
+      StdoutStream{} << broker->Trace() << x << std::endl;              \
   } while (false)
 
 #define TRACE_BROKER_MISSING(broker, x)                                        \
@@ -101,7 +101,7 @@ class V8_EXPORT_PRIVATE JSHeapBroker {
   // For use only in tests, sets default values for some arguments. Avoids
   // churn when new flags are added.
   JSHeapBroker(Isolate* isolate, Zone* broker_zone)
-      : JSHeapBroker(isolate, broker_zone, FLAG_trace_heap_broker,
+      : JSHeapBroker(isolate, broker_zone, v8_flags.trace_heap_broker,
                      CodeKind::TURBOFAN) {}
 
   ~JSHeapBroker();
@@ -245,6 +245,15 @@ class V8_EXPORT_PRIVATE JSHeapBroker {
   LocalIsolate* local_isolate_or_isolate() const {
     return local_isolate() != nullptr ? local_isolate()
                                       : isolate()->AsLocalIsolate();
+  }
+
+  base::Optional<RootIndex> FindRootIndex(const HeapObjectRef& object) {
+    Address address = object.object()->ptr();
+    RootIndex root_index;
+    if (root_index_map_.Lookup(address, &root_index)) {
+      return root_index;
+    }
+    return {};
   }
 
   // Return the corresponding canonical persistent handle for {object}. Create

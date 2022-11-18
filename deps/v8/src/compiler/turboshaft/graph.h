@@ -21,8 +21,8 @@
 
 namespace v8::internal::compiler::turboshaft {
 
+template <template <class> class... Reducers>
 class Assembler;
-class VarAssembler;
 
 // `OperationBuffer` is a growable, Zone-allocated buffer to store Turboshaft
 // operations. It is part of a `Graph`.
@@ -68,6 +68,7 @@ class OperationBuffer {
   };
 
   explicit OperationBuffer(Zone* zone, size_t initial_capacity) : zone_(zone) {
+    DCHECK_NE(initial_capacity, 0);
     begin_ = end_ = zone_->NewArray<OperationStorageSlot>(initial_capacity);
     operation_sizes_ =
         zone_->NewArray<uint16_t>((initial_capacity + 1) / kSlotsPerId);
@@ -184,6 +185,11 @@ class OperationBuffer {
 };
 
 template <class Derived>
+class DominatorForwardTreeNode;
+template <class Derived>
+class RandomAccessStackDominatorNode;
+
+template <class Derived>
 class DominatorForwardTreeNode {
   // A class storing a forward representation of the dominator tree, since the
   // regular dominator tree is represented as pointers from the children to
@@ -210,8 +216,9 @@ class DominatorForwardTreeNode {
   }
 
  private:
-  friend class Block;
-
+#ifdef DEBUG
+  friend class RandomAccessStackDominatorNode<Derived>;
+#endif
   Derived* neighboring_child_ = nullptr;
   Derived* last_child_ = nullptr;
 };
@@ -226,24 +233,35 @@ class RandomAccessStackDominatorNode
   // the height of the dominator tree.
  public:
   void SetDominator(Derived* dominator);
+  void SetAsDominatorRoot();
   Derived* GetDominator() { return nxt_; }
 
   // Returns the lowest common dominator of {this} and {other}.
-  Derived* GetCommonDominator(RandomAccessStackDominatorNode<Derived>* other);
+  Derived* GetCommonDominator(
+      RandomAccessStackDominatorNode<Derived>* other) const;
+
+  bool IsDominatedBy(const Derived* other) const {
+    // TODO(dmercadier): we don't have to call GetCommonDominator and could
+    // determine quicker that {this} isn't dominated by {other}.
+    return GetCommonDominator(other) == other;
+  }
 
   int Depth() const { return len_; }
 
  private:
-  friend class Graph;
   friend class DominatorForwardTreeNode<Derived>;
+#ifdef DEBUG
+  friend class Block;
+#endif
 
-  int len_ = 0;
-  Derived* nxt_ = nullptr;
-  Derived* jmp_ = nullptr;
   // Myers' original datastructure requires to often check jmp_->len_, which is
   // not so great on modern computers (memory access, caches & co). To speed up
   // things a bit, we store here jmp_len_.
   int jmp_len_ = 0;
+
+  int len_ = 0;
+  Derived* nxt_ = nullptr;
+  Derived* jmp_ = nullptr;
 };
 
 // A basic block
@@ -254,9 +272,12 @@ class Block : public RandomAccessStackDominatorNode<Block> {
   bool IsLoopOrMerge() const { return IsLoop() || IsMerge(); }
   bool IsLoop() const { return kind_ == Kind::kLoopHeader; }
   bool IsMerge() const { return kind_ == Kind::kMerge; }
+  bool IsBranchTarget() const { return kind_ == Kind::kBranchTarget; }
   bool IsHandler() const { return false; }
   bool IsSwitchCase() const { return false; }
+
   Kind kind() const { return kind_; }
+  void SetKind(Kind kind) { kind_ = kind; }
 
   BlockIndex index() const { return index_; }
 
@@ -269,14 +290,6 @@ class Block : public RandomAccessStackDominatorNode<Block> {
 
   bool IsBound() const { return index_ != BlockIndex::Invalid(); }
 
-  void AddPredecessor(Block* predecessor) {
-    DCHECK(!IsBound() ||
-           (Predecessors().size() == 1 && kind_ == Kind::kLoopHeader));
-    DCHECK_EQ(predecessor->neighboring_predecessor_, nullptr);
-    predecessor->neighboring_predecessor_ = last_predecessor_;
-    last_predecessor_ = predecessor;
-  }
-
   base::SmallVector<Block*, 8> Predecessors() const {
     base::SmallVector<Block*, 8> result;
     for (Block* pred = last_predecessor_; pred != nullptr;
@@ -287,8 +300,10 @@ class Block : public RandomAccessStackDominatorNode<Block> {
     return result;
   }
 
-#ifdef DEBUG
-  int PredecessorCount() {
+  // TODO(dmercadier): we should store predecessor count in the Blocks directly
+  // (or in the Graph, or in the Assembler), to avoid this O(n) PredecessorCount
+  // method.
+  int PredecessorCount() const {
     int count = 0;
     for (Block* pred = last_predecessor_; pred != nullptr;
          pred = pred->neighboring_predecessor_) {
@@ -296,16 +311,43 @@ class Block : public RandomAccessStackDominatorNode<Block> {
     }
     return count;
   }
-#endif
+
+  // Returns the index of {target} in the predecessors of the current Block.
+  int GetPredecessorIndex(const Block* target) const {
+    int pred_count = 0;
+    int pred_reverse_index = -1;
+    for (Block* pred = last_predecessor_; pred != nullptr;
+         pred = pred->neighboring_predecessor_) {
+      if (pred == target) {
+        DCHECK_EQ(pred_reverse_index, -1);
+        pred_reverse_index = pred_count;
+      }
+      pred_count++;
+    }
+    DCHECK_NE(pred_reverse_index, -1);
+    return pred_count - pred_reverse_index - 1;
+  }
+
+  // HasExactlyNPredecessors(n) returns the same result as
+  // `PredecessorCount() == n`, but stops early and iterates at most the first
+  // {n} predecessors.
+  bool HasExactlyNPredecessors(unsigned int n) const {
+    Block* current_pred = last_predecessor_;
+    while (current_pred != nullptr && n != 0) {
+      current_pred = current_pred->neighboring_predecessor_;
+      n--;
+    }
+    return n == 0 && current_pred == nullptr;
+  }
 
   Block* LastPredecessor() const { return last_predecessor_; }
   Block* NeighboringPredecessor() const { return neighboring_predecessor_; }
   bool HasPredecessors() const { return last_predecessor_ != nullptr; }
+  void ResetLastPredecessor() { last_predecessor_ = nullptr; }
 
   // The block from the previous graph which produced the current block. This is
   // used for translating phi nodes from the previous graph.
   void SetOrigin(const Block* origin) {
-    DCHECK_NULL(origin_);
     DCHECK_EQ(origin->graph_generation_ + 1, graph_generation_);
     origin_ = origin;
   }
@@ -320,6 +362,24 @@ class Block : public RandomAccessStackDominatorNode<Block> {
     return end_;
   }
 
+  const Operation& LastOperation(const Graph& graph) const;
+
+  bool EndsWithBranchingOp(const Graph& graph) const {
+    switch (LastOperation(graph).opcode) {
+      case Opcode::kBranch:
+      case Opcode::kSwitch:
+      case Opcode::kCatchException:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // Computes the dominators of the this block, assuming that the dominators of
+  // its predecessors are already computed. Returns the depth of the current
+  // block in the dominator tree.
+  uint32_t ComputeDominator();
+
   void PrintDominatorTree(
       std::vector<const char*> tree_symbols = std::vector<const char*>(),
       bool has_next = false) const;
@@ -327,7 +387,20 @@ class Block : public RandomAccessStackDominatorNode<Block> {
   explicit Block(Kind kind) : kind_(kind) {}
 
  private:
+  // AddPredecessor should never be called directly except from Assembler's
+  // AddPredecessor and SplitEdge methods, which takes care of maintaining
+  // split-edge form.
+  void AddPredecessor(Block* predecessor) {
+    DCHECK(!IsBound() ||
+           (Predecessors().size() == 1 && kind_ == Kind::kLoopHeader));
+    DCHECK_EQ(predecessor->neighboring_predecessor_, nullptr);
+    predecessor->neighboring_predecessor_ = last_predecessor_;
+    last_predecessor_ = predecessor;
+  }
+
   friend class Graph;
+  template <template <class> class... Reducers>
+  friend class Assembler;
 
   Kind kind_;
   bool deferred_ = false;
@@ -341,6 +414,8 @@ class Block : public RandomAccessStackDominatorNode<Block> {
   size_t graph_generation_ = 0;
 #endif
 };
+
+std::ostream& operator<<(std::ostream& os, const Block* b);
 
 class Graph {
  public:
@@ -361,11 +436,10 @@ class Graph {
     source_positions_.Reset();
     operation_origins_.Reset();
     next_block_ = 0;
+    dominator_tree_depth_ = 0;
   }
 
-  void GenerateDominatorTree();
-
-  const Operation& Get(OpIndex i) const {
+  V8_INLINE const Operation& Get(OpIndex i) const {
     // `Operation` contains const fields and can be overwritten with placement
     // new. Therefore, std::launder is necessary to avoid undefined behavior.
     const Operation* ptr =
@@ -374,7 +448,7 @@ class Graph {
     DCHECK_LT(OpcodeIndex(ptr->opcode), kNumberOfOpcodes);
     return *ptr;
   }
-  Operation& Get(OpIndex i) {
+  V8_INLINE Operation& Get(OpIndex i) {
     // `Operation` contains const fields and can be overwritten with placement
     // new. Therefore, std::launder is necessary to avoid undefined behavior.
     Operation* ptr =
@@ -394,12 +468,13 @@ class Graph {
     DCHECK_LT(i.id(), bound_blocks_.size());
     return *bound_blocks_[i.id()];
   }
-  Block* GetPtr(uint32_t index) {
-    DCHECK_LT(index, bound_blocks_.size());
-    return bound_blocks_[index];
-  }
 
   OpIndex Index(const Operation& op) const { return operations_.Index(op); }
+
+  OpIndex NextIndex(const OpIndex idx) const { return operations_.Next(idx); }
+  OpIndex PreviousIndex(const OpIndex idx) const {
+    return operations_.Previous(idx);
+  }
 
   OperationStorageSlot* Allocate(size_t slot_count) {
     return operations_.Allocate(slot_count);
@@ -411,8 +486,10 @@ class Graph {
   }
 
   template <class Op, class... Args>
-  V8_INLINE OpIndex Add(Args... args) {
+  V8_INLINE Op& Add(Args... args) {
+#ifdef DEBUG
     OpIndex result = next_operation_index();
+#endif  // DEBUG
     Op& op = Op::New(this, args...);
     IncrementInputUses(op);
     DCHECK_EQ(result, Index(op));
@@ -421,7 +498,7 @@ class Graph {
       DCHECK_LT(input, result);
     }
 #endif  // DEBUG
-    return result;
+    return op;
   }
 
   template <class Op, class... Args>
@@ -441,46 +518,51 @@ class Graph {
     IncrementInputUses(*new_op);
   }
 
-  V8_INLINE Block* NewBlock(Block::Kind kind) {
-    if (V8_UNLIKELY(next_block_ == all_blocks_.size())) {
-      constexpr size_t new_block_count = 64;
-      base::Vector<Block> blocks =
-          graph_zone_->NewVector<Block>(new_block_count, Block(kind));
-      for (size_t i = 0; i < new_block_count; ++i) {
-        all_blocks_.push_back(&blocks[i]);
-      }
-    }
-    Block* result = all_blocks_[next_block_++];
-    *result = Block(kind);
-#ifdef DEBUG
-    result->graph_generation_ = generation_;
-#endif
-    return result;
+  V8_INLINE Block* NewLoopHeader() {
+    return NewBlock(Block::Kind::kLoopHeader);
   }
+  V8_INLINE Block* NewBlock() { return NewBlock(Block::Kind::kMerge); }
 
   V8_INLINE bool Add(Block* block) {
     DCHECK_EQ(block->graph_generation_, generation_);
     if (!bound_blocks_.empty() && !block->HasPredecessors()) return false;
-    bool deferred = true;
-    for (Block* pred = block->last_predecessor_; pred != nullptr;
-         pred = pred->neighboring_predecessor_) {
-      if (!pred->IsDeferred()) {
-        deferred = false;
-        break;
+    if (!block->IsDeferred()) {
+      bool deferred = true;
+      for (Block* pred = block->last_predecessor_; pred != nullptr;
+           pred = pred->neighboring_predecessor_) {
+        if (!pred->IsDeferred()) {
+          deferred = false;
+          break;
+        }
       }
+      block->SetDeferred(deferred);
     }
-    block->SetDeferred(deferred);
     DCHECK(!block->begin_.valid());
     block->begin_ = next_operation_index();
     DCHECK_EQ(block->index_, BlockIndex::Invalid());
     block->index_ = BlockIndex(static_cast<uint32_t>(bound_blocks_.size()));
     bound_blocks_.push_back(block);
+    uint32_t depth = block->ComputeDominator();
+    dominator_tree_depth_ = std::max<uint32_t>(dominator_tree_depth_, depth);
     return true;
   }
 
   void Finalize(Block* block) {
     DCHECK(!block->end_.valid());
     block->end_ = next_operation_index();
+  }
+
+  void TurnLoopIntoMerge(Block* loop) {
+    DCHECK(loop->IsLoop());
+    DCHECK_EQ(loop->PredecessorCount(), 1);
+    loop->kind_ = Block::Kind::kMerge;
+    for (Operation& op : operations(*loop)) {
+      if (auto* pending_phi = op.TryCast<PendingLoopPhiOp>()) {
+        Replace<PhiOp>(Index(*pending_phi),
+                       base::VectorOf({pending_phi->first()}),
+                       pending_phi->rep);
+      }
+    }
   }
 
   OpIndex next_operation_index() const { return operations_.EndIndex(); }
@@ -629,6 +711,8 @@ class Graph {
   }
   GrowingSidetable<OpIndex>& operation_origins() { return operation_origins_; }
 
+  uint32_t DominatorTreeDepth() const { return dominator_tree_depth_; }
+
   Graph& GetOrCreateCompanion() {
     if (!companion_) {
       companion_ = std::make_unique<Graph>(graph_zone_, operations_.size());
@@ -691,6 +775,23 @@ class Graph {
     }
   }
 
+  V8_INLINE Block* NewBlock(Block::Kind kind) {
+    if (V8_UNLIKELY(next_block_ == all_blocks_.size())) {
+      constexpr size_t new_block_count = 64;
+      base::Vector<Block> blocks =
+          graph_zone_->NewVector<Block>(new_block_count, Block(kind));
+      for (size_t i = 0; i < new_block_count; ++i) {
+        all_blocks_.push_back(&blocks[i]);
+      }
+    }
+    Block* result = all_blocks_[next_block_++];
+    *result = Block(kind);
+#ifdef DEBUG
+    result->graph_generation_ = generation_;
+#endif
+    return result;
+  }
+
   OperationBuffer operations_;
   ZoneVector<Block*> bound_blocks_;
   ZoneVector<Block*> all_blocks_;
@@ -698,6 +799,7 @@ class Graph {
   Zone* graph_zone_;
   GrowingSidetable<SourcePosition> source_positions_;
   GrowingSidetable<OpIndex> operation_origins_;
+  uint32_t dominator_tree_depth_ = 0;
 
   std::unique_ptr<Graph> companion_ = {};
 #ifdef DEBUG
@@ -710,12 +812,117 @@ V8_INLINE OperationStorageSlot* AllocateOpStorage(Graph* graph,
   return graph->Allocate(slot_count);
 }
 
+V8_INLINE const Operation& Block::LastOperation(const Graph& graph) const {
+  return graph.Get(graph.PreviousIndex(end()));
+}
+
 struct PrintAsBlockHeader {
   const Block& block;
 };
 std::ostream& operator<<(std::ostream& os, PrintAsBlockHeader block);
 std::ostream& operator<<(std::ostream& os, const Graph& graph);
 std::ostream& operator<<(std::ostream& os, const Block::Kind& kind);
+
+inline uint32_t Block::ComputeDominator() {
+  if (V8_UNLIKELY(LastPredecessor() == nullptr)) {
+    // If the block has no predecessors, then it's the start block. We create a
+    // jmp_ edge to itself, so that the SetDominator algorithm does not need a
+    // special case for when the start block is reached.
+    SetAsDominatorRoot();
+  } else {
+    // If the block has one or more predecessors, the dominator is the lowest
+    // common ancestor (LCA) of all of the predecessors.
+
+    // Note that for BranchTarget, there is a single predecessor. This doesn't
+    // change the logic: the loop won't be entered, and the first (and only)
+    // predecessor is set as the dominator.
+    // Similarly, since we compute dominators on the fly, when we reach a
+    // kLoopHeader, we haven't visited its body yet, and it should only have one
+    // predecessor (the backedge is not here yet), which is its dominator.
+    DCHECK_IMPLIES(kind_ == Block::Kind::kLoopHeader, PredecessorCount() == 1);
+
+    Block* dominator = LastPredecessor();
+    for (Block* pred = dominator->NeighboringPredecessor(); pred != nullptr;
+         pred = pred->NeighboringPredecessor()) {
+      dominator = dominator->GetCommonDominator(pred);
+    }
+    SetDominator(dominator);
+  }
+  DCHECK_NE(jmp_, nullptr);
+  DCHECK_IMPLIES(nxt_ == nullptr, LastPredecessor() == nullptr);
+  DCHECK_IMPLIES(len_ == 0, LastPredecessor() == nullptr);
+  return Depth();
+}
+
+template <class Derived>
+inline void RandomAccessStackDominatorNode<Derived>::SetAsDominatorRoot() {
+  jmp_ = static_cast<Derived*>(this);
+  nxt_ = nullptr;
+  len_ = 0;
+  jmp_len_ = 0;
+}
+
+template <class Derived>
+inline void RandomAccessStackDominatorNode<Derived>::SetDominator(
+    Derived* dominator) {
+  DCHECK_NOT_NULL(dominator);
+  DCHECK_NULL(static_cast<Block*>(this)->neighboring_child_);
+  DCHECK_NULL(static_cast<Block*>(this)->last_child_);
+  // Determining the jmp pointer
+  Derived* t = dominator->jmp_;
+  if (dominator->len_ - t->len_ == t->len_ - t->jmp_len_) {
+    t = t->jmp_;
+  } else {
+    t = dominator;
+  }
+  // Initializing fields
+  nxt_ = dominator;
+  jmp_ = t;
+  len_ = dominator->len_ + 1;
+  jmp_len_ = jmp_->len_;
+  dominator->AddChild(static_cast<Derived*>(this));
+}
+
+template <class Derived>
+inline Derived* RandomAccessStackDominatorNode<Derived>::GetCommonDominator(
+    RandomAccessStackDominatorNode<Derived>* other) const {
+  const RandomAccessStackDominatorNode* a = this;
+  const RandomAccessStackDominatorNode* b = other;
+  if (b->len_ > a->len_) {
+    // Swapping |a| and |b| so that |a| always has a greater length.
+    std::swap(a, b);
+  }
+  DCHECK_GE(a->len_, 0);
+  DCHECK_GE(b->len_, 0);
+
+  // Going up the dominators of |a| in order to reach the level of |b|.
+  while (a->len_ != b->len_) {
+    DCHECK_GE(a->len_, 0);
+    if (a->jmp_len_ >= b->len_) {
+      a = a->jmp_;
+    } else {
+      a = a->nxt_;
+    }
+  }
+
+  // Going up the dominators of |a| and |b| simultaneously until |a| == |b|
+  while (a != b) {
+    DCHECK_EQ(a->len_, b->len_);
+    DCHECK_GE(a->len_, 0);
+    if (a->jmp_ == b->jmp_) {
+      // We found a common dominator, but we actually want to find the smallest
+      // one, so we go down in the current subtree.
+      a = a->nxt_;
+      b = b->nxt_;
+    } else {
+      a = a->jmp_;
+      b = b->jmp_;
+    }
+  }
+
+  return static_cast<Derived*>(
+      const_cast<RandomAccessStackDominatorNode<Derived>*>(a));
+}
 
 }  // namespace v8::internal::compiler::turboshaft
 
