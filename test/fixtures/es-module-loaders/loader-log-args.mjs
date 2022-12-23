@@ -1,4 +1,4 @@
-export async function resolve(...args) {
+export function resolve(...args) {
   console.log(`resolve arg count: ${args.length}`);
   console.log({
     specifier: args[0],

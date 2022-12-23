@@ -1,4 +1,4 @@
-export async function resolve(url, context, next) {
+export function resolve(url, context, next) {
   // This check is needed to make sure that we don't prevent the
   // resolution from follow-up loaders. It wouldn't be a problem
   // in real life because loaders aren't supposed to break the
@@ -10,7 +10,7 @@ export async function resolve(url, context, next) {
   const {
     format,
     url: nextUrl,
-  } = await next(url, context);
+  } = next(url, context);
 
   return {
     format,
