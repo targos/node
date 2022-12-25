@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises';
+
 export async function resolve(specifier, context, next) {
   // This check is needed to make sure that we don't prevent the
   // resolution from follow-up loaders. It wouldn't be a problem
@@ -7,6 +9,7 @@ export async function resolve(specifier, context, next) {
     return next(specifier);
   }
 
-  console.log('resolve passthru'); // This log is deliberate
+  // TODO: This probably won't work on Windows. Need to find another solution (write to a real file?).
+  await writeFile('/dev/fd/1', 'resolve passthru')
   return next(specifier);
 }
