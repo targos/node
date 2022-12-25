@@ -3,13 +3,13 @@ import assert from 'node:assert';
 // a loader that asserts that the defaultResolve will throw "not found"
 // (skipping the top-level main of course)
 let mainLoad = true;
-export function resolve(specifier, { importAssertions }, next) {
+export async function resolve(specifier, { importAssertions }, next) {
   if (mainLoad) {
     mainLoad = false;
     return next(specifier);
   }
   try {
-    next(specifier);
+    await next(specifier);
   }
   catch (e) {
     assert.strictEqual(e.code, 'ERR_MODULE_NOT_FOUND');
