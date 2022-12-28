@@ -66,7 +66,7 @@ export function globalPreload({port}) {
   // alive just because a loader is waiting for messages
   port.unref();
 
-  const insideAppContext = (getBuiltin, port, setImportMetaCallback) => {
+  const insideAppContext = (getBuiltin, port) => {
     /**
      * This is the Map that saves *all* the mocked URL -> replacement Module
      * mappings
@@ -131,39 +131,9 @@ export function globalPreload({port}) {
       // and names the next time it resolves a specifier to equal `resolved`
       port.postMessage({ mockVersion, resolved, exports: exportNames });
       return namespace;
-    }
-    // Sets the import.meta properties up
-    // has the normal chaining workflow with `defaultImportMetaInitializer`
-    setImportMetaCallback((meta, context, defaultImportMetaInitializer) => {
-      /**
-       * 'node:mock' creates its default export by plucking off of import.meta
-       * and must do so in order to get the communications channel from inside
-       * preloadCode
-       */
-      if (context.url === 'node:mock') {
-        meta.doMock = doMock;
-        return;
-      }
-      /**
-       * Fake modules created by `node:mock` get their meta.mock utility set
-       * to the corresponding value keyed off `mockedModules` and use this
-       * to setup their exports/listeners properly
-       */
-      if (context.url.startsWith('mock-facade:')) {
-        let [proto, version, encodedTargetURL] = context.url.split(':');
-        let decodedTargetURL = decodeURIComponent(encodedTargetURL);
-        if (mockedModules.has(decodedTargetURL)) {
-          meta.mock = mockedModules.get(decodedTargetURL);
-          return;
-        }
-      }
-      /**
-       * Ensure we still get things like `import.meta.url`
-       */
-      defaultImportMetaInitializer(meta, context);
-    });
+    };
   };
-  return `(${insideAppContext})(getBuiltin, port, setImportMetaCallback)`
+  return `(${insideAppContext})(getBuiltin, port)`
 }
 
 
