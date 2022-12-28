@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { writeSync } from 'fs';
 
 export async function resolve(specifier, context, next) {
   // This check is needed to make sure that we don't prevent the
@@ -9,7 +9,6 @@ export async function resolve(specifier, context, next) {
     return next(specifier);
   }
 
-  // TODO: This probably won't work on Windows. Need to find another solution (write to a real file?).
-  await writeFile('/dev/fd/1', 'resolve passthru')
+  writeSync(1, 'resolve passthru\n'); // This log is deliberate
   return next(specifier);
 }
