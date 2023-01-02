@@ -348,6 +348,7 @@ command flag enabled.
 Provides a module-relative resolution function scoped to each module, returning
 the URL string. In alignment with browser behavior, this now returns
 synchronously.
+
 > **Caveat** This can result in synchronous file-system operations, which
 > can impact performance similarly to `require.resolve`.
 
