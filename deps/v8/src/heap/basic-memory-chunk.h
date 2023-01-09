@@ -137,6 +137,8 @@ class BasicMemoryChunk {
 
   static constexpr MainThreadFlags kInSharedHeap = IN_SHARED_HEAP;
 
+  static constexpr MainThreadFlags kIncrementalMarking = INCREMENTAL_MARKING;
+
   static constexpr MainThreadFlags kSkipEvacuationSlotsRecordingMask =
       MainThreadFlags(kEvacuationCandidateMask) |
       MainThreadFlags(kIsInYoungGenerationMask);
@@ -347,6 +349,10 @@ class BasicMemoryChunk {
   // release store.
   void SynchronizedHeapLoad() const;
 #endif
+
+  // Computes position of object in marking bitmap. Useful for debugging.
+  V8_ALLOW_UNUSED static MarkBit ComputeMarkBit(HeapObject object);
+  V8_ALLOW_UNUSED static MarkBit ComputeMarkBit(Address address);
 
  protected:
   // Overall size of the chunk, including the header and guards.

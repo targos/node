@@ -6,6 +6,7 @@
 #define V8_HEAP_MARKING_VISITOR_H_
 
 #include "src/common/globals.h"
+#include "src/execution/isolate.h"
 #include "src/heap/marking-state.h"
 #include "src/heap/marking-worklist.h"
 #include "src/heap/objects-visiting.h"
@@ -81,8 +82,7 @@ class MarkingVisitorBase : public HeapVisitor<int, ConcreteVisitor> {
   // ObjectVisitor overrides.
   void VisitMapPointer(HeapObject host) final {
     Map map = host.map(ObjectVisitorWithCageBases::cage_base());
-    MarkObject(host, map);
-    concrete_visitor()->RecordSlot(host, host.map_slot(), map);
+    ProcessStrongHeapObject(host, host.map_slot(), map);
   }
   V8_INLINE void VisitPointer(HeapObject host, ObjectSlot p) final {
     VisitPointersImpl(host, p, p + 1);
@@ -242,12 +242,18 @@ class YoungGenerationMarkingVisitorBase
     UNREACHABLE();
   }
 
+  V8_INLINE int VisitJSApiObject(Map map, JSObject object);
   V8_INLINE int VisitJSArrayBuffer(Map map, JSArrayBuffer object);
+  V8_INLINE int VisitJSDataView(Map map, JSDataView object);
+  V8_INLINE int VisitJSTypedArray(Map map, JSTypedArray object);
 
  protected:
   ConcreteVisitor* concrete_visitor() {
     return static_cast<ConcreteVisitor*>(this);
   }
+
+  template <typename T>
+  int VisitEmbedderTracingSubClassWithEmbedderTracing(Map map, T object);
 
   inline void MarkObjectViaMarkingWorklist(HeapObject object);
 

@@ -1245,7 +1245,9 @@ Node* RepresentationChanger::GetWord64RepresentationFor(
              ((use_info.truncation().IsUsedAsWord64() &&
                (use_info.type_check() == TypeCheckKind::kBigInt ||
                 output_type.Is(Type::BigInt()))) ||
-              use_info.type_check() == TypeCheckKind::kBigInt64)) {
+              (use_info.type_check() == TypeCheckKind::kBigInt64 ||
+               output_type.Is(Type::SignedBigInt64()) ||
+               output_type.Is(Type::UnsignedBigInt64())))) {
     node = GetTaggedPointerRepresentationFor(node, output_rep, output_type,
                                              use_node, use_info);
     op = simplified()->TruncateBigIntToWord64();
@@ -1371,6 +1373,12 @@ const Operator* RepresentationChanger::Int64OperatorFor(
       return machine()->Int64Sub();
     case IrOpcode::kSpeculativeBigIntMultiply:
       return machine()->Int64Mul();
+    case IrOpcode::kSpeculativeBigIntBitwiseAnd:
+      return machine()->Word64And();
+    case IrOpcode::kSpeculativeBigIntBitwiseOr:
+      return machine()->Word64Or();
+    case IrOpcode::kSpeculativeBigIntBitwiseXor:
+      return machine()->Word64Xor();
     default:
       UNREACHABLE();
   }
@@ -1407,6 +1415,16 @@ const Operator* RepresentationChanger::BigIntOperatorFor(
       return simplified()->BigIntDivide();
     case IrOpcode::kSpeculativeBigIntModulus:
       return simplified()->BigIntModulus();
+    case IrOpcode::kSpeculativeBigIntBitwiseAnd:
+      return simplified()->BigIntBitwiseAnd();
+    case IrOpcode::kSpeculativeBigIntBitwiseOr:
+      return simplified()->BigIntBitwiseOr();
+    case IrOpcode::kSpeculativeBigIntBitwiseXor:
+      return simplified()->BigIntBitwiseXor();
+    case IrOpcode::kSpeculativeBigIntShiftLeft:
+      return simplified()->BigIntShiftLeft();
+    case IrOpcode::kSpeculativeBigIntShiftRight:
+      return simplified()->BigIntShiftRight();
     default:
       UNREACHABLE();
   }

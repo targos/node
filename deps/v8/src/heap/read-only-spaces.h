@@ -11,9 +11,11 @@
 #include "include/v8-platform.h"
 #include "src/base/macros.h"
 #include "src/common/globals.h"
+#include "src/heap/allocation-result.h"
 #include "src/heap/allocation-stats.h"
 #include "src/heap/base-space.h"
 #include "src/heap/basic-memory-chunk.h"
+#include "src/heap/heap-verifier.h"
 #include "src/heap/list.h"
 #include "src/heap/memory-chunk.h"
 
@@ -223,7 +225,7 @@ class ReadOnlySpace : public BaseSpace {
   bool ContainsSlow(Address addr) const;
   V8_EXPORT_PRIVATE void ShrinkPages();
 #ifdef VERIFY_HEAP
-  void Verify(Isolate* isolate) const;
+  void Verify(Isolate* isolate, SpaceVerificationVisitor* visitor) const final;
 #ifdef DEBUG
   void VerifyCounters(Heap* heap) const;
 #endif  // DEBUG

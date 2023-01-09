@@ -133,7 +133,9 @@ class Scavenger {
   template <typename TSlot>
   inline void CheckOldToNewSlotForSharedUntyped(MemoryChunk* chunk, TSlot slot);
   inline void CheckOldToNewSlotForSharedTyped(MemoryChunk* chunk,
-                                              SlotType slot_type, Address slot);
+                                              SlotType slot_type,
+                                              Address slot_address,
+                                              MaybeObject new_target);
 
   // Scavenges an object |object| referenced from slot |p|. |object| is required
   // to be in from space.
@@ -214,6 +216,7 @@ class Scavenger {
   const bool is_compacting_;
   const bool shared_string_table_;
   const bool mark_shared_heap_;
+  const bool shortcut_strings_;
 
   friend class IterateAndScavengePromotedObjectsVisitor;
   friend class RootScavengeVisitor;

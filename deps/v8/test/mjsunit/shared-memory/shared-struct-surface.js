@@ -13,6 +13,9 @@ let S = new SharedStructType(['field']);
   // proposal explainer which says accessing the prototype throws.
   assertNull(S.prototype);
   assertNull(Object.getPrototypeOf(new S()));
+  assertThrows(() => {
+    S.prototype = {};
+  });
 })();
 
 (function TestPrimitives() {
@@ -93,4 +96,9 @@ let S = new SharedStructType(['field']);
 
 (function TestDuplicateFieldNames() {
   assertThrows(() => new SharedStructType(['same', 'same']));
+})();
+
+(function TestNoFields() {
+  const EmptyStruct = new SharedStructType([]);
+  let s = new EmptyStruct();
 })();

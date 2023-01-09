@@ -568,7 +568,7 @@
   MINOR_INCREMENTAL_SCOPES(F)                        \
   F(HEAP_EMBEDDER_TRACING_EPILOGUE)                  \
   F(HEAP_EPILOGUE)                                   \
-  F(HEAP_EPILOGUE_ADJUST_NEW_SPACE)                  \
+  F(HEAP_EPILOGUE_REDUCE_NEW_SPACE)                  \
   F(HEAP_EPILOGUE_SAFEPOINT)                         \
   F(HEAP_EXTERNAL_EPILOGUE)                          \
   F(HEAP_EXTERNAL_NEAR_HEAP_LIMIT)                   \
@@ -651,6 +651,8 @@
   F(MINOR_MC_MARK_ROOTS)                             \
   F(MINOR_MC_MARK_CLOSURE_PARALLEL)                  \
   F(MINOR_MC_MARK_CLOSURE)                           \
+  F(MINOR_MC_MARK_EMBEDDER_PROLOGUE)                 \
+  F(MINOR_MC_MARK_EMBEDDER_TRACING)                  \
   F(MINOR_MC_SWEEP_NEW)                              \
   F(MINOR_MC_SWEEP_NEW_LO)                           \
   F(SAFEPOINT)                                       \
@@ -694,6 +696,7 @@
   F(BACKGROUND_YOUNG_ARRAY_BUFFER_SWEEP)          \
   F(MINOR_MARK_COMPACTOR)                         \
   F(MINOR_MC_COMPLETE_SWEEP_ARRAY_BUFFERS)        \
+  F(MINOR_MC_COMPLETE_SWEEPING)                   \
   F(MINOR_MC_BACKGROUND_EVACUATE_COPY)            \
   F(MINOR_MC_BACKGROUND_EVACUATE_UPDATE_POINTERS) \
   F(MINOR_MC_BACKGROUND_MARKING)                  \

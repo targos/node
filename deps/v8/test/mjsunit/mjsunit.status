@@ -157,6 +157,8 @@
   'wasm/atomics64-stress': [PASS, SLOW, NO_VARIANTS, ['mode != release or dcheck_always_on', SKIP], ['tsan', SKIP]],
   'wasm/compare-exchange-stress': [PASS, SLOW, NO_VARIANTS],
   'wasm/compare-exchange64-stress': [PASS, SLOW, NO_VARIANTS],
+  'wasm/code-space-overflow': [PASS, SLOW, NO_VARIANTS, ['gc_stress == True or (simulator_run and mode == debug)', SKIP]],
+  'wasm/max-wasm-functions': [PASS, SLOW, ['mode != release or dcheck_always_on or simulator_run or predictable', SKIP], ['tsan', SKIP]],
 
   # Very slow on ARM, MIPS, RISCV and LOONG, contains no architecture dependent code.
   'unicode-case-overoptimization0': [PASS, NO_VARIANTS, ['arch in (arm, arm64, mips64el, mips64, riscv64, riscv32, loong64)', SKIP]],
@@ -981,6 +983,17 @@
   # not possible.
   'wasm/serialization-with-compilation-hints': [SKIP],
 
+  # The test enables the global profiler, and there can only exist one profiler
+  # at a time.
+  'wasm/log-code-after-post-message': [SKIP],
+
+  # The test explicitly deserializes a wasm module and expects the resulting
+  # wasm module to match the serialized one. With multiple isolate the resulting
+  # wasm module can however, come from the native module cache, and therefore
+  # does not match the serialized one, e.g. some functions are not compiled with
+  # TurboFan.
+  'regress/wasm/regress-11024': [SKIP],
+
   # waitAsync tests modify the global state (across Isolates)
   'harmony/atomics-waitasync': [SKIP],
   'harmony/atomics-waitasync-1thread-2timeout': [SKIP],
@@ -1176,6 +1189,9 @@
   # stack overflow
   'big-array-literal': [SKIP],
   'regress/regress-353551': [SKIP],
+
+  # Limited wasm code space
+  'wasm/max-wasm-functions': [SKIP],
 }],  # 'arch == ppc64'
 
 ##############################################################################
@@ -1186,6 +1202,9 @@
   # PASE environment currently ships with no tzdata database
   'tzoffset-transition-new-york-noi18n': [SKIP],
   'tzoffset-seoul-noi18n': [SKIP],
+  # Manipulating addresses in in tools/system-analyzer/processor.mjs can cause
+  # computation errors due to unsafe integers (v8:13440)
+  'tools/processor': [PASS, ['component_build', SKIP]],
 }],  # 'system == aix'
 
 ##############################################################################
@@ -1345,6 +1364,7 @@
   # Type assertions block the propagation of word64 truncation useinfo,
   # leading to differences in representation selection.
   'compiler/bigint-multiply-truncate': [SKIP],
+  'compiler/bigint-shift-left': [SKIP],
   'wasm/bigint-opt': [SKIP]
 }],  # variant == assert_types
 
@@ -1580,13 +1600,11 @@
   'default-nospec': [SKIP],
   'es6/collections-constructor-*': [SKIP],
   'es6/map-constructor-entry-side-effect*': [SKIP],
-
-  'shared-memory/*': [SKIP],
 }], # single_generation
 
 ################################################################################
 ['conservative_stack_scanning', {
-  # TODO(v8:13257): Conservative stack scanning is not currently compatible
+  # TODO(v8:13493): Conservative stack scanning is not currently compatible
   # with stack switching.
   'wasm/stack-switching': [SKIP],
   'wasm/stack-switching-export': [SKIP],
@@ -1802,6 +1820,8 @@
 # Tests that cannot run without JS shared memory
 ['no_js_shared_memory', {
   'shared-memory/*': [SKIP],
+  'regress/regress-crbug-1394741': [SKIP],
+  'regress/regress-crbug-1395117': [SKIP],
 }],  # 'no_js_shared_memory'
 
 ##############################################################################

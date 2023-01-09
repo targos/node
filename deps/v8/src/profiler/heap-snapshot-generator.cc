@@ -14,6 +14,7 @@
 #include "src/debug/debug.h"
 #include "src/handles/global-handles.h"
 #include "src/heap/combined-heap.h"
+#include "src/heap/heap.h"
 #include "src/heap/safepoint.h"
 #include "src/numbers/conversions.h"
 #include "src/objects/allocation-site-inl.h"
@@ -1397,14 +1398,10 @@ void V8HeapExplorer::ExtractContextReferences(HeapEntry* entry,
                      context.get(Context::OPTIMIZED_CODE_LIST),
                      Context::OffsetOfElementAt(Context::OPTIMIZED_CODE_LIST),
                      HeapEntry::kCustomWeakPointer);
-    SetWeakReference(entry, "deoptimized_code_list",
-                     context.get(Context::DEOPTIMIZED_CODE_LIST),
-                     Context::OffsetOfElementAt(Context::DEOPTIMIZED_CODE_LIST),
-                     HeapEntry::kCustomWeakPointer);
     static_assert(Context::OPTIMIZED_CODE_LIST == Context::FIRST_WEAK_SLOT);
     static_assert(Context::NEXT_CONTEXT_LINK + 1 ==
                   Context::NATIVE_CONTEXT_SLOTS);
-    static_assert(Context::FIRST_WEAK_SLOT + 3 ==
+    static_assert(Context::FIRST_WEAK_SLOT + 2 ==
                   Context::NATIVE_CONTEXT_SLOTS);
   }
 }
@@ -2064,14 +2061,16 @@ bool V8HeapExplorer::IterateAndExtractReferences(
   // its custom name to a generic builtin.
   RootsReferencesExtractor extractor(this);
   ReadOnlyRoots(heap_).Iterate(&extractor);
-  heap_->IterateRoots(&extractor, base::EnumSet<SkipRoot>{SkipRoot::kWeak});
-  // TODO(v8:11800): The heap snapshot generator incorrectly considers the weak
-  // string tables as strong retainers. Move IterateWeakRoots after
-  // SetVisitingWeakRoots.
-  heap_->IterateWeakRoots(&extractor, {});
-  extractor.SetVisitingWeakRoots();
-  heap_->IterateWeakGlobalHandles(&extractor);
-
+  {
+    SaveStackContextScope scope(&heap_->stack());
+    heap_->IterateRoots(&extractor, base::EnumSet<SkipRoot>{SkipRoot::kWeak});
+    // TODO(v8:11800): The heap snapshot generator incorrectly considers the
+    // weak string tables as strong retainers. Move IterateWeakRoots after
+    // SetVisitingWeakRoots.
+    heap_->IterateWeakRoots(&extractor, {});
+    extractor.SetVisitingWeakRoots();
+    heap_->IterateWeakGlobalHandles(&extractor);
+  }
   bool interrupted = false;
 
   CombinedHeapObjectIterator iterator(heap_,

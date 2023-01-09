@@ -68,7 +68,15 @@ class PretenturingHandler final {
   // Removes an entry from the global pretenuring storage.
   void RemoveAllocationSitePretenuringFeedback(AllocationSite site);
 
+#if DEBUG
+  bool HasPretenuringFeedback() const {
+    return !global_pretenuring_feedback_.empty();
+  }
+#endif  // DEBUG
+
  private:
+  bool DeoptMaybeTenuredAllocationSites() const;
+
   Heap* const heap_;
 
   // The feedback storage is used to store allocation sites (keys) and how often

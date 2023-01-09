@@ -75,8 +75,7 @@ enum MemoryType { kMemory32, kMemory64 };
 // globals, or memories.
 class TestModuleBuilder {
  public:
-  explicit TestModuleBuilder(ModuleOrigin origin = kWasmOrigin)
-      : allocator(), mod(std::make_unique<Zone>(&allocator, ZONE_NAME)) {
+  explicit TestModuleBuilder(ModuleOrigin origin = kWasmOrigin) {
     mod.origin = origin;
   }
   byte AddGlobal(ValueType type, bool mutability = true) {
@@ -124,7 +123,7 @@ class TestModuleBuilder {
 
   byte AddStruct(std::initializer_list<F> fields,
                  uint32_t supertype = kNoSuperType) {
-    StructType::Builder type_builder(mod.signature_zone.get(),
+    StructType::Builder type_builder(&mod.signature_zone,
                                      static_cast<uint32_t>(fields.size()));
     for (F field : fields) {
       type_builder.AddField(field.first, field.second);
@@ -135,7 +134,7 @@ class TestModuleBuilder {
   }
 
   byte AddArray(ValueType type, bool mutability) {
-    ArrayType* array = mod.signature_zone->New<ArrayType>(type, mutability);
+    ArrayType* array = mod.signature_zone.New<ArrayType>(type, mutability);
     mod.add_array_type(array, kNoSuperType);
     GetTypeCanonicalizer()->AddRecursiveGroup(module(), 1);
     return static_cast<byte>(mod.types.size() - 1);
@@ -191,7 +190,6 @@ class TestModuleBuilder {
     return static_cast<byte>(mod.functions.size() - 1);
   }
 
-  AccountingAllocator allocator;
   WasmModule mod;
 };
 
@@ -1718,7 +1716,7 @@ TEST_F(FunctionBodyDecoderTest, ReturnCallWithSubtype) {
   WASM_FEATURE_SCOPE(return_call);
 
   auto sig = MakeSig::Returns(kWasmAnyRef);
-  auto callee_sig = MakeSig::Returns(kWasmAnyNonNullableRef);
+  auto callee_sig = MakeSig::Returns(kWasmAnyRef.AsNonNull());
   builder.AddFunction(&callee_sig);
 
   ExpectValidates(&sig, {WASM_RETURN_CALL_FUNCTION0(0)});
@@ -4361,6 +4359,10 @@ TEST_F(FunctionBodyDecoderTest, RefTestCast) {
                                                 WASM_HEAP_TYPE(to_heap))});
       ExpectValidates(&cast_sig, {WASM_REF_CAST(WASM_LOCAL_GET(0),
                                                 WASM_HEAP_TYPE(to_heap))});
+      ExpectValidates(&test_sig, {WASM_REF_TEST_NULL(WASM_LOCAL_GET(0),
+                                                     WASM_HEAP_TYPE(to_heap))});
+      ExpectValidates(&cast_sig, {WASM_REF_CAST_NULL(WASM_LOCAL_GET(0),
+                                                     WASM_HEAP_TYPE(to_heap))});
     } else {
       std::string error_message =
           "local.get of type " + cast_reps[1].name() +
@@ -4374,6 +4376,16 @@ TEST_F(FunctionBodyDecoderTest, RefTestCast) {
                     {WASM_REF_CAST(WASM_LOCAL_GET(0), WASM_HEAP_TYPE(to_heap))},
                     kAppendEnd,
                     ("Invalid types for ref.cast: " + error_message).c_str());
+      ExpectFailure(
+          &test_sig,
+          {WASM_REF_TEST_NULL(WASM_LOCAL_GET(0), WASM_HEAP_TYPE(to_heap))},
+          kAppendEnd,
+          ("Invalid types for ref.test null: " + error_message).c_str());
+      ExpectFailure(
+          &cast_sig,
+          {WASM_REF_CAST_NULL(WASM_LOCAL_GET(0), WASM_HEAP_TYPE(to_heap))},
+          kAppendEnd,
+          ("Invalid types for ref.cast null: " + error_message).c_str());
     }
   }
 
@@ -4407,6 +4419,7 @@ TEST_F(FunctionBodyDecoderTest, BrOnCastOrCastFail) {
   byte super_struct = builder.AddStruct({F(kWasmI16, true)});
   byte sub_struct =
       builder.AddStruct({F(kWasmI16, true), F(kWasmI32, false)}, super_struct);
+  byte fct_type = builder.AddSignature(sigs.i_i(), kNoSuperType);
 
   ValueType supertype = ValueType::RefNull(super_struct);
   ValueType subtype = ValueType::RefNull(sub_struct);
@@ -4445,18 +4458,32 @@ TEST_F(FunctionBodyDecoderTest, BrOnCastOrCastFail) {
       kAppendEnd, "type error in branch[0] (expected i32, got (ref null 0))");
 
   // Argument type error.
+  ExpectFailure(FunctionSig::Build(this->zone(), {subtype}, {kWasmExternRef}),
+                {WASM_LOCAL_GET(0), WASM_BR_ON_CAST(0, sub_struct),
+                 WASM_GC_OP(kExprRefCast), sub_struct},
+                kAppendEnd,
+                "Invalid types for br_on_cast: local.get of type externref has "
+                "to be in the same reference type hierarchy as (ref 1)");
   ExpectFailure(
       FunctionSig::Build(this->zone(), {subtype}, {kWasmExternRef}),
-      {WASM_LOCAL_GET(0), WASM_BR_ON_CAST(0, sub_struct),
+      {WASM_LOCAL_GET(0), WASM_BR_ON_CAST_NULL(0, sub_struct),
        WASM_GC_OP(kExprRefCast), sub_struct},
       kAppendEnd,
-      "br_on_cast[0] expected subtype of (ref null func), (ref null struct) or "
-      "(ref null array), found local.get of type externref");
+      "Invalid types for br_on_cast null: local.get of type externref has "
+      "to be in the same reference type hierarchy as (ref 1)");
   ExpectFailure(
       FunctionSig::Build(this->zone(), {supertype}, {kWasmExternRef}),
       {WASM_LOCAL_GET(0), WASM_BR_ON_CAST_FAIL(0, sub_struct)}, kAppendEnd,
       "br_on_cast_fail[0] expected subtype of (ref null func), (ref null "
       "struct) or (ref null array), found local.get of type externref");
+
+  // Cast between types of different type hierarchies is invalid.
+  ExpectFailure(
+      FunctionSig::Build(this->zone(), {subtype}, {supertype}),
+      {WASM_LOCAL_GET(0), WASM_BR_ON_CAST(0, fct_type), WASM_UNREACHABLE},
+      kAppendEnd,
+      "Invalid types for br_on_cast: local.get of type (ref null 0) has "
+      "to be in the same reference type hierarchy as (ref 2)");
 }
 
 TEST_F(FunctionBodyDecoderTest, BrOnAbstractType) {
@@ -4933,7 +4960,7 @@ TEST_F(WasmOpcodeLengthTest, IllegalRefIndices) {
 
 TEST_F(WasmOpcodeLengthTest, GCOpcodes) {
   // br_on_cast{,_fail}: prefix + opcode + br_depth + type_index
-  ExpectLength(4, 0xfb, kExprBrOnCast & 0xFF);
+  ExpectLength(4, 0xfb, kExprBrOnCastDeprecated & 0xFF);
   ExpectLength(4, 0xfb, kExprBrOnCastFail & 0xFF);
 
   // struct.new, with leb immediate operand.
@@ -5025,7 +5052,6 @@ TEST_F(TypeReaderTest, HeapTypeDecodingTest) {
 
 class LocalDeclDecoderTest : public TestWithZone {
  public:
-  v8::internal::AccountingAllocator allocator;
   WasmFeatures enabled_features_;
 
   size_t ExpectRun(ValueType* local_types, size_t pos, ValueType expected,

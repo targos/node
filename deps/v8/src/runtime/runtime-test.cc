@@ -816,6 +816,8 @@ RUNTIME_FUNCTION(Runtime_GetOptimizationStatus) {
           static_cast<int>(OptimizationStatus::kTopmostFrameIsInterpreted);
     } else if (frame->is_baseline()) {
       status |= static_cast<int>(OptimizationStatus::kTopmostFrameIsBaseline);
+    } else if (frame->is_maglev()) {
+      status |= static_cast<int>(OptimizationStatus::kTopmostFrameIsMaglev);
     }
   }
 
@@ -1195,6 +1197,7 @@ RUNTIME_FUNCTION(Runtime_GlobalPrint) {
     uint16_t character = stream.GetNext();
     PrintF(output_stream, "%c", character);
   }
+  fflush(output_stream);
   return string;
 }
 

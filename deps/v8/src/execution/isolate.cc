@@ -3338,13 +3338,18 @@ void Isolate::Delete(Isolate* isolate) {
   SetIsolateThreadLocals(isolate, nullptr);
   isolate->set_thread_id(ThreadId::Current());
   isolate->thread_local_top()->stack_ =
-      saved_isolate ? saved_isolate->thread_local_top()->stack_
+      saved_isolate ? std::move(saved_isolate->thread_local_top()->stack_)
                     : ::heap::base::Stack(base::Stack::GetStackStart());
 
   bool owns_shared_isolate = isolate->owns_shared_isolate_;
   Isolate* maybe_shared_isolate = isolate->shared_isolate_;
 
   isolate->Deinit();
+
+  // Restore the saved isolate's stack.
+  if (saved_isolate)
+    saved_isolate->thread_local_top()->stack_ =
+        std::move(isolate->thread_local_top()->stack_);
 
 #ifdef DEBUG
   non_disposed_isolates_--;
@@ -3699,6 +3704,13 @@ void Isolate::SetIsolateThreadLocals(Isolate* isolate,
                                      PerIsolateThreadData* data) {
   g_current_isolate_ = isolate;
   g_current_per_isolate_thread_data_ = data;
+
+  if (isolate && isolate->main_thread_local_isolate()) {
+    WriteBarrier::SetForThread(
+        isolate->main_thread_local_heap()->marking_barrier());
+  } else {
+    WriteBarrier::SetForThread(nullptr);
+  }
 }
 
 Isolate::~Isolate() {
@@ -4097,6 +4109,11 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
                    SnapshotData* read_only_snapshot_data,
                    SnapshotData* shared_heap_snapshot_data, bool can_rehash) {
   TRACE_ISOLATE(init);
+
+#ifdef V8_COMPRESS_POINTERS_IN_SHARED_CAGE
+  CHECK_EQ(V8HeapCompressionScheme::base(), cage_base());
+#endif  // V8_COMPRESS_POINTERS_IN_SHARED_CAGE
+
   const bool create_heap_objects = (read_only_snapshot_data == nullptr);
   // We either have all or none.
   DCHECK_EQ(create_heap_objects, startup_snapshot_data == nullptr);
@@ -4201,7 +4218,7 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
 
   // Lock clients_mutex_ in order to prevent shared GCs from other clients
   // during deserialization.
-  base::Optional<base::MutexGuard> clients_guard;
+  base::Optional<base::RecursiveMutexGuard> clients_guard;
 
   if (Isolate* isolate =
           shared_isolate_ ? shared_isolate_ : attach_to_shared_space_isolate) {
@@ -4219,12 +4236,27 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
   DCHECK_IMPLIES(shared_isolate(), !shared_space_isolate());
   DCHECK_IMPLIES(shared_space_isolate(), !shared_isolate());
 
+  isolate_data_.is_shared_space_isolate_flag_ = is_shared_heap_isolate();
+  isolate_data_.uses_shared_heap_flag_ = has_shared_heap();
+
+  if (attach_to_shared_space_isolate && !is_shared_space_isolate() &&
+      attach_to_shared_space_isolate->heap()
+          ->incremental_marking()
+          ->IsMajorMarking()) {
+    heap_.SetIsMarkingFlag(true);
+  }
+
   // SetUp the object heap.
   DCHECK(!heap_.HasBeenSetUp());
   heap_.SetUp(main_thread_local_heap());
   ReadOnlyHeap::SetUp(this, read_only_snapshot_data, can_rehash);
   heap_.SetUpSpaces(isolate_data_.new_allocation_info_,
                     isolate_data_.old_allocation_info_);
+
+  DCHECK_EQ(this, Isolate::Current());
+  PerIsolateThreadData* const current_data = CurrentPerIsolateThreadData();
+  DCHECK_EQ(current_data->isolate(), this);
+  SetIsolateThreadLocals(this, current_data);
 
   if (OwnsStringTables()) {
     string_table_ = std::make_shared<StringTable>(this);
@@ -4252,8 +4284,7 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
     // Additionally, enable if there is already a process-wide CodeRange that
     // has re-embedded builtins.
     if (COMPRESS_POINTERS_IN_SHARED_CAGE_BOOL) {
-      std::shared_ptr<CodeRange> code_range =
-          CodeRange::GetProcessWideCodeRange();
+      CodeRange* code_range = CodeRange::GetProcessWideCodeRange();
       if (code_range && code_range->embedded_blob_code_copy() != nullptr) {
         is_short_builtin_calls_enabled_ = true;
       }
@@ -4267,15 +4298,32 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
     }
   }
 #ifdef V8_EXTERNAL_CODE_SPACE
-  if (heap_.code_range()) {
-    code_cage_base_ = ExternalCodeCompressionScheme::GetPtrComprCageBaseAddress(
-        heap_.code_range()->base());
-  } else {
-    CHECK(jitless_);
-    // In jitless mode the code space pages will be allocated in the main
-    // pointer compression cage.
-    code_cage_base_ =
-        ExternalCodeCompressionScheme::GetPtrComprCageBaseAddress(cage_base());
+  {
+    VirtualMemoryCage* code_cage;
+    if (heap_.code_range()) {
+      code_cage = heap_.code_range();
+    } else {
+      CHECK(jitless_);
+      // In jitless mode the code space pages will be allocated in the main
+      // pointer compression cage.
+      code_cage = GetPtrComprCage();
+    }
+    code_cage_base_ = ExternalCodeCompressionScheme::PrepareCageBaseAddress(
+        code_cage->base());
+#ifdef V8_COMPRESS_POINTERS_IN_SHARED_CAGE
+    CHECK_EQ(ExternalCodeCompressionScheme::base(), code_cage_base_);
+#endif  // V8_COMPRESS_POINTERS_IN_SHARED_CAGE
+
+    // Ensure that ExternalCodeCompressionScheme is applicable to all objects
+    // stored in the code cage.
+    using ComprScheme = ExternalCodeCompressionScheme;
+    Address base = code_cage->base();
+    Address last = base + code_cage->size() - 1;
+    PtrComprCageBase code_cage_base{code_cage_base_};
+    CHECK_EQ(base, ComprScheme::DecompressTaggedPointer(
+                       code_cage_base, ComprScheme::CompressTagged(base)));
+    CHECK_EQ(last, ComprScheme::DecompressTaggedPointer(
+                       code_cage_base, ComprScheme::CompressTagged(last)));
   }
 #endif  // V8_EXTERNAL_CODE_SPACE
 
@@ -4304,12 +4352,12 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
 #endif  // defined(V8_OS_WIN)
 
   if (setup_delegate_ == nullptr) {
-    setup_delegate_ = new SetupIsolateDelegate(create_heap_objects);
+    setup_delegate_ = new SetupIsolateDelegate;
   }
 
   if (!v8_flags.inline_new) heap_.DisableInlineAllocation();
 
-  if (!setup_delegate_->SetupHeap(&heap_)) {
+  if (!setup_delegate_->SetupHeap(this, create_heap_objects)) {
     V8::FatalProcessOutOfMemory(this, "heap object creation");
   }
 
@@ -4330,7 +4378,7 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
   if (create_heap_objects) {
     builtins_constants_table_builder_ = new BuiltinsConstantsTableBuilder(this);
 
-    setup_delegate_->SetupBuiltins(this);
+    setup_delegate_->SetupBuiltins(this, true);
 
     builtins_constants_table_builder_->Finalize();
     delete builtins_constants_table_builder_;
@@ -4338,7 +4386,7 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
 
     CreateAndSetEmbeddedBlob();
   } else {
-    setup_delegate_->SetupBuiltins(this);
+    setup_delegate_->SetupBuiltins(this, false);
     MaybeRemapEmbeddedBuiltinsIntoCodeRange();
   }
 

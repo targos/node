@@ -2507,11 +2507,13 @@ void JSCallReducer::Finalize() {
   std::set<Node*> const waitlist = std::move(waitlist_);
   for (Node* node : waitlist) {
     if (!node->IsDead()) {
+      // Remember the max node id before reduction.
+      NodeId const max_id = static_cast<NodeId>(graph()->NodeCount() - 1);
       Reduction const reduction = Reduce(node);
       if (reduction.Changed()) {
         Node* replacement = reduction.replacement();
         if (replacement != node) {
-          Replace(node, replacement);
+          Replace(node, replacement, max_id);
         }
       }
     }
@@ -8170,6 +8172,34 @@ Reduction JSCallReducer::ReduceNumberParseInt(Node* node) {
   FrameState frame_state = n.frame_state();
   Node* object = n.Argument(0);
   Node* radix = n.ArgumentOrUndefined(1, jsgraph());
+
+  // Try constant-folding when input is a string constant.
+  HeapObjectMatcher object_matcher(object);
+  HeapObjectMatcher radix_object_matcher(radix);
+  NumberMatcher radix_number_matcher(radix);
+  if (object_matcher.HasResolvedValue() &&
+      object_matcher.Ref(broker()).IsString() &&
+      (radix_object_matcher.Is(factory()->undefined_value()) ||
+       radix_number_matcher.HasResolvedValue())) {
+    StringRef input_value = object_matcher.Ref(broker()).AsString();
+    // {undefined} is treated same as 0.
+    int radix_value = radix_object_matcher.Is(factory()->undefined_value())
+                          ? 0
+                          : DoubleToInt32(radix_number_matcher.ResolvedValue());
+    if (radix_value != 0 && (radix_value < 2 || radix_value > 36)) {
+      Node* value = jsgraph()->NaNConstant();
+      ReplaceWithValue(node, value);
+      return Replace(value);
+    }
+
+    base::Optional<double> number = input_value.ToInt(radix_value);
+    if (number.has_value()) {
+      Node* result = graph()->NewNode(common()->NumberConstant(number.value()));
+      ReplaceWithValue(node, result);
+      return Replace(result);
+    }
+  }
+
   node->ReplaceInput(0, object);
   node->ReplaceInput(1, radix);
   node->ReplaceInput(2, context);

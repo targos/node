@@ -15,6 +15,9 @@ EXTRA_FLAGS = [
     (0.1, '--cache=code'),
     (0.1, '--force-slow-path'),
     (0.2, '--future'),
+    # TODO(v8:13524): Enable when issue is fixed
+    # TODO(v8:13528): Enable when issue is fixed
+    # (0.1, '--harmony-struct'),
     (0.1, '--interrupt-budget=100'),
     (0.1, '--interrupt-budget-for-maglev=100'),
     (0.1, '--liftoff'),
@@ -42,6 +45,7 @@ EXTRA_FLAGS = [
     (0.1, '--regexp-interpret-all'),
     (0.1, '--regexp-tier-up-ticks=10'),
     (0.1, '--regexp-tier-up-ticks=100'),
+    (0.1, '--shared-string-table'),
     (0.1, '--stress-background-compile'),
     (0.1, '--stress-flush-code'),
     (0.1, '--stress-lazy-source-positions'),

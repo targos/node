@@ -929,7 +929,6 @@ void Scope::Snapshot::Reparent(DeclarationScope* new_parent) {
   // Move eval calls since Snapshot's creation into new_parent.
   if (outer_scope_->calls_eval_) {
     new_parent->RecordEvalCall();
-    outer_scope_->calls_eval_ = false;
     declaration_scope_->sloppy_eval_can_extend_vars_ = false;
   }
 }
@@ -1263,8 +1262,9 @@ Declaration* DeclarationScope::CheckConflictingVarDeclarations(
     if (decl->IsVariableDeclaration() &&
         decl->AsVariableDeclaration()->AsNested() != nullptr) {
       Scope* current = decl->AsVariableDeclaration()->AsNested()->scope();
-      DCHECK(decl->var()->mode() == VariableMode::kVar ||
-             decl->var()->mode() == VariableMode::kDynamic);
+      if (decl->var()->mode() != VariableMode::kVar &&
+          decl->var()->mode() != VariableMode::kDynamic)
+        continue;
       // Iterate through all scopes until the declaration scope.
       do {
         // There is a conflict if there exists a non-VAR binding.

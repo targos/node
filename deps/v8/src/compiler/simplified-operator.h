@@ -41,8 +41,6 @@ class Operator;
 struct SimplifiedOperatorGlobalCache;
 struct WasmTypeCheckConfig;
 
-enum BaseTaggedness : uint8_t { kUntaggedBase, kTaggedBase };
-
 size_t hash_value(BaseTaggedness);
 
 std::ostream& operator<<(std::ostream&, BaseTaggedness);
@@ -790,6 +788,10 @@ class V8_EXPORT_PRIVATE SimplifiedOperatorBuilder final
   const Operator* BigIntDivide();
   const Operator* BigIntModulus();
   const Operator* BigIntBitwiseAnd();
+  const Operator* BigIntBitwiseOr();
+  const Operator* BigIntBitwiseXor();
+  const Operator* BigIntShiftLeft();
+  const Operator* BigIntShiftRight();
   const Operator* BigIntNegate();
 
   const Operator* SpeculativeSafeIntegerAdd(NumberOperationHint hint);
@@ -818,6 +820,10 @@ class V8_EXPORT_PRIVATE SimplifiedOperatorBuilder final
   const Operator* SpeculativeBigIntDivide(BigIntOperationHint hint);
   const Operator* SpeculativeBigIntModulus(BigIntOperationHint hint);
   const Operator* SpeculativeBigIntBitwiseAnd(BigIntOperationHint hint);
+  const Operator* SpeculativeBigIntBitwiseOr(BigIntOperationHint hint);
+  const Operator* SpeculativeBigIntBitwiseXor(BigIntOperationHint hint);
+  const Operator* SpeculativeBigIntShiftLeft(BigIntOperationHint hint);
+  const Operator* SpeculativeBigIntShiftRight(BigIntOperationHint hint);
   const Operator* SpeculativeBigIntNegate(BigIntOperationHint hint);
   const Operator* SpeculativeBigIntAsIntN(int bits,
                                           const FeedbackSource& feedback);
@@ -1078,7 +1084,7 @@ class V8_EXPORT_PRIVATE SimplifiedOperatorBuilder final
   const Operator* VerifyType();
 
 #if V8_ENABLE_WEBASSEMBLY
-  const Operator* AssertNotNull();
+  const Operator* AssertNotNull(TrapId trap_id);
   const Operator* IsNull();
   const Operator* IsNotNull();
   const Operator* Null();

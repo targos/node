@@ -381,10 +381,9 @@ void LiftoffAssembler::LoadTaggedPointerFromInstance(Register dst,
 
 void LiftoffAssembler::LoadExternalPointer(Register dst, Register instance,
                                            int offset, ExternalPointerTag tag,
-                                           Register isolate_root) {
-  LoadExternalPointerField(dst, FieldOperand(instance, offset), tag,
-                           isolate_root,
-                           IsolateRootLocation::kInScratchRegister);
+                                           Register scratch) {
+  LoadExternalPointerField(dst, FieldOperand(instance, offset), tag, scratch,
+                           IsolateRootLocation::kInRootRegister);
 }
 
 void LiftoffAssembler::SpillInstance(Register instance) {
@@ -442,8 +441,8 @@ void LiftoffAssembler::StoreTaggedPointer(Register dst_addr,
     DecompressTaggedPointer(src.gp(), src.gp());
   }
   CheckPageFlag(src.gp(), scratch,
-                MemoryChunk::kPointersToHereAreInterestingMask, zero, &exit,
-                Label::kNear);
+                MemoryChunk::kPointersToHereAreInterestingOrInSharedHeapMask,
+                zero, &exit, Label::kNear);
   leaq(scratch, dst_op);
 
   CallRecordWriteStubSaveRegisters(dst_addr, scratch, SaveFPRegsMode::kSave,
