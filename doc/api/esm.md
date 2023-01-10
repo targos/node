@@ -754,34 +754,39 @@ changes:
 * `specifier` {string}
 * `context` {Object}
   * `conditions` {string\[]} Export conditions of the relevant `package.json`
-  * `importAssertions` {Object}
-  * `parentURL` {string|undefined} The module importing this one, or undefined
+  * `importAssertions` {Object} The object after the `assert` in an `import`
+    statement, or the value of the `assert` property in the second argument of
+    an `import()` expression; or an empty object
+  * `parentURL` {string | undefined} The module importing this one, or undefined
     if this is the Node.js entry point
 * `nextResolve` {Function} The subsequent `resolve` hook in the chain, or the
   Node.js default `resolve` hook after the last user-supplied `resolve` hook
   * `specifier` {string}
   * `context` {Object}
 * Returns: {Object}
-  * `format` {string|null|undefined} A hint to the load hook (it might be
+  * `format` {string | null | undefined} A hint to the load hook (it might be
     ignored)
     `'builtin' | 'commonjs' | 'json' | 'module' | 'wasm'`
-  * `shortCircuit` {undefined|boolean} A signal that this hook intends to
+  * `importAssertions` {Object | undefined} The import assertions to use when
+    caching the module (optional; if excluded the input will be used)
+  * `shortCircuit` {undefined | boolean} A signal that this hook intends to
     terminate the chain of `resolve` hooks. **Default:** `false`
   * `url` {string} The absolute URL to which this input resolves
 
-The `resolve` hook chain is responsible for resolving file URL for a given
-module specifier and parent URL, and optionally its format (such as `'module'`)
-as a hint to the `load` hook. If a format is specified, the `load` hook is
-ultimately responsible for providing the final `format` value (and it is free to
-ignore the hint provided by `resolve`); if `resolve` provides a `format`, a
-custom `load` hook is required even if only to pass the value to the Node.js
-default `load` hook.
+The `resolve` hook chain is responsible for telling Node.js where to find and
+how to cache a given `import` statement or expression. It can optionally return
+its format (such as `'module'`) as a hint to the `load` hook. If a format is
+specified, the `load` hook is ultimately responsible for providing the final
+`format` value (and it is free to ignore the hint provided by `resolve`); if
+`resolve` provides a `format`, a custom `load` hook is required even if only to
+pass the value to the Node.js default `load` hook.
 
-The module specifier is the string in an `import` statement or
-`import()` expression.
-
-The parent URL is the URL of the module that imported this one, or `undefined`
-if this is the main entry point for the application.
+Import assertions are part of the cache key for saving loaded modules into the
+Node.js internal module cache. The `resolve` hook is responsible for returning
+an `importAssertions` object if the module should be cached with different
+assertions than were present in the source code (for example, if no assertions
+were present but the module should be cached with assertions
+`{ type: 'json' }`).
 
 The `conditions` property in `context` is an array of conditions for
 [package exports conditions][Conditional Exports] that apply to this resolution
@@ -846,7 +851,7 @@ changes:
 * `url` {string} The URL returned by the `resolve` chain
 * `context` {Object}
   * `conditions` {string\[]} Export conditions of the relevant `package.json`
-  * `format` {string|null|undefined} The format optionally supplied by the
+  * `format` {string | null | undefined} The format optionally supplied by the
     `resolve` hook chain
   * `importAssertions` {Object}
 * `nextLoad` {Function} The subsequent `load` hook in the chain, or the
@@ -855,9 +860,10 @@ changes:
   * `context` {Object}
 * Returns: {Object}
   * `format` {string}
-  * `shortCircuit` {undefined|boolean} A signal that this hook intends to
+  * `shortCircuit` {undefined | boolean} A signal that this hook intends to
     terminate the chain of `resolve` hooks. **Default:** `false`
-  * `source` {string|ArrayBuffer|TypedArray} The source for Node.js to evaluate
+  * `source` {string | ArrayBuffer | TypedArray} The source for Node.js to
+    evaluate
 
 The `load` hook provides a way to define a custom method of determining how
 a URL should be interpreted, retrieved, and parsed. It is also in charge of
