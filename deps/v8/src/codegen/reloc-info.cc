@@ -253,28 +253,23 @@ void RelocIterator::next() {
   done_ = true;
 }
 
-RelocIterator::RelocIterator(InstructionStream code, int mode_mask)
+RelocIterator::RelocIterator(Code code, int mode_mask)
     : RelocIterator(code, code.unchecked_relocation_info(), mode_mask) {}
 
-RelocIterator::RelocIterator(Code code, int mode_mask)
-    : RelocIterator(code.instruction_stream(),
-                    code.instruction_stream().unchecked_relocation_info(),
-                    mode_mask) {}
-
-RelocIterator::RelocIterator(InstructionStream code, ByteArray relocation_info,
+RelocIterator::RelocIterator(Code code, ByteArray relocation_info,
                              int mode_mask)
     : RelocIterator(code, code.raw_instruction_start(), code.constant_pool(),
                     relocation_info.GetDataEndAddress(),
                     relocation_info.GetDataStartAddress(), mode_mask) {}
 
 RelocIterator::RelocIterator(const CodeReference code_reference, int mode_mask)
-    : RelocIterator(InstructionStream(), code_reference.instruction_start(),
+    : RelocIterator(Code(), code_reference.instruction_start(),
                     code_reference.constant_pool(),
                     code_reference.relocation_end(),
                     code_reference.relocation_start(), mode_mask) {}
 
-RelocIterator::RelocIterator(EmbeddedData* embedded_data,
-                             InstructionStream code, int mode_mask)
+RelocIterator::RelocIterator(EmbeddedData* embedded_data, Code code,
+                             int mode_mask)
     : RelocIterator(code,
                     embedded_data->InstructionStartOfBuiltin(code.builtin_id()),
                     code.constant_pool(),
@@ -282,22 +277,20 @@ RelocIterator::RelocIterator(EmbeddedData* embedded_data,
                     code.relocation_start(), mode_mask) {}
 
 RelocIterator::RelocIterator(const CodeDesc& desc, int mode_mask)
-    : RelocIterator(InstructionStream(), reinterpret_cast<Address>(desc.buffer),
-                    0, desc.buffer + desc.buffer_size,
+    : RelocIterator(Code(), reinterpret_cast<Address>(desc.buffer), 0,
+                    desc.buffer + desc.buffer_size,
                     desc.buffer + desc.buffer_size - desc.reloc_size,
                     mode_mask) {}
 
 RelocIterator::RelocIterator(base::Vector<byte> instructions,
                              base::Vector<const byte> reloc_info,
                              Address const_pool, int mode_mask)
-    : RelocIterator(InstructionStream(),
-                    reinterpret_cast<Address>(instructions.begin()), const_pool,
-                    reloc_info.begin() + reloc_info.size(), reloc_info.begin(),
-                    mode_mask) {}
+    : RelocIterator(Code(), reinterpret_cast<Address>(instructions.begin()),
+                    const_pool, reloc_info.begin() + reloc_info.size(),
+                    reloc_info.begin(), mode_mask) {}
 
-RelocIterator::RelocIterator(InstructionStream host, Address pc,
-                             Address constant_pool, const byte* pos,
-                             const byte* end, int mode_mask)
+RelocIterator::RelocIterator(Code host, Address pc, Address constant_pool,
+                             const byte* pos, const byte* end, int mode_mask)
     : pos_(pos), end_(end), mode_mask_(mode_mask) {
   // Relocation info is read backwards.
   DCHECK_GE(pos_, end_);
@@ -357,8 +350,7 @@ void RelocInfo::set_target_address(Address target,
                                    icache_flush_mode);
   if (!host().is_null() && IsCodeTargetMode(rmode_) &&
       !v8_flags.disable_write_barriers) {
-    InstructionStream target_code =
-        InstructionStream::GetCodeFromTargetAddress(target);
+    Code target_code = Code::GetCodeFromTargetAddress(target);
     WriteBarrierForCode(host(), this, target_code, write_barrier_mode);
   }
 }
@@ -393,7 +385,7 @@ bool RelocInfo::RequiresRelocationAfterCodegen(const CodeDesc& desc) {
   return !it.done();
 }
 
-bool RelocInfo::RequiresRelocation(InstructionStream code) {
+bool RelocInfo::RequiresRelocation(Code code) {
   RelocIterator it(code, RelocInfo::kApplyMask);
   return !it.done();
 }
@@ -470,9 +462,8 @@ void RelocInfo::Print(Isolate* isolate, std::ostream& os) {
        << ")";
   } else if (IsCodeTargetMode(rmode_)) {
     const Address code_target = target_address();
-    InstructionStream code =
-        InstructionStream::GetCodeFromTargetAddress(code_target);
-    DCHECK(code.IsInstructionStream());
+    Code code = Code::GetCodeFromTargetAddress(code_target);
+    DCHECK(code.IsCode());
     os << " (" << CodeKindToString(code.kind());
     if (Builtins::IsBuiltin(code)) {
       os << " " << Builtins::name(code.builtin_id());
@@ -501,11 +492,10 @@ void RelocInfo::Verify(Isolate* isolate) {
       Address addr = target_address();
       CHECK_NE(addr, kNullAddress);
       // Check that we can find the right code object.
-      InstructionStream code =
-          InstructionStream::GetCodeFromTargetAddress(addr);
+      Code code = Code::GetCodeFromTargetAddress(addr);
       CodeLookupResult lookup_result = isolate->FindCodeObject(addr);
       CHECK(lookup_result.IsFound());
-      CHECK_EQ(code.address(), lookup_result.instruction_stream().address());
+      CHECK_EQ(code.address(), lookup_result.code().address());
       break;
     }
     case INTERNAL_REFERENCE:
@@ -514,7 +504,7 @@ void RelocInfo::Verify(Isolate* isolate) {
       Address pc = target_internal_reference_address();
       CodeLookupResult lookup_result = isolate->FindCodeObject(pc);
       CHECK(lookup_result.IsFound());
-      InstructionStream code = lookup_result.instruction_stream();
+      Code code = lookup_result.code();
       CHECK(target >= code.InstructionStart(isolate, pc));
       CHECK(target <= code.InstructionEnd(isolate, pc));
       break;

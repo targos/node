@@ -135,7 +135,7 @@ CopyAndForwardResult Scavenger::SemiSpaceCopyObject(
 
   HeapObject target;
   if (allocation.To(&target)) {
-    DCHECK(heap()->marking_state()->IsWhite(target));
+    DCHECK(heap()->non_atomic_marking_state()->IsWhite(target));
     const bool self_success =
         MigrateObject(map, object, target, object_size, kPromoteIntoLocalHeap);
     if (!self_success) {
@@ -484,10 +484,8 @@ class ScavengeVisitor final : public NewSpaceVisitor<ScavengeVisitor> {
                                MaybeObjectSlot end) final;
   V8_INLINE void VisitCodePointer(HeapObject host, CodeObjectSlot slot) final;
 
-  V8_INLINE void VisitCodeTarget(InstructionStream host,
-                                 RelocInfo* rinfo) final;
-  V8_INLINE void VisitEmbeddedPointer(InstructionStream host,
-                                      RelocInfo* rinfo) final;
+  V8_INLINE void VisitCodeTarget(Code host, RelocInfo* rinfo) final;
+  V8_INLINE void VisitEmbeddedPointer(Code host, RelocInfo* rinfo) final;
   V8_INLINE int VisitEphemeronHashTable(Map map, EphemeronHashTable object);
   V8_INLINE int VisitJSArrayBuffer(Map map, JSArrayBuffer object);
   V8_INLINE int VisitJSApiObject(Map map, JSObject object);
@@ -514,28 +512,24 @@ void ScavengeVisitor::VisitPointers(HeapObject host, MaybeObjectSlot start,
 
 void ScavengeVisitor::VisitCodePointer(HeapObject host, CodeObjectSlot slot) {
   CHECK(V8_EXTERNAL_CODE_SPACE_BOOL);
-  // InstructionStream slots never appear in new space because
-  // Code objects, the only object that can contain code pointers, are
-  // always allocated in the old space.
+  // Code slots never appear in new space because CodeDataContainers, the
+  // only object that can contain code pointers, are always allocated in
+  // the old space.
   UNREACHABLE();
 }
 
-void ScavengeVisitor::VisitCodeTarget(InstructionStream host,
-                                      RelocInfo* rinfo) {
-  InstructionStream target =
-      InstructionStream::GetCodeFromTargetAddress(rinfo->target_address());
+void ScavengeVisitor::VisitCodeTarget(Code host, RelocInfo* rinfo) {
+  Code target = Code::GetCodeFromTargetAddress(rinfo->target_address());
 #ifdef DEBUG
-  InstructionStream old_target = target;
+  Code old_target = target;
 #endif
   FullObjectSlot slot(&target);
   VisitHeapObjectImpl(slot, target);
-  // InstructionStream objects are never in new-space, so the slot contents must
-  // not change.
+  // Code objects are never in new-space, so the slot contents must not change.
   DCHECK_EQ(old_target, target);
 }
 
-void ScavengeVisitor::VisitEmbeddedPointer(InstructionStream host,
-                                           RelocInfo* rinfo) {
+void ScavengeVisitor::VisitEmbeddedPointer(Code host, RelocInfo* rinfo) {
   HeapObject heap_object = rinfo->target_object(cage_base());
 #ifdef DEBUG
   HeapObject old_heap_object = heap_object;

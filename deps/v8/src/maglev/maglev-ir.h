@@ -162,8 +162,7 @@ class CompactInterpreterFrameState;
   V(InitialValue)                            \
   V(LoadTaggedField)                         \
   V(LoadDoubleField)                         \
-  V(LoadFixedArrayElement)                   \
-  V(LoadFixedDoubleArrayElement)             \
+  V(LoadTaggedElement)                       \
   V(LoadSignedIntDataViewElement)            \
   V(LoadDoubleDataViewElement)               \
   V(LoadSignedIntTypedArrayElement)          \
@@ -172,7 +171,7 @@ class CompactInterpreterFrameState;
   V(LoadUnsignedIntTypedArrayElementNoDeopt) \
   V(LoadDoubleTypedArrayElement)             \
   V(LoadDoubleTypedArrayElementNoDeopt)      \
-  V(LoadEnumCacheLength)                     \
+  V(LoadDoubleElement)                       \
   V(LoadGlobal)                              \
   V(LoadNamedGeneric)                        \
   V(LoadNamedFromSuperGeneric)               \
@@ -210,7 +209,6 @@ class CompactInterpreterFrameState;
   V(SetPendingMessage)                       \
   V(StringAt)                                \
   V(StringLength)                            \
-  V(FunctionLength)                          \
   V(ToBoolean)                               \
   V(ToBooleanLogicalNot)                     \
   V(TaggedEqual)                             \
@@ -3035,8 +3033,13 @@ class RegisterInput : public FixedInputValueNodeT<0, RegisterInput> {
   using Base = FixedInputValueNodeT<0, RegisterInput>;
 
  public:
+  static constexpr RegList kAllowedRegisters = {
+      kJavaScriptCallNewTargetRegister};
+
   explicit RegisterInput(uint64_t bitfield, Register input)
-      : Base(bitfield), input_(input) {}
+      : Base(bitfield), input_(input) {
+    DCHECK(kAllowedRegisters.has(input));
+  }
 
   Register input() const { return input_; }
 
@@ -4065,20 +4068,19 @@ class LoadDoubleField : public FixedInputValueNodeT<1, LoadDoubleField> {
   const int offset_;
 };
 
-class LoadFixedArrayElement
-    : public FixedInputValueNodeT<2, LoadFixedArrayElement> {
-  using Base = FixedInputValueNodeT<2, LoadFixedArrayElement>;
+class LoadTaggedElement : public FixedInputValueNodeT<2, LoadTaggedElement> {
+  using Base = FixedInputValueNodeT<2, LoadTaggedElement>;
 
  public:
-  explicit LoadFixedArrayElement(uint64_t bitfield) : Base(bitfield) {}
+  explicit LoadTaggedElement(uint64_t bitfield) : Base(bitfield) {}
 
   static constexpr OpProperties kProperties = OpProperties::Reading();
   static constexpr typename Base::InputTypes kInputTypes{
       ValueRepresentation::kTagged, ValueRepresentation::kInt32};
 
-  static constexpr int kElementsIndex = 0;
+  static constexpr int kObjectIndex = 0;
   static constexpr int kIndexIndex = 1;
-  Input& elements_input() { return input(kElementsIndex); }
+  Input& object_input() { return input(kObjectIndex); }
   Input& index_input() { return input(kIndexIndex); }
 
   void SetValueLocationConstraints();
@@ -4086,21 +4088,20 @@ class LoadFixedArrayElement
   void PrintParams(std::ostream&, MaglevGraphLabeller*) const {}
 };
 
-class LoadFixedDoubleArrayElement
-    : public FixedInputValueNodeT<2, LoadFixedDoubleArrayElement> {
-  using Base = FixedInputValueNodeT<2, LoadFixedDoubleArrayElement>;
+class LoadDoubleElement : public FixedInputValueNodeT<2, LoadDoubleElement> {
+  using Base = FixedInputValueNodeT<2, LoadDoubleElement>;
 
  public:
-  explicit LoadFixedDoubleArrayElement(uint64_t bitfield) : Base(bitfield) {}
+  explicit LoadDoubleElement(uint64_t bitfield) : Base(bitfield) {}
 
   static constexpr OpProperties kProperties =
       OpProperties::Reading() | OpProperties::Float64();
   static constexpr typename Base::InputTypes kInputTypes{
       ValueRepresentation::kTagged, ValueRepresentation::kInt32};
 
-  static constexpr int kElementsIndex = 0;
+  static constexpr int kObjectIndex = 0;
   static constexpr int kIndexIndex = 1;
-  Input& elements_input() { return input(kElementsIndex); }
+  Input& object_input() { return input(kObjectIndex); }
   Input& index_input() { return input(kIndexIndex); }
 
   void SetValueLocationConstraints();
@@ -4578,26 +4579,6 @@ class SetNamedGeneric : public FixedInputValueNodeT<3, SetNamedGeneric> {
   const compiler::FeedbackSource feedback_;
 };
 
-class LoadEnumCacheLength
-    : public FixedInputValueNodeT<1, LoadEnumCacheLength> {
-  using Base = FixedInputValueNodeT<1, LoadEnumCacheLength>;
-
- public:
-  explicit LoadEnumCacheLength(uint64_t bitfield) : Base(bitfield) {}
-
-  static constexpr OpProperties kProperties =
-      OpProperties::Reading() | OpProperties::Int32();
-  static constexpr
-      typename Base::InputTypes kInputTypes{ValueRepresentation::kTagged};
-
-  static constexpr int kMapInput = 0;
-  Input& map_input() { return input(kMapInput); }
-
-  void SetValueLocationConstraints();
-  void GenerateCode(MaglevAssembler*, const ProcessingState&);
-  void PrintParams(std::ostream&, MaglevGraphLabeller*) const {}
-};
-
 class StringAt : public FixedInputValueNodeT<2, StringAt> {
   using Base = FixedInputValueNodeT<2, StringAt>;
 
@@ -4635,25 +4616,6 @@ class StringLength : public FixedInputValueNodeT<1, StringLength> {
   Input& object_input() { return input(kObjectIndex); }
 
   int MaxCallStackArgs() const;
-  void SetValueLocationConstraints();
-  void GenerateCode(MaglevAssembler*, const ProcessingState&);
-  void PrintParams(std::ostream&, MaglevGraphLabeller*) const {}
-};
-
-class FunctionLength : public FixedInputValueNodeT<1, FunctionLength> {
-  using Base = FixedInputValueNodeT<1, FunctionLength>;
-
- public:
-  explicit FunctionLength(uint64_t bitfield) : Base(bitfield) {}
-
-  static constexpr OpProperties kProperties =
-      OpProperties::Reading() | OpProperties::Int32();
-  static constexpr
-      typename Base::InputTypes kInputTypes{ValueRepresentation::kTagged};
-
-  static constexpr int kObjectIndex = 0;
-  Input& object_input() { return input(kObjectIndex); }
-
   void SetValueLocationConstraints();
   void GenerateCode(MaglevAssembler*, const ProcessingState&);
   void PrintParams(std::ostream&, MaglevGraphLabeller*) const {}
@@ -4920,8 +4882,7 @@ class Call : public ValueNodeT<Call> {
 
   // We need enough inputs to have these fixed inputs plus the maximum arguments
   // to a function call.
-  static_assert(kMaxInputs >=
-                kFixedInputCount + InstructionStream::kMaxArguments);
+  static_assert(kMaxInputs >= kFixedInputCount + Code::kMaxArguments);
 
   // This ctor is used when for variable input counts.
   // Inputs must be initialized manually.
@@ -4976,8 +4937,7 @@ class Construct : public ValueNodeT<Construct> {
 
   // We need enough inputs to have these fixed inputs plus the maximum arguments
   // to a function call.
-  static_assert(kMaxInputs >=
-                kFixedInputCount + InstructionStream::kMaxArguments);
+  static_assert(kMaxInputs >= kFixedInputCount + Code::kMaxArguments);
 
   // This ctor is used when for variable input counts.
   // Inputs must be initialized manually.
@@ -5254,8 +5214,7 @@ class CallKnownJSFunction : public ValueNodeT<CallKnownJSFunction> {
 
   // We need enough inputs to have these fixed inputs plus the maximum arguments
   // to a function call.
-  static_assert(kMaxInputs >=
-                kFixedInputCount + InstructionStream::kMaxArguments);
+  static_assert(kMaxInputs >= kFixedInputCount + Code::kMaxArguments);
 
   // This ctor is used when for variable input counts.
   // Inputs must be initialized manually.

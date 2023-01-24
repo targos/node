@@ -95,7 +95,7 @@ class V8_EXPORT_PRIVATE Compiler : public AllStatic {
   // Generate and return optimized code for OSR. The empty handle is returned
   // either on failure, or after spawning a concurrent OSR task (in which case
   // a future OSR request will pick up the resulting code object).
-  V8_WARN_UNUSED_RESULT static MaybeHandle<Code> CompileOptimizedOSR(
+  V8_WARN_UNUSED_RESULT static MaybeHandle<CodeT> CompileOptimizedOSR(
       Isolate* isolate, Handle<JSFunction> function, BytecodeOffset osr_offset,
       ConcurrencyMode mode);
 

@@ -34,7 +34,7 @@
 namespace v8 {
 namespace internal {
 
-class InstructionStream;
+class Code;
 class CodeDesc;
 class Isolate;
 
@@ -438,9 +438,8 @@ class V8_EXPORT_PRIVATE WasmCode final {
   // back to the function index. Return value is guaranteed to not be empty.
   std::string DebugName() const;
 
-  // Code objects that have been registered with the global trap
-  // handler within this process, will have a {trap_handler_index} associated
-  // with them.
+  // Code objects that have been registered with the global trap handler within
+  // this process, will have a {trap_handler_index} associated with them.
   int trap_handler_index() const {
     CHECK(has_trap_handler_index());
     return trap_handler_index_;
@@ -561,12 +560,11 @@ class WasmCodeAllocator {
   //////////////////////////////////////////////////////////////////////////////
   // These fields are protected by the mutex in {NativeModule}.
 
-  // Code space that was reserved and is available for allocations
-  // (subset of {owned_code_space_}).
+  // Code space that was reserved and is available for allocations (subset of
+  // {owned_code_space_}).
   DisjointAllocationPool free_code_space_;
-  // Code space that was allocated before but is dead now. Full
-  // pages within this region are discarded. It's still a subset of
-  // {owned_code_space_}.
+  // Code space that was allocated before but is dead now. Full pages within
+  // this region are discarded. It's still a subset of {owned_code_space_}.
   DisjointAllocationPool freed_code_space_;
   std::vector<VirtualMemory> owned_code_space_;
 
@@ -637,11 +635,7 @@ class V8_EXPORT_PRIVATE NativeModule final {
       ExecutionTier tier);
 
   // Adds anonymous code for testing purposes.
-  WasmCode* AddCodeForTesting(Handle<InstructionStream> code);
-
-  // Allocates and initializes the {lazy_compile_table_} and initializes the
-  // first jump table with jumps to the {lazy_compile_table_}.
-  void InitializeJumpTableForLazyCompilation(uint32_t num_wasm_functions);
+  WasmCode* AddCodeForTesting(Handle<Code> code);
 
   // Use {UseLazyStubLocked} to setup lazy compilation per function. It will use
   // the existing {WasmCode::kWasmCompileLazy} runtime stub and populate the
@@ -794,7 +788,6 @@ class V8_EXPORT_PRIVATE NativeModule final {
   enum class RemoveFilter {
     kRemoveDebugCode,
     kRemoveNonDebugCode,
-    kRemoveLiftoffCode,
     kRemoveAllCode,
   };
   // Remove all compiled code from the {NativeModule} and replace it with

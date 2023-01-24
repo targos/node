@@ -38,48 +38,6 @@ namespace wasm {
 // A {DecodeResult} only stores the failure / success status, but no data.
 using DecodeResult = VoidResult;
 
-struct WasmFunction;
-
-class ITracer {
- public:
-  static constexpr ITracer* NoTrace = nullptr;
-
-  // Hooks for extracting byte offsets of things.
-  virtual void TypeOffset(uint32_t offset) = 0;
-  virtual void ImportOffset(uint32_t offset) = 0;
-  virtual void ImportsDone() = 0;
-  virtual void TableOffset(uint32_t offset) = 0;
-  virtual void MemoryOffset(uint32_t offset) = 0;
-  virtual void TagOffset(uint32_t offset) = 0;
-  virtual void GlobalOffset(uint32_t offset) = 0;
-  virtual void StartOffset(uint32_t offset) = 0;
-  virtual void ElementOffset(uint32_t offset) = 0;
-  virtual void DataOffset(uint32_t offset) = 0;
-
-  // Hooks for annotated hex dumps.
-  virtual void Bytes(const byte* start, uint32_t count) = 0;
-
-  virtual void Description(const char* desc) = 0;
-  virtual void Description(const char* desc, size_t length) = 0;
-  virtual void Description(uint32_t number) = 0;
-  virtual void Description(ValueType type) = 0;
-  virtual void Description(HeapType type) = 0;
-  virtual void Description(const FunctionSig* sig) = 0;
-
-  virtual void NextLine() = 0;
-  virtual void NextLineIfFull() = 0;
-  virtual void NextLineIfNonEmpty() = 0;
-
-  virtual void InitializerExpression(const byte* start, const byte* end,
-                                     ValueType expected_type) = 0;
-  virtual void FunctionBody(const WasmFunction* func, const byte* start) = 0;
-  virtual void FunctionName(uint32_t func_index) = 0;
-  virtual void NameSection(const byte* start, const byte* end,
-                           uint32_t offset) = 0;
-
-  virtual ~ITracer() = default;
-};
-
 // A helper utility to decode bytes, integers, fields, varints, etc, from
 // a buffer of bytes.
 class Decoder {
@@ -231,11 +189,10 @@ class Decoder {
   uint8_t consume_u8(const char* name = "uint8_t") {
     return consume_little_endian<uint8_t, kTrace>(name);
   }
-  uint8_t consume_u8(const char* name, ITracer* tracer) {
-    if (tracer) {
-      tracer->Bytes(pc_, sizeof(uint8_t));
-      tracer->Description(name);
-    }
+  template <class Tracer>
+  uint8_t consume_u8(const char* name, Tracer& tracer) {
+    tracer.Bytes(pc_, sizeof(uint8_t));
+    tracer.Description(name);
     return consume_little_endian<uint8_t, kNoTrace>(name);
   }
 
@@ -245,11 +202,10 @@ class Decoder {
   }
 
   // Reads a single 32-bit unsigned integer (little endian) and advances {pc_}.
-  uint32_t consume_u32(const char* name, ITracer* tracer) {
-    if (tracer) {
-      tracer->Bytes(pc_, sizeof(uint32_t));
-      tracer->Description(name);
-    }
+  template <class Tracer>
+  uint32_t consume_u32(const char* name, Tracer& tracer) {
+    tracer.Bytes(pc_, sizeof(uint32_t));
+    tracer.Description(name);
     return consume_little_endian<uint32_t, kNoTrace>(name);
   }
 
@@ -261,14 +217,13 @@ class Decoder {
     pc_ += length;
     return result;
   }
-  uint32_t consume_u32v(const char* name, ITracer* tracer) {
+  template <class Tracer>
+  uint32_t consume_u32v(const char* name, Tracer& tracer) {
     uint32_t length = 0;
     uint32_t result =
         read_leb<uint32_t, FullValidationTag, kNoTrace>(pc_, &length, name);
-    if (tracer) {
-      tracer->Bytes(pc_, length);
-      tracer->Description(name);
-    }
+    tracer.Bytes(pc_, length);
+    tracer.Description(name);
     pc_ += length;
     return result;
   }
@@ -283,14 +238,13 @@ class Decoder {
   }
 
   // Reads a LEB128 variable-length unsigned 64-bit integer and advances {pc_}.
-  uint64_t consume_u64v(const char* name, ITracer* tracer) {
+  template <class Tracer>
+  uint64_t consume_u64v(const char* name, Tracer& tracer) {
     uint32_t length = 0;
     uint64_t result =
         read_leb<uint64_t, FullValidationTag, kNoTrace>(pc_, &length, name);
-    if (tracer) {
-      tracer->Bytes(pc_, length);
-      tracer->Description(name);
-    }
+    tracer.Bytes(pc_, length);
+    tracer.Description(name);
     pc_ += length;
     return result;
   }
@@ -314,11 +268,10 @@ class Decoder {
       pc_ = end_;
     }
   }
-  void consume_bytes(uint32_t size, const char* name, ITracer* tracer) {
-    if (tracer) {
-      tracer->Bytes(pc_, size);
-      tracer->Description(name);
-    }
+  template <class Tracer>
+  void consume_bytes(uint32_t size, const char* name, Tracer& tracer) {
+    tracer.Bytes(pc_, size);
+    tracer.Description(name);
     consume_bytes(size, nullptr);
   }
 
@@ -527,32 +480,23 @@ class Decoder {
       }
       return result;
     }
-    IntType result;
-    read_leb_slowpath<IntType, ValidationTag, trace, size_in_bits>(
-        pc, length, name, &result);
-    return result;
+    return read_leb_slowpath<IntType, ValidationTag, trace, size_in_bits>(
+        pc, length, name);
   }
 
-  // {read_leb_slowpath} returns the result via an output parameter, because the
-  // "preserve_most" attribute currently does not support return values (see
-  // https://reviews.llvm.org/D141020).
-  // TODO(clemensb): Fix this once our clang version is new enough.
   template <typename IntType, typename ValidationTag, TraceFlag trace,
             size_t size_in_bits = 8 * sizeof(IntType)>
-  V8_NOINLINE V8_PRESERVE_MOST void read_leb_slowpath(const byte* pc,
-                                                      uint32_t* length,
-                                                      Name<ValidationTag> name,
-                                                      IntType* result) {
+  V8_NOINLINE IntType read_leb_slowpath(const byte* pc, uint32_t* length,
+                                        Name<ValidationTag> name) {
     // Create an unrolled LEB decoding function per integer type.
-    *result = 0;
-    read_leb_tail<IntType, ValidationTag, trace, size_in_bits, 0>(pc, length,
-                                                                  name, result);
+    return read_leb_tail<IntType, ValidationTag, trace, size_in_bits, 0>(
+        pc, length, name, 0);
   }
 
   template <typename IntType, typename ValidationTag, TraceFlag trace,
             size_t size_in_bits, int byte_index>
-  V8_INLINE void read_leb_tail(const byte* pc, uint32_t* length,
-                               Name<ValidationTag> name, IntType* result) {
+  V8_INLINE IntType read_leb_tail(const byte* pc, uint32_t* length,
+                                  Name<ValidationTag> name, IntType result) {
     constexpr bool is_signed = std::is_signed<IntType>::value;
     constexpr int kMaxLength = (size_in_bits + 6) / 7;
     static_assert(byte_index < kMaxLength, "invalid template instantiation");
@@ -565,17 +509,16 @@ class Decoder {
       b = *pc;
       TRACE_IF(trace, "%02x ", b);
       using Unsigned = typename std::make_unsigned<IntType>::type;
-      *result = *result | (static_cast<Unsigned>(static_cast<IntType>(b) & 0x7f)
-                           << shift);
+      result = result |
+               (static_cast<Unsigned>(static_cast<IntType>(b) & 0x7f) << shift);
     }
     if (!is_last_byte && (b & 0x80)) {
       // Make sure that we only instantiate the template for valid byte indexes.
       // Compilers are not smart enough to figure out statically that the
       // following call is unreachable if is_last_byte is false.
       constexpr int next_byte_index = byte_index + (is_last_byte ? 0 : 1);
-      read_leb_tail<IntType, ValidationTag, trace, size_in_bits,
-                    next_byte_index>(pc + 1, length, name, result);
-      return;
+      return read_leb_tail<IntType, ValidationTag, trace, size_in_bits,
+                           next_byte_index>(pc + 1, length, name, result);
     }
     *length = byte_index + (at_end ? 0 : 1);
     if (ValidationTag::validate && V8_UNLIKELY(at_end || (b & 0x80))) {
@@ -585,7 +528,7 @@ class Decoder {
       } else {
         MarkError();
       }
-      *result = 0;
+      result = 0;
       *length = 0;
     }
     if constexpr (is_last_byte) {
@@ -610,19 +553,20 @@ class Decoder {
         } else {
           MarkError();
         }
-        *result = 0;
+        result = 0;
         *length = 0;
       }
     }
     constexpr int sign_ext_shift =
         is_signed ? std::max(0, int{8 * sizeof(IntType)} - shift - 7) : 0;
     // Perform sign extension.
-    *result = (*result << sign_ext_shift) >> sign_ext_shift;
+    result = (result << sign_ext_shift) >> sign_ext_shift;
     if (trace && is_signed) {
-      TRACE("= %" PRIi64 "\n", static_cast<int64_t>(*result));
+      TRACE("= %" PRIi64 "\n", static_cast<int64_t>(result));
     } else if (trace) {
-      TRACE("= %" PRIu64 "\n", static_cast<uint64_t>(*result));
+      TRACE("= %" PRIu64 "\n", static_cast<uint64_t>(result));
     }
+    return result;
   }
 };
 

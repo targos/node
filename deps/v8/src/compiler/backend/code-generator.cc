@@ -411,7 +411,7 @@ void CodeGenerator::AssembleCode() {
   unwinding_info_writer_.Finish(tasm()->pc_offset());
 
   // Final alignment before starting on the metadata section.
-  tasm()->Align(InstructionStream::kMetadataAlignment);
+  tasm()->Align(Code::kMetadataAlignment);
 
   safepoints()->Emit(tasm(), frame()->GetTotalFrameSlotCount());
 
@@ -470,7 +470,7 @@ base::OwnedVector<byte> CodeGenerator::GetProtectedInstructionsData() {
 MaybeHandle<Code> CodeGenerator::FinalizeCode() {
   if (result_ != kSuccess) {
     tasm()->AbortedCodeGeneration();
-    return {};
+    return MaybeHandle<Code>();
   }
 
   // Allocate the source position table.
@@ -509,7 +509,7 @@ MaybeHandle<Code> CodeGenerator::FinalizeCode() {
   Handle<Code> code;
   if (!maybe_code.ToHandle(&code)) {
     tasm()->AbortedCodeGeneration();
-    return {};
+    return MaybeHandle<Code>();
   }
 
   LOG_CODE_EVENT(isolate(), CodeLinePosInfoRecordEvent(

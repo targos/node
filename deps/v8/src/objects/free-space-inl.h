@@ -71,8 +71,9 @@ bool FreeSpace::IsValid() const {
   Heap* heap = GetHeapFromWritableObject(*this);
   Object free_space_map =
       Isolate::FromHeap(heap)->root(RootIndex::kFreeSpaceMap);
-  CHECK(!heap->deserialization_complete() ||
-        map_slot().contains_map_value(free_space_map.ptr()));
+  CHECK_IMPLIES(!map_slot().contains_map_value(free_space_map.ptr()),
+                !heap->deserialization_complete() &&
+                    map_slot().contains_map_value(kNullAddress));
   CHECK_LE(kNextOffset + kTaggedSize, size(kRelaxedLoad));
   return true;
 }

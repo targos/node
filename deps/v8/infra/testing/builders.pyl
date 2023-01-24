@@ -181,6 +181,21 @@
         'shards': 4,
       },
       {'name': 'gcmole_v3', 'variant': 'ia32', 'shards': 4},
+      {'name': 'gcmole_v3', 'variant': 'x64', 'shards': 4},
+      {'name': 'gcmole_v3', 'variant': 'arm', 'shards': 4},
+      {'name': 'gcmole_v3', 'variant': 'arm64', 'shards': 4},
+      {
+        'name': 'gcmole_v2',
+        'variant': 'x64',
+        'suffix': 'test single host',
+        'test_args': ['--test-run'],
+      },
+      {
+        'name': 'gcmole_v3',
+        'variant': 'x64',
+        'suffix': 'test multi host',
+        'test_args': ['--test-run'],
+      },
     ],
   },
   'v8_linux_optional_rel': {
@@ -330,7 +345,6 @@
       {'name': 'test262', 'variant': 'default', 'shards': 2},
       {'name': 'v8testing', 'shards': 10},
       {'name': 'v8testing', 'variant': 'extra', 'shards': 10},
-      {'name': 'gcmole_v3', 'variant': 'arm', 'shards': 4},
     ],
   },
   ##############################################################################
@@ -456,6 +470,8 @@
       {'name': 'webkit', 'variant': 'stress_sampling'},
       # Stress snapshot.
       {'name': 'mjsunit', 'variant': 'stress_snapshot'},
+      # Maglev.
+      {'name': 'mjsunit', 'variant': 'maglev'},
       # Stress maglev.
       {'name': 'mjsunit', 'variant': 'stress_maglev'},
       # Experimental regexp engine.
@@ -613,20 +629,6 @@
       {'name': 'v8testing', 'variant': 'stress_instruction_scheduling'},
       # Maglev -- move to extra once more architectures are supported.
       {'name': 'mjsunit', 'variant': 'maglev'},
-      # GCMole.
-      {'name': 'gcmole_v3', 'variant': 'x64', 'shards': 4},
-      {
-        'name': 'gcmole_v2',
-        'variant': 'x64',
-        'suffix': 'test single host',
-        'test_args': ['--test-run'],
-      },
-      {
-        'name': 'gcmole_v3',
-        'variant': 'x64',
-        'suffix': 'test multi host',
-        'test_args': ['--test-run'],
-      },
     ],
   },
   'v8_linux64_predictable_rel': {
@@ -749,7 +751,6 @@
       {'name': 'test262', 'variant': 'default', 'shards': 4},
       {'name': 'v8testing', 'shards': 14},
       {'name': 'v8testing', 'variant': 'extra', 'shards': 14},
-      {'name': 'gcmole_v3', 'variant': 'arm64', 'shards': 4},
     ],
   },
   'v8_linux_arm64_cfi_rel': {
@@ -944,8 +945,6 @@
     },
     'tests': [
       {'name': 'v8testing'},
-      # Maglev -- move to extra once more architectures are supported.
-      {'name': 'mjsunit', 'variant': 'maglev'},
     ],
   },
   'v8_mac_arm64_dbg': {
@@ -956,8 +955,6 @@
     },
     'tests': [
       {'name': 'v8testing'},
-      # Maglev -- move to extra once more architectures are supported.
-      {'name': 'mjsunit', 'variant': 'maglev'},
     ],
   },
   'v8_mac_arm64_full_dbg': {
@@ -968,8 +965,6 @@
     },
     'tests': [
       {'name': 'v8testing'},
-      # Maglev -- move to extra once more architectures are supported.
-      {'name': 'mjsunit', 'variant': 'maglev'},
     ],
   },
   'v8_mac_arm64_no_pointer_compression_dbg': {
@@ -1100,6 +1095,21 @@
         'shards': 2
       },
       {'name': 'gcmole_v3', 'variant': 'ia32', 'shards': 4},
+      {'name': 'gcmole_v3', 'variant': 'x64', 'shards': 4},
+      {'name': 'gcmole_v3', 'variant': 'arm', 'shards': 4},
+      {'name': 'gcmole_v3', 'variant': 'arm64', 'shards': 4},
+      {
+        'name': 'gcmole_v2',
+        'variant': 'x64',
+        'suffix': 'test single host',
+        'test_args': ['--test-run'],
+      },
+      {
+        'name': 'gcmole_v3',
+        'variant': 'x64',
+        'suffix': 'test multi host',
+        'test_args': ['--test-run'],
+      },
     ],
   },
   'V8 Linux - arm64 - sim - CFI': {
@@ -1335,20 +1345,6 @@
         'suffix': 'noavx',
         'test_args': ['--extra-flags', '--noenable-avx']
       },
-      # GCMole.
-      {'name': 'gcmole_v3', 'variant': 'x64', 'shards': 4},
-      {
-        'name': 'gcmole_v2',
-        'variant': 'x64',
-        'suffix': 'test single host',
-        'test_args': ['--test-run'],
-      },
-      {
-        'name': 'gcmole_v3',
-        'variant': 'x64',
-        'suffix': 'test multi host',
-        'test_args': ['--test-run'],
-      },
     ],
   },
   'V8 Linux64 - cfi': {
@@ -1461,6 +1457,8 @@
       {'name': 'webkit', 'variant': 'stress_sampling'},
       # Stress snapshot.
       {'name': 'mjsunit', 'variant': 'stress_snapshot'},
+      # Maglev.
+      {'name': 'mjsunit', 'variant': 'maglev'},
       # Stress maglev.
       {'name': 'mjsunit', 'variant': 'stress_maglev'},
       # Experimental regexp engine.
@@ -1523,6 +1521,8 @@
       {'name': 'webkit', 'variant': 'stress_sampling'},
       # Stress snapshot.
       {'name': 'mjsunit', 'variant': 'stress_snapshot'},
+      # Maglev.
+      {'name': 'mjsunit', 'variant': 'maglev'},
       # Stress maglev.
       {'name': 'mjsunit', 'variant': 'stress_maglev'},
       # Experimental regexp engine.
@@ -1805,8 +1805,6 @@
     'tests': [
       {'name': 'v8testing'},
       {'name': 'v8testing', 'variant': 'extra'},
-      # Maglev -- move to extra once more architectures are supported.
-      {'name': 'mjsunit', 'variant': 'maglev'},
     ],
   },
   'V8 Mac - arm64 - debug': {
@@ -1823,8 +1821,6 @@
     'tests': [
       {'name': 'v8testing', 'shards': 2},
       {'name': 'v8testing', 'variant': 'extra', 'shards': 2},
-      # Maglev -- move to extra once more architectures are supported.
-      {'name': 'mjsunit', 'variant': 'maglev'},
     ],
   },
   'V8 Mac - arm64 - no pointer compression debug': {
@@ -2068,8 +2064,6 @@
         'test_args': ['--novfp3'],
         'shards': 6
       },
-      # GCMole.
-      {'name': 'gcmole_v3', 'variant': 'arm', 'shards': 4},
     ],
   },
   'V8 Linux - arm - sim - debug': {
@@ -2151,7 +2145,6 @@
       {'name': 'test262', 'variant': 'default', 'shards': 2},
       {'name': 'v8testing', 'shards': 3},
       {'name': 'v8testing', 'variant': 'extra', 'shards': 2},
-      {'name': 'gcmole_v3', 'variant': 'arm64', 'shards': 4},
     ],
   },
   'V8 Linux - arm64 - sim - debug': {

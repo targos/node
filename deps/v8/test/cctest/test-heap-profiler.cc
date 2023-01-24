@@ -2733,7 +2733,11 @@ TEST(CheckCodeNames) {
   const char* builtin_path1[] = {
       "::(GC roots)",
       "::(Builtins)",
+#ifdef V8_EXTERNAL_CODE_SPACE
       "::(KeyedLoadIC_PolymorphicName builtin handle)",
+#else
+      "::(KeyedLoadIC_PolymorphicName builtin)",
+#endif
   };
   const v8::HeapGraphNode* node = GetNodeByPath(
       env->GetIsolate(), snapshot, builtin_path1, arraysize(builtin_path1));
@@ -2742,13 +2746,21 @@ TEST(CheckCodeNames) {
   const char* builtin_path2[] = {
       "::(GC roots)",
       "::(Builtins)",
+#ifdef V8_EXTERNAL_CODE_SPACE
       "::(CompileLazy builtin handle)",
+#else
+      "::(CompileLazy builtin)",
+#endif
   };
   node = GetNodeByPath(env->GetIsolate(), snapshot, builtin_path2,
                        arraysize(builtin_path2));
   CHECK(node);
   v8::String::Utf8Value node_name(env->GetIsolate(), node->GetName());
-  CHECK_EQ(0, strcmp("(CompileLazy builtin handle)", *node_name));
+  if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+    CHECK_EQ(0, strcmp("(CompileLazy builtin handle)", *node_name));
+  } else {
+    CHECK_EQ(0, strcmp("(CompileLazy builtin)", *node_name));
+  }
 }
 
 
@@ -4086,7 +4098,7 @@ TEST(WeakReference) {
       shared_function, feedback_cell_array,
       handle(i::JSFunction::cast(*obj).raw_feedback_cell(), i_isolate));
 
-  // Create a Code object.
+  // Create a Code.
   i::Assembler assm(i::AssemblerOptions{});
   assm.nop();  // supported on all architectures
   i::CodeDesc desc;
@@ -4098,7 +4110,7 @@ TEST(WeakReference) {
 
   // Manually inlined version of FeedbackVector::SetOptimizedCode (needed due
   // to the FOR_TESTING code kind).
-  fv->set_maybe_optimized_code(i::HeapObjectReference::Weak(*code),
+  fv->set_maybe_optimized_code(i::HeapObjectReference::Weak(ToCodeT(*code)),
                                v8::kReleaseStore);
   fv->set_flags(
       i::FeedbackVector::MaybeHasTurbofanCodeBit::encode(true) |

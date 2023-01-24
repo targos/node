@@ -120,7 +120,7 @@ void CodeSerializer::SerializeObjectImpl(Handle<HeapObject> obj) {
     if (SerializeReadOnlyObjectReference(raw, &sink_)) return;
 
     instance_type = raw.map().instance_type();
-    CHECK(!InstanceTypeChecker::IsInstructionStream(instance_type));
+    CHECK(!InstanceTypeChecker::IsCode(instance_type));
 
     if (ElideObject(raw)) {
       AllowGarbageCollection allow_gc;
@@ -275,17 +275,16 @@ void CreateInterpreterDataForDeserializedCode(Isolate* isolate,
             INTERPRETER_DATA_TYPE, AllocationType::kOld));
 
     interpreter_data->set_bytecode_array(info->GetBytecodeArray(isolate));
-    interpreter_data->set_interpreter_trampoline(*code);
+    interpreter_data->set_interpreter_trampoline(ToCodeT(*code));
     if (info->HasBaselineCode()) {
-      FromCode(info->baseline_code(kAcquireLoad))
+      FromCodeT(info->baseline_code(kAcquireLoad))
           .set_bytecode_or_interpreter_data(*interpreter_data);
     } else {
       info->set_interpreter_data(*interpreter_data);
     }
 
     if (!log_code_creation) continue;
-    Handle<InstructionStream> istream(code->instruction_stream(), isolate);
-    Handle<AbstractCode> abstract_code = Handle<AbstractCode>::cast(istream);
+    Handle<AbstractCode> abstract_code = Handle<AbstractCode>::cast(code);
     Script::InitLineEnds(isolate, script);
     int line_num = script->GetLineNumber(info->StartPosition()) + 1;
     int column_num = script->GetColumnNumber(info->StartPosition()) + 1;

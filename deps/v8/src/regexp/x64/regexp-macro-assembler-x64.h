@@ -189,8 +189,7 @@ class V8_EXPORT_PRIVATE RegExpMacroAssemblerX64
   // name to the register.
   static constexpr Register backtrack_stackpointer() { return rcx; }
 
-  // The registers containing a self pointer to this code's InstructionStream
-  // object.
+  // The registers containing a self pointer to this code's Code object.
   static constexpr Register code_object_pointer() { return r8; }
 
   // Byte size of chars in the string to match (decided by the Mode argument)
@@ -224,9 +223,9 @@ class V8_EXPORT_PRIVATE RegExpMacroAssemblerX64
   // by a word size and stores the value there.
   inline void Push(Immediate value);
 
-  // Pushes the InstructionStream object relative offset of a label on the
-  // backtrack stack (i.e., a backtrack target). Decrements the stack pointer
-  // (rcx) by a word size and stores the value there.
+  // Pushes the Code object relative offset of a label on the backtrack stack
+  // (i.e., a backtrack target). Decrements the stack pointer (rcx)
+  // by a word size and stores the value there.
   inline void Push(Label* label);
 
   // Pops a value from the backtrack stack. Reads the word at the stack pointer

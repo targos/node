@@ -16,6 +16,10 @@ namespace v8 {
 namespace internal {
 namespace maglev {
 
+constexpr Register kScratchRegister = x16;
+constexpr Register kScratchRegisterW = w16;
+constexpr DoubleRegister kScratchDoubleReg = d30;
+
 constexpr Condition ConditionFor(Operation operation) {
   switch (operation) {
     case Operation::kEqual:
@@ -34,65 +38,24 @@ constexpr Condition ConditionFor(Operation operation) {
   }
 }
 
-class MaglevAssembler::ScratchRegisterScope {
- public:
-  explicit ScratchRegisterScope(MaglevAssembler* masm) : wrapped_scope_(masm) {
-    // This field is never used in arm64.
-    DCHECK_NULL(masm->scratch_register_scope_);
-  }
-
-  Register Acquire() { return wrapped_scope_.AcquireX(); }
-  void Include(Register reg) { wrapped_scope_.Include(reg); }
-  void Include(const RegList list) {
-    wrapped_scope_.Include(CPURegList(kXRegSizeInBits, list));
-  }
-
-  DoubleRegister AcquireDouble() { return wrapped_scope_.AcquireD(); }
-  void IncludeDouble(const DoubleRegList list) {
-    wrapped_scope_.IncludeFP(CPURegList(kDRegSizeInBits, list));
-  }
-
-  RegList Available() {
-    return RegList::FromBits(wrapped_scope_.Available()->bits());
-  }
-  void SetAvailable(RegList list) {
-    wrapped_scope_.SetAvailable(CPURegList(kXRegSizeInBits, list));
-  }
-
-  DoubleRegList AvailableDouble() {
-    uint64_t bits = wrapped_scope_.AvailableFP()->bits();
-    // AvailableFP fits in a 32 bits word.
-    DCHECK_LE(bits, std::numeric_limits<uint32_t>::max());
-    return DoubleRegList::FromBits(static_cast<uint32_t>(bits));
-  }
-  void SetAvailableDouble(DoubleRegList list) {
-    wrapped_scope_.SetAvailableFP(CPURegList(kDRegSizeInBits, list));
-  }
-
- private:
-  UseScratchRegisterScope wrapped_scope_;
-};
-
 namespace detail {
 
 template <typename Arg>
 inline Register ToRegister(MaglevAssembler* masm,
-                           MaglevAssembler::ScratchRegisterScope* scratch,
-                           Arg arg) {
-  Register reg = scratch->Acquire();
+                           UseScratchRegisterScope* scratch, Arg arg) {
+  Register reg = scratch->AcquireX();
   masm->Move(reg, arg);
   return reg;
 }
 inline Register ToRegister(MaglevAssembler* masm,
-                           MaglevAssembler::ScratchRegisterScope* scratch,
-                           Register reg) {
+                           UseScratchRegisterScope* scratch, Register reg) {
   return reg;
 }
 inline Register ToRegister(MaglevAssembler* masm,
-                           MaglevAssembler::ScratchRegisterScope* scratch,
+                           UseScratchRegisterScope* scratch,
                            const Input& input) {
   if (input.operand().IsConstant()) {
-    Register reg = scratch->Acquire();
+    Register reg = scratch->AcquireX();
     input.node()->LoadToRegister(masm, reg);
     return reg;
   }
@@ -102,7 +65,7 @@ inline Register ToRegister(MaglevAssembler* masm,
     return ToRegister(input);
   } else {
     DCHECK(operand.IsStackSlot());
-    Register reg = scratch->Acquire();
+    Register reg = scratch->AcquireX();
     masm->Move(reg, masm->ToMemOperand(input));
     return reg;
   }
@@ -194,11 +157,11 @@ inline void PushAligned(MaglevAssembler* masm, Arg1 arg1, Arg2 arg2) {
     // The second argument is not pushed together with the first so we can
     // re-use any scratch registers used to materialise the first argument for
     // the second one.
-    MaglevAssembler::ScratchRegisterScope temps(masm);
+    UseScratchRegisterScope temps(masm);
     masm->MacroAssembler::Push(ToRegister(masm, &temps, arg1), padreg);
   }
   {
-    MaglevAssembler::ScratchRegisterScope temps(masm);
+    UseScratchRegisterScope temps(masm);
     masm->MacroAssembler::str(ToRegister(masm, &temps, arg2), MemOperand(sp));
   }
 }
@@ -299,8 +262,8 @@ inline void MaglevAssembler::DoubleToInt64Repr(Register dst,
 
 inline Condition MaglevAssembler::IsInt64Constant(Register reg,
                                                   int64_t constant) {
-  ScratchRegisterScope temps(this);
-  Register scratch = temps.Acquire();
+  UseScratchRegisterScope temps(this);
+  Register scratch = temps.AcquireX();
   Mov(scratch, kHoleNanInt64);
   Cmp(reg, scratch);
   return eq;
@@ -312,8 +275,8 @@ inline Condition MaglevAssembler::IsRootConstant(Input input,
     CompareRoot(ToRegister(input), root_index);
   } else {
     DCHECK(input.operand().IsStackSlot());
-    ScratchRegisterScope temps(this);
-    Register scratch = temps.Acquire();
+    UseScratchRegisterScope temps(this);
+    Register scratch = temps.AcquireX();
     Ldr(scratch, ToMemOperand(input));
     CompareRoot(scratch, root_index);
   }
@@ -363,8 +326,8 @@ inline void MaglevAssembler::BuildTypedArrayDataPointer(Register data_pointer,
       data_pointer,
       FieldMemOperand(object, JSTypedArray::kExternalPointerOffset));
   if (JSTypedArray::kMaxSizeInHeap == 0) return;
-  ScratchRegisterScope scope(this);
-  Register base = scope.Acquire();
+  UseScratchRegisterScope scope(this);
+  Register base = scope.AcquireX();
   Ldr(base.W(), FieldMemOperand(object, JSTypedArray::kBasePointerOffset));
   Add(data_pointer, data_pointer, base);
 }
@@ -537,8 +500,8 @@ inline void MaglevAssembler::Pop(Register dst) { Pop(dst, padreg); }
 
 inline void MaglevAssembler::AssertStackSizeCorrect() {
   if (v8_flags.debug_code) {
-    ScratchRegisterScope temps(this);
-    Register scratch = temps.Acquire();
+    UseScratchRegisterScope temps(this);
+    Register scratch = temps.AcquireX();
     Add(scratch, sp,
         RoundUp<2 * kSystemPointerSize>(
             code_gen_state()->stack_slots() * kSystemPointerSize +
@@ -586,10 +549,10 @@ inline void MaglevAssembler::MaterialiseValueNode(Register dst,
   switch (value->properties().value_representation()) {
     case ValueRepresentation::kInt32: {
       Label done;
-      ScratchRegisterScope temps(this);
-      Register scratch = temps.Acquire();
-      Ldr(scratch.W(), src);
-      Adds(dst.W(), scratch.W(), scratch.W());
+      UseScratchRegisterScope temps(this);
+      Register scratch = temps.AcquireW();
+      Ldr(scratch, src);
+      Adds(dst.W(), scratch, scratch);
       B(&done, vc);
       // If we overflow, instead of bailing out (deopting), we change
       // representation to a HeapNumber.
@@ -663,8 +626,8 @@ inline void MaglevAssembler::MoveRepr(MachineRepresentation repr,
 template <>
 inline void MaglevAssembler::MoveRepr(MachineRepresentation repr,
                                       MemOperand dst, MemOperand src) {
-  ScratchRegisterScope temps(this);
-  Register scratch = temps.Acquire();
+  UseScratchRegisterScope temps(this);
+  Register scratch = temps.AcquireX();
   MoveRepr(repr, scratch, src);
   MoveRepr(repr, dst, scratch);
 }

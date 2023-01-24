@@ -601,8 +601,7 @@ size_t OverheadPerCodeSpace(uint32_t num_declared_functions) {
   return overhead;
 }
 
-// Returns an estimate how much code space should be reserved. This can be
-// smaller than the passed-in {code_size_estimate}, see comments in the code.
+// Returns an estimate how much code space should be reserved.
 size_t ReservationSize(size_t code_size_estimate, int num_declared_functions,
                        size_t total_reserved) {
   size_t overhead = OverheadPerCodeSpace(num_declared_functions);
@@ -611,13 +610,6 @@ size_t ReservationSize(size_t code_size_estimate, int num_declared_functions,
   //   a) needed size + overhead (this is the minimum needed)
   //   b) 2 * overhead (to not waste too much space by overhead)
   //   c) 1/4 of current total reservation size (to grow exponentially)
-  // For the minimum size we only take the overhead into account and not the
-  // code space estimate, for two reasons:
-  //  - The code space estimate is only an estimate; we might actually need less
-  //    space later.
-  //  - When called at module construction time we pass the estimate for all
-  //    code in the module; this can still be split up into multiple spaces
-  //    later.
   size_t minimum_size = 2 * overhead;
   size_t suggested_size =
       std::max(std::max(RoundUp<kCodeAlignment>(code_size_estimate) + overhead,
@@ -675,14 +667,6 @@ base::Vector<byte> WasmCodeAllocator::AllocateForCodeInRegion(
     for (auto& vmem : owned_code_space_) total_reserved += vmem.size();
     size_t reserve_size = ReservationSize(
         size, native_module->module()->num_declared_functions, total_reserved);
-    if (reserve_size < size) {
-      auto oom_detail = base::FormattedString{}
-                        << "cannot reserve space for " << size
-                        << "bytes of code (maximum reservation size is "
-                        << reserve_size << ")";
-      V8::FatalProcessOutOfMemory(nullptr, "Grow wasm code space",
-                                  oom_detail.PrintToArray().data());
-    }
     VirtualMemory new_mem =
         code_manager->TryAllocate(reserve_size, reinterpret_cast<void*>(hint));
     if (!new_mem.IsReserved()) {
@@ -701,8 +685,7 @@ base::Vector<byte> WasmCodeAllocator::AllocateForCodeInRegion(
     native_module->AddCodeSpaceLocked(new_region);
 
     code_space = free_code_space_.Allocate(size);
-    CHECK(!code_space.is_empty());
-
+    DCHECK(!code_space.is_empty());
     async_counters_->wasm_module_num_code_spaces()->AddSample(
         static_cast<int>(owned_code_space_.size()));
   }
@@ -853,8 +836,6 @@ void NativeModule::ReserveCodeTableForTesting(uint32_t max_functions) {
       JumpTableAssembler::SizeForNumberOfSlots(max_functions),
       single_code_space_region);
   code_space_data_[0].jump_table = main_jump_table_;
-  CodeSpaceWriteScope code_space_write_scope(this);
-  InitializeJumpTableForLazyCompilation(max_functions);
 }
 
 void NativeModule::LogWasmCodes(Isolate* isolate, Script script) {
@@ -883,7 +864,7 @@ CompilationEnv NativeModule::CreateCompilationEnv() const {
           compilation_state()->dynamic_tiering()};
 }
 
-WasmCode* NativeModule::AddCodeForTesting(Handle<InstructionStream> code) {
+WasmCode* NativeModule::AddCodeForTesting(Handle<Code> code) {
   CodeSpaceWriteScope code_space_write_scope(this);
   const size_t relocation_size = code->relocation_size();
   base::OwnedVector<byte> reloc_info;
@@ -900,19 +881,18 @@ WasmCode* NativeModule::AddCodeForTesting(Handle<InstructionStream> code) {
                                source_pos_table->length());
   }
   CHECK(!code->is_off_heap_trampoline());
-  static_assert(InstructionStream::kOnHeapBodyIsContiguous);
+  static_assert(Code::kOnHeapBodyIsContiguous);
   base::Vector<const byte> instructions(
       reinterpret_cast<byte*>(code->raw_body_start()),
       static_cast<size_t>(code->raw_body_size()));
   const int stack_slots = code->stack_slots();
 
-  // Metadata offsets in InstructionStream objects are relative to the start of
-  // the metadata section, whereas WasmCode expects offsets relative to
-  // InstructionStart.
+  // Metadata offsets in Code objects are relative to the start of the metadata
+  // section, whereas WasmCode expects offsets relative to InstructionStart.
   const int base_offset = code->raw_instruction_size();
   // TODO(jgruber,v8:8758): Remove this translation. It exists only because
-  // InstructionStream objects contains real offsets but WasmCode expects an
-  // offset of 0 to mean 'empty'.
+  // Code objects contains real offsets but WasmCode expects an offset of 0 to
+  // mean 'empty'.
   const int safepoint_table_offset =
       code->has_safepoint_table() ? base_offset + code->safepoint_table_offset()
                                   : 0;
@@ -976,34 +956,6 @@ WasmCode* NativeModule::AddCodeForTesting(Handle<InstructionStream> code) {
   return PublishCodeLocked(std::move(new_code));
 }
 
-void NativeModule::InitializeJumpTableForLazyCompilation(
-    uint32_t num_wasm_functions) {
-  if (!num_wasm_functions) return;
-  allocation_mutex_.AssertHeld();
-  DCHECK(CodeSpaceWriteScope::IsInScope());
-
-  DCHECK_NULL(lazy_compile_table_);
-  lazy_compile_table_ = CreateEmptyJumpTableLocked(
-      JumpTableAssembler::SizeForNumberOfLazyFunctions(num_wasm_functions));
-
-  DCHECK_EQ(1, code_space_data_.size());
-  const CodeSpaceData& code_space_data = code_space_data_[0];
-  DCHECK_NOT_NULL(code_space_data.jump_table);
-  DCHECK_NOT_NULL(code_space_data.far_jump_table);
-
-  Address compile_lazy_address =
-      code_space_data.far_jump_table->instruction_start() +
-      JumpTableAssembler::FarJumpSlotIndexToOffset(WasmCode::kWasmCompileLazy);
-
-  JumpTableAssembler::GenerateLazyCompileTable(
-      lazy_compile_table_->instruction_start(), num_wasm_functions,
-      module_->num_imported_functions, compile_lazy_address);
-
-  JumpTableAssembler::InitializeJumpsToLazyCompileTable(
-      code_space_data.jump_table->instruction_start(), num_wasm_functions,
-      lazy_compile_table_->instruction_start());
-}
-
 void NativeModule::UseLazyStubLocked(uint32_t func_index) {
   allocation_mutex_.AssertHeld();
   DCHECK_LE(module_->num_imported_functions, func_index);
@@ -1013,7 +965,19 @@ void NativeModule::UseLazyStubLocked(uint32_t func_index) {
   // scope instead.
   DCHECK(CodeSpaceWriteScope::IsInScope());
 
-  DCHECK_NOT_NULL(lazy_compile_table_);
+  if (!lazy_compile_table_) {
+    uint32_t num_slots = module_->num_declared_functions;
+    WasmCodeRefScope code_ref_scope;
+    lazy_compile_table_ = CreateEmptyJumpTableLocked(
+        JumpTableAssembler::SizeForNumberOfLazyFunctions(num_slots));
+    Address compile_lazy_address = GetNearRuntimeStubEntry(
+        WasmCode::kWasmCompileLazy,
+        FindJumpTablesForRegionLocked(
+            base::AddressRegionOf(lazy_compile_table_->instructions())));
+    JumpTableAssembler::GenerateLazyCompileTable(
+        lazy_compile_table_->instruction_start(), num_slots,
+        module_->num_imported_functions, compile_lazy_address);
+  }
 
   // Add jump table entry for jump to the lazy compile stub.
   uint32_t slot_index = declared_function_index(module(), func_index);
@@ -1497,7 +1461,9 @@ void NativeModule::AddCodeSpaceLocked(base::AddressRegion region) {
   code_space_data_.push_back(CodeSpaceData{region, jump_table, far_jump_table});
 
   if (is_first_code_space) {
-    InitializeJumpTableForLazyCompilation(num_wasm_functions);
+    for (uint32_t i = 0; i < num_wasm_functions; ++i) {
+      UseLazyStubLocked(module_->num_imported_functions + i);
+    }
   }
 
   if (jump_table && !is_first_code_space) {
@@ -2135,8 +2101,8 @@ void NativeModule::SampleCodeSize(Counters* counters) const {
   int code_size_mb = static_cast<int>(code_size / MB);
   counters->wasm_module_code_size_mb()->AddSample(code_size_mb);
   // If this is a wasm module of >= 2MB, also sample the freed code size,
-  // absolute and relative. Code GC does not happen on asm.js
-  // modules, and small modules will never trigger GC anyway.
+  // absolute and relative. Code GC does not happen on asm.js modules, and
+  // small modules will never trigger GC anyway.
   size_t generated_size = code_allocator_.generated_code_size();
   if (generated_size >= 2 * MB && module()->origin == kWasmOrigin) {
     size_t freed_size = code_allocator_.freed_code_size();
@@ -2245,10 +2211,6 @@ bool ShouldRemoveCode(WasmCode* code, NativeModule::RemoveFilter filter) {
   }
   if (filter == NativeModule::RemoveFilter::kRemoveNonDebugCode &&
       code->for_debugging()) {
-    return false;
-  }
-  if (filter == NativeModule::RemoveFilter::kRemoveLiftoffCode &&
-      !code->is_liftoff()) {
     return false;
   }
   return true;

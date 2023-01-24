@@ -636,10 +636,10 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
                                                        Handle<Map> rtt);
   Handle<WasmCapiFunctionData> NewWasmCapiFunctionData(
       Address call_target, Handle<Foreign> embedder_data,
-      Handle<Code> wrapper_code, Handle<Map> rtt,
+      Handle<CodeT> wrapper_code, Handle<Map> rtt,
       Handle<PodArray<wasm::ValueType>> serialized_sig);
   Handle<WasmExportedFunctionData> NewWasmExportedFunctionData(
-      Handle<Code> export_wrapper, Handle<WasmInstanceObject> instance,
+      Handle<CodeT> export_wrapper, Handle<WasmInstanceObject> instance,
       Address call_target, Handle<Object> ref, int func_index,
       const wasm::FunctionSig* sig, uint32_t canonical_type_index,
       int wrapper_budget, Handle<Map> rtt, wasm::Promise promise);
@@ -651,7 +651,7 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
   Handle<WasmJSFunctionData> NewWasmJSFunctionData(
       Address opt_call_target, Handle<JSReceiver> callable, int return_count,
       int parameter_count, Handle<PodArray<wasm::ValueType>> serialized_sig,
-      Handle<Code> wrapper_code, Handle<Map> rtt, wasm::Suspend suspend,
+      Handle<CodeT> wrapper_code, Handle<Map> rtt, wasm::Suspend suspend,
       wasm::Promise promise);
   Handle<WasmResumeData> NewWasmResumeData(
       Handle<WasmSuspenderObject> suspender, wasm::OnResume on_resume);
@@ -754,8 +754,8 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
 
   // Allocates a new code object and initializes it as the trampoline to the
   // given off-heap entry point.
-  Handle<Code> NewOffHeapTrampolineFor(Handle<Code> code,
-                                       Address off_heap_entry);
+  Handle<CodeT> NewOffHeapTrampolineFor(Handle<CodeT> code,
+                                        Address off_heap_entry);
 
   Handle<BytecodeArray> CopyBytecodeArray(Handle<BytecodeArray>);
 
@@ -918,7 +918,7 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
     void PrepareMap();
     void PrepareFeedbackCell();
 
-    V8_WARN_UNUSED_RESULT Handle<JSFunction> BuildRaw(Handle<Code> code);
+    V8_WARN_UNUSED_RESULT Handle<JSFunction> BuildRaw(Handle<CodeT> code);
 
     Isolate* const isolate_;
     Handle<SharedFunctionInfo> sfi_;
@@ -930,8 +930,8 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
     friend class Factory;
   };
 
-  // Allows creation of InstructionStream objects. It provides two build
-  // methods, one of which tries to gracefully handle allocation failure.
+  // Allows creation of Code objects. It provides two build methods, one of
+  // which tries to gracefully handle allocation failure.
   class V8_EXPORT_PRIVATE CodeBuilder final {
    public:
     CodeBuilder(Isolate* isolate, const CodeDesc& desc, CodeKind kind);
@@ -941,16 +941,15 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
                 CodeKind kind);
 
     // Builds a new code object (fully initialized). All header fields of the
-    // associated InstructionStream are immutable and the InstructionStream
-    // object is write protected.
+    // returned object are immutable and the code object is write protected.
     V8_WARN_UNUSED_RESULT Handle<Code> Build();
     // Like Build, builds a new code object. May return an empty handle if the
     // allocation fails.
     V8_WARN_UNUSED_RESULT MaybeHandle<Code> TryBuild();
 
     // Sets the self-reference object in which a reference to the code object is
-    // stored. This allows generated code to reference its own InstructionStream
-    // object by using this handle.
+    // stored. This allows generated code to reference its own Code object by
+    // using this handle.
     CodeBuilder& set_self_reference(Handle<Object> self_reference) {
       DCHECK(!self_reference.is_null());
       self_reference_ = self_reference;
@@ -1007,6 +1006,12 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
       return *this;
     }
 
+    CodeBuilder& set_is_executable(bool executable) {
+      DCHECK_EQ(kind_, CodeKind::BUILTIN);
+      is_executable_ = executable;
+      return *this;
+    }
+
     CodeBuilder& set_kind_specific_flags(int32_t flags) {
       kind_specific_flags_ = flags;
       return *this;
@@ -1026,9 +1031,8 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
 
    private:
     MaybeHandle<Code> BuildInternal(bool retry_allocation_or_fail);
-    MaybeHandle<InstructionStream> AllocateInstructionStream(
-        bool retry_allocation_or_fail);
-    MaybeHandle<InstructionStream> AllocateConcurrentSparkplugInstructionStream(
+    MaybeHandle<Code> AllocateCode(bool retry_allocation_or_fail);
+    MaybeHandle<Code> AllocateConcurrentSparkplugCode(
         bool retry_allocation_or_fail);
 
     Isolate* const isolate_;
@@ -1048,6 +1052,7 @@ class V8_EXPORT_PRIVATE Factory : public FactoryBase<Factory> {
         DeoptimizationData::Empty(isolate_);
     Handle<HeapObject> interpreter_data_;
     BasicBlockProfilerData* profiler_data_ = nullptr;
+    bool is_executable_ = true;
     bool is_turbofanned_ = false;
     int stack_slots_ = 0;
   };

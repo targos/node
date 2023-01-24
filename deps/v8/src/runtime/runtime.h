@@ -415,7 +415,7 @@ namespace internal {
   F(RegExpExecTreatMatchAtEndAsFailure, 4, 1)                    \
   F(RegExpExperimentalOneshotExec, 4, 1)                         \
   F(RegExpExperimentalOneshotExecTreatMatchAtEndAsFailure, 4, 1) \
-  F(RegExpExecMultiple, 3, 1)                                    \
+  F(RegExpExecMultiple, 4, 1)                                    \
   F(RegExpInitializeAndCompile, 3, 1)                            \
   F(RegExpReplaceRT, 3, 1)                                       \
   F(RegExpSplit, 3, 1)                                           \
@@ -654,7 +654,6 @@ namespace internal {
 #define FOR_EACH_INTRINSIC_WASM_TEST(F, I) \
   F(DeserializeWasmModule, 2, 1)           \
   F(DisallowWasmCodegen, 1, 1)             \
-  F(FlushWasmCode, 0, 1)                   \
   F(FreezeWasmLazyCompilation, 1, 1)       \
   F(GetWasmExceptionTagId, 2, 1)           \
   F(GetWasmExceptionValues, 1, 1)          \
@@ -663,18 +662,16 @@ namespace internal {
   F(IsLiftoffFunction, 1, 1)               \
   F(IsTurboFanFunction, 1, 1)              \
   F(IsWasmDebugFunction, 1, 1)             \
-  F(IsUncompiledWasmFunction, 1, 1)        \
   F(IsThreadInWasm, 0, 1)                  \
   F(IsWasmCode, 1, 1)                      \
   F(IsWasmTrapHandlerEnabled, 0, 1)        \
   F(SerializeWasmModule, 1, 1)             \
   F(SetWasmCompileControls, 2, 1)          \
   F(SetWasmInstantiateControls, 0, 1)      \
-  F(SetWasmGCEnabled, 1, 1)                \
   F(WasmGetNumberOfInstances, 1, 1)        \
   F(WasmNumCodeSpaces, 1, 1)               \
   F(WasmEnterDebugging, 0, 1)              \
-  F(WasmTierUpFunction, 1, 1)              \
+  F(WasmTierUpFunction, 2, 1)              \
   F(WasmTraceEnter, 0, 1)                  \
   F(WasmTraceExit, 1, 1)                   \
   F(WasmTraceMemory, 1, 1)

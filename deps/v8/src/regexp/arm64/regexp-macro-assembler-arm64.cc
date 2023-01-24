@@ -22,7 +22,7 @@ namespace internal {
  * This assembler uses the following register assignment convention:
  * - w19     : Used to temporarely store a value before a call to C code.
  *             See CheckNotBackReferenceIgnoreCase.
- * - x20     : Pointer to the current InstructionStream object,
+ * - x20     : Pointer to the current Code object,
  *             it includes the heap object tag.
  * - w21     : Current position in input, as negative offset from
  *             the end of the string. Please notice that this is
@@ -1194,10 +1194,9 @@ Handle<HeapObject> RegExpMacroAssemblerARM64::GetCode(Handle<String> source) {
       Factory::CodeBuilder(isolate(), code_desc, CodeKind::REGEXP)
           .set_self_reference(masm_->CodeObject())
           .Build();
-  Handle<InstructionStream> istream(code->instruction_stream(), isolate());
   PROFILE(masm_->isolate(),
-          RegExpCodeCreateEvent(Handle<AbstractCode>::cast(istream), source));
-  return Handle<HeapObject>::cast(istream);
+          RegExpCodeCreateEvent(Handle<AbstractCode>::cast(code), source));
+  return Handle<HeapObject>::cast(code);
 }
 
 
@@ -1245,7 +1244,7 @@ void RegExpMacroAssemblerARM64::PopRegister(int register_index) {
 void RegExpMacroAssemblerARM64::PushBacktrack(Label* label) {
   if (label->is_bound()) {
     int target = label->pos();
-    __ Mov(w10, target + InstructionStream::kHeaderSize - kHeapObjectTag);
+    __ Mov(w10, target + Code::kHeaderSize - kHeapObjectTag);
   } else {
     __ Adr(x10, label, MacroAssembler::kAdrFar);
     __ Sub(x10, x10, code_pointer());
@@ -1430,7 +1429,7 @@ static T* frame_entry_address(Address re_frame, int frame_offset) {
 int RegExpMacroAssemblerARM64::CheckStackGuardState(
     Address* return_address, Address raw_code, Address re_frame,
     int start_index, const byte** input_start, const byte** input_end) {
-  InstructionStream re_code = InstructionStream::cast(Object(raw_code));
+  Code re_code = Code::cast(Object(raw_code));
   return NativeRegExpMacroAssembler::CheckStackGuardState(
       frame_entry<Isolate*>(re_frame, kIsolate), start_index,
       static_cast<RegExp::CallOrigin>(frame_entry<int>(re_frame, kDirectCall)),
@@ -1478,7 +1477,7 @@ void RegExpMacroAssemblerARM64::CallCheckStackGuardState(Register scratch) {
   __ Mov(w3, start_offset());
   // RegExp code frame pointer.
   __ Mov(x2, frame_pointer());
-  // InstructionStream of self.
+  // Code of self.
   __ Mov(x1, Operand(masm_->CodeObject()));
 
   // We need to pass a pointer to the return address as first argument.
@@ -1499,7 +1498,7 @@ void RegExpMacroAssemblerARM64::CallCheckStackGuardState(Register scratch) {
 
   __ Drop(xreg_to_claim);
 
-  // Reload the InstructionStream pointer.
+  // Reload the Code pointer.
   __ Mov(code_pointer(), Operand(masm_->CodeObject()));
 }
 

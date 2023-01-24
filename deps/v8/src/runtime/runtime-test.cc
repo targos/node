@@ -326,11 +326,11 @@ Object OptimizeFunctionOnNextCall(RuntimeArguments& args, Isolate* isolate,
   // function has.
   if (!function->is_compiled()) {
     DCHECK(function->shared().HasBytecodeArray());
-    Code code = *BUILTIN_CODE(isolate, InterpreterEntryTrampoline);
+    CodeT codet = *BUILTIN_CODE(isolate, InterpreterEntryTrampoline);
     if (function->shared().HasBaselineCode()) {
-      code = function->shared().baseline_code(kAcquireLoad);
+      codet = function->shared().baseline_code(kAcquireLoad);
     }
-    function->set_code(code);
+    function->set_code(codet);
   }
 
   TraceManualRecompile(*function, target_kind, concurrency_mode);
@@ -404,10 +404,10 @@ RUNTIME_FUNCTION(Runtime_BenchMaglev) {
   Handle<JSFunction> function = args.at<JSFunction>(0);
   int count = args.smi_value_at(1);
 
-  Handle<Code> code;
+  Handle<CodeT> codet;
   base::ElapsedTimer timer;
   timer.Start();
-  code = Maglev::Compile(isolate, function).ToHandleChecked();
+  codet = Maglev::Compile(isolate, function).ToHandleChecked();
   for (int i = 1; i < count; ++i) {
     HandleScope handle_scope(isolate);
     Maglev::Compile(isolate, function);
@@ -415,7 +415,7 @@ RUNTIME_FUNCTION(Runtime_BenchMaglev) {
   PrintF("Maglev compile time: %g ms!\n",
          timer.Elapsed().InMillisecondsF() / count);
 
-  function->set_code(*code);
+  function->set_code(*codet);
 
   return ReadOnlyRoots(isolate).undefined_value();
 }
@@ -685,8 +685,7 @@ RUNTIME_FUNCTION(Runtime_OptimizeOsr) {
     USE(unused_result);
 
     // Finalize again to finish the queued job. The next call into
-    // Runtime::kCompileOptimizedOSR will pick up the cached InstructionStream
-    // object.
+    // Runtime::kCompileOptimizedOSR will pick up the cached Code object.
     FinalizeOptimization(isolate);
   }
 
@@ -789,7 +788,7 @@ RUNTIME_FUNCTION(Runtime_GetOptimizationStatus) {
   }
 
   if (function->HasAttachedOptimizedCode()) {
-    Code code = function->code();
+    CodeT code = function->code();
     if (code.marked_for_deoptimization()) {
       status |= static_cast<int>(OptimizationStatus::kMarkedForDeoptimization);
     } else {
@@ -1437,7 +1436,7 @@ RUNTIME_FUNCTION(Runtime_RegexpHasNativeCode) {
   bool is_latin1 = Oddball::cast(args[1]).ToBool(isolate);
   bool result;
   if (regexp.type_tag() == JSRegExp::IRREGEXP) {
-    result = regexp.code(is_latin1).IsCode();
+    result = regexp.code(is_latin1).IsCodeT();
   } else {
     result = false;
   }
@@ -1667,9 +1666,9 @@ RUNTIME_FUNCTION(Runtime_EnableCodeLoggingForTesting) {
     void CodeMovingGCEvent() final {}
     void CodeDisableOptEvent(Handle<AbstractCode> code,
                              Handle<SharedFunctionInfo> shared) final {}
-    void CodeDeoptEvent(Handle<InstructionStream> code, DeoptimizeKind kind,
-                        Address pc, int fp_to_sp_delta) final {}
-    void CodeDependencyChangeEvent(Handle<InstructionStream> code,
+    void CodeDeoptEvent(Handle<Code> code, DeoptimizeKind kind, Address pc,
+                        int fp_to_sp_delta) final {}
+    void CodeDependencyChangeEvent(Handle<Code> code,
                                    Handle<SharedFunctionInfo> shared,
                                    const char* reason) final {}
     void WeakCodeClearEvent() final {}

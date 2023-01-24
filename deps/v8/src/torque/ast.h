@@ -595,13 +595,11 @@ struct AssumeTypeImpossibleExpression : Expression {
 struct NewExpression : Expression {
   DEFINE_AST_NODE_LEAF_BOILERPLATE(NewExpression)
   NewExpression(SourcePosition pos, TypeExpression* type,
-                std::vector<NameAndExpression> initializers, bool pretenured,
-                bool clear_padding)
+                std::vector<NameAndExpression> initializers, bool pretenured)
       : Expression(kKind, pos),
         type(type),
         initializers(std::move(initializers)),
-        pretenured(pretenured),
-        clear_padding(clear_padding) {}
+        pretenured(pretenured) {}
 
   void VisitAllSubExpressions(VisitCallback callback) override {
     for (auto& initializer : initializers) {
@@ -613,7 +611,6 @@ struct NewExpression : Expression {
   TypeExpression* type;
   std::vector<NameAndExpression> initializers;
   bool pretenured;
-  bool clear_padding;
 };
 
 enum class ImplicitKind { kNoImplicit, kJSImplicit, kImplicit };

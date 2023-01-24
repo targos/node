@@ -264,6 +264,7 @@ void TurboAssembler::Call(Handle<Code> code, RelocInfo::Mode rmode,
     CallBuiltin(builtin, cond);
     return;
   }
+  DCHECK(code->IsExecutable());
   int32_t target_index = AddCodeTarget(code);
   Call(static_cast<Address>(target_index), rmode, cond);
 }
@@ -363,12 +364,17 @@ void TurboAssembler::Drop(Register count, Register scratch) {
   add(sp, sp, scratch);
 }
 
-void MacroAssembler::TestCodeIsMarkedForDeoptimization(Register code,
-                                                       Register scratch1,
-                                                       Register scratch2) {
-  LoadS32(scratch1, FieldMemOperand(code, Code::kKindSpecificFlagsOffset),
-          scratch2);
-  TestBit(scratch1, InstructionStream::kMarkedForDeoptimizationBit, scratch2);
+void MacroAssembler::TestCodeTIsMarkedForDeoptimization(Register codet,
+                                                        Register scratch1,
+                                                        Register scratch2) {
+  LoadTaggedPointerField(scratch1,
+                         FieldMemOperand(codet, Code::kCodeDataContainerOffset),
+                         scratch2);
+  LoadS32(
+      scratch1,
+      FieldMemOperand(scratch1, CodeDataContainer::kKindSpecificFlagsOffset),
+      scratch2);
+  TestBit(scratch1, Code::kMarkedForDeoptimizationBit, scratch2);
 }
 
 Operand MacroAssembler::ClearedValue() const {
@@ -1204,15 +1210,13 @@ void TurboAssembler::ShiftRightAlgPair(Register dst_low, Register dst_high,
 void TurboAssembler::LoadConstantPoolPointerRegisterFromCodeTargetAddress(
     Register code_target_address) {
   // Builtins do not use the constant pool (see is_constant_pool_available).
-  static_assert(InstructionStream::kOnHeapBodyIsContiguous);
+  static_assert(Code::kOnHeapBodyIsContiguous);
 
   lwz(r0, MemOperand(code_target_address,
-                     InstructionStream::kInstructionSizeOffset -
-                         InstructionStream::kHeaderSize));
+                     Code::kInstructionSizeOffset - Code::kHeaderSize));
   lwz(kConstantPoolRegister,
       MemOperand(code_target_address,
-                 InstructionStream::kConstantPoolOffsetOffset -
-                     InstructionStream::kHeaderSize));
+                 Code::kConstantPoolOffsetOffset - Code::kHeaderSize));
   add(kConstantPoolRegister, kConstantPoolRegister, code_target_address);
   add(kConstantPoolRegister, kConstantPoolRegister, r0);
 }
@@ -1232,7 +1236,7 @@ void TurboAssembler::ComputeCodeStartAddress(Register dst) {
 void TurboAssembler::LoadConstantPoolPointerRegister() {
   //
   // Builtins do not use the constant pool (see is_constant_pool_available).
-  static_assert(InstructionStream::kOnHeapBodyIsContiguous);
+  static_assert(Code::kOnHeapBodyIsContiguous);
 
   LoadPC(kConstantPoolRegister);
   int32_t delta = -pc_offset() + 4;
@@ -2045,8 +2049,8 @@ void TailCallOptimizedCodeSlot(MacroAssembler* masm,
   // runtime to clear it.
   {
     UseScratchRegisterScope temps(masm);
-    __ TestCodeIsMarkedForDeoptimization(optimized_code_entry, temps.Acquire(),
-                                         scratch);
+    __ TestCodeTIsMarkedForDeoptimization(optimized_code_entry, temps.Acquire(),
+                                          scratch);
     __ bne(&heal_optimized_code_slot, cr0);
   }
 
@@ -2055,7 +2059,7 @@ void TailCallOptimizedCodeSlot(MacroAssembler* masm,
   __ ReplaceClosureCodeWithOptimizedCode(optimized_code_entry, closure, scratch,
                                          r8);
   static_assert(kJavaScriptCallCodeStartRegister == r5, "ABI mismatch");
-  __ LoadCodeEntry(r5, optimized_code_entry);
+  __ LoadCodeObjectEntry(r5, optimized_code_entry);
   __ Jump(r5);
 
   // Optimized code slot contains deoptimized code or code is cleared and
@@ -4897,32 +4901,64 @@ MemOperand TurboAssembler::EntryFromBuiltinAsOperand(Builtin builtin) {
                     IsolateData::BuiltinEntrySlotOffset(builtin));
 }
 
-void TurboAssembler::LoadCodeEntry(Register destination, Register code_object) {
-  ASM_CODE_COMMENT(this);
-  LoadU64(destination,
-          FieldMemOperand(code_object, Code::kCodeEntryPointOffset), r0);
-}
+void TurboAssembler::LoadCodeObjectEntry(Register destination,
+                                         Register code_object) {
+  // Code objects are called differently depending on whether we are generating
+  // builtin code (which will later be embedded into the binary) or compiling
+  // user JS code at runtime.
+  // * Builtin code runs in --jitless mode and thus must not call into on-heap
+  //   Code targets. Instead, we dispatch through the builtins entry table.
+  // * Codegen at runtime does not have this restriction and we can use the
+  //   shorter, branchless instruction sequence. The assumption here is that
+  //   targets are usually generated code and not builtin Code objects.
 
-void TurboAssembler::LoadCodeInstructionStreamNonBuiltin(Register destination,
-                                                         Register code_object) {
-  ASM_CODE_COMMENT(this);
-  // Compute the InstructionStream object pointer from the code entry point.
-  LoadU64(destination,
-          FieldMemOperand(code_object, Code::kCodeEntryPointOffset), r0);
-  SubS64(destination, destination,
-         Operand(InstructionStream::kHeaderSize - kHeapObjectTag));
+  if (options().isolate_independent_code) {
+    DCHECK(root_array_available());
+    Label if_code_is_off_heap, out;
+
+    Register scratch = r11;
+
+    DCHECK(!AreAliased(destination, scratch));
+    DCHECK(!AreAliased(code_object, scratch));
+
+    // Check whether the Code object is an off-heap trampoline. If so, call its
+    // (off-heap) entry point directly without going through the (on-heap)
+    // trampoline.  Otherwise, just call the Code object as always.
+    LoadS32(scratch, FieldMemOperand(code_object, Code::kFlagsOffset), r0);
+    mov(r0, Operand(Code::IsOffHeapTrampoline::kMask));
+    and_(r0, scratch, r0, SetRC);
+    bne(&if_code_is_off_heap, cr0);
+
+    // Not an off-heap trampoline, the entry point is at
+    // Code::raw_instruction_start().
+    addi(destination, code_object, Operand(Code::kHeaderSize - kHeapObjectTag));
+    b(&out);
+
+    // An off-heap trampoline, the entry point is loaded from the builtin entry
+    // table.
+    bind(&if_code_is_off_heap);
+    LoadS32(scratch, FieldMemOperand(code_object, Code::kBuiltinIndexOffset),
+            r0);
+    ShiftLeftU64(destination, scratch, Operand(kSystemPointerSizeLog2));
+    add(destination, destination, kRootRegister);
+    LoadU64(destination,
+            MemOperand(destination, IsolateData::builtin_entry_table_offset()),
+            r0);
+
+    bind(&out);
+  } else {
+    addi(destination, code_object, Operand(Code::kHeaderSize - kHeapObjectTag));
+  }
 }
 
 void TurboAssembler::CallCodeObject(Register code_object) {
-  ASM_CODE_COMMENT(this);
-  LoadCodeEntry(code_object, code_object);
+  LoadCodeObjectEntry(code_object, code_object);
   Call(code_object);
 }
 
 void TurboAssembler::JumpCodeObject(Register code_object, JumpMode jump_mode) {
-  ASM_CODE_COMMENT(this);
   DCHECK_EQ(JumpMode::kJump, jump_mode);
-  LoadCodeEntry(code_object, code_object);
+  LoadCodeObjectEntry(code_object, code_object);
   Jump(code_object);
 }
 
@@ -4930,9 +4966,9 @@ void TurboAssembler::StoreReturnAddressAndCall(Register target) {
   // This generates the final instruction sequence for calls to C functions
   // once an exit frame has been constructed.
   //
-  // Note that this assumes the caller code (i.e. the InstructionStream object
-  // currently being generated) is immovable or that the callee function cannot
-  // trigger GC, since the callee function will return to it.
+  // Note that this assumes the caller code (i.e. the Code object currently
+  // being generated) is immovable or that the callee function cannot trigger
+  // GC, since the callee function will return to it.
 
   static constexpr int after_call_offset = 5 * kInstrSize;
   Label start_call;

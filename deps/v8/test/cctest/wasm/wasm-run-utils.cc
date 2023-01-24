@@ -78,7 +78,8 @@ TestingModuleBuilder::TestingModuleBuilder(
     uint32_t canonical_type_index =
         GetTypeCanonicalizer()->AddRecursiveGroup(maybe_import->sig);
     auto resolved = compiler::ResolveWasmImportCall(
-        maybe_import->js_function, maybe_import->sig, canonical_type_index);
+        maybe_import->js_function, maybe_import->sig, canonical_type_index,
+        instance_object_->module(), enabled_features_);
     compiler::WasmImportCallKind kind = resolved.kind;
     Handle<JSReceiver> callable = resolved.callable;
     WasmImportWrapperCache::ModificationScope cache_scope(
@@ -577,26 +578,28 @@ Handle<Code> WasmFunctionWrapper::GetWrapperCode(Isolate* isolate) {
 // This struct is just a type tag for Zone::NewArray<T>(size_t) call.
 struct WasmFunctionCompilerBuffer {};
 
-void WasmFunctionCompiler::Build(base::Vector<const uint8_t> bytes) {
+void WasmFunctionCompiler::Build(const byte* start, const byte* end) {
   size_t locals_size = local_decls.Size();
-  size_t total_size = bytes.size() + locals_size + 1;
+  size_t total_size = end - start + locals_size + 1;
   byte* buffer = zone()->NewArray<byte, WasmFunctionCompilerBuffer>(total_size);
   // Prepend the local decls to the code.
   local_decls.Emit(buffer);
   // Emit the code.
-  memcpy(buffer + locals_size, bytes.begin(), bytes.size());
+  memcpy(buffer + locals_size, start, end - start);
   // Append an extra end opcode.
   buffer[total_size - 1] = kExprEnd;
 
-  bytes = base::VectorOf(buffer, total_size);
+  start = buffer;
+  end = buffer + total_size;
 
-  function_->code = {builder_->AddBytes(bytes),
-                     static_cast<uint32_t>(bytes.size())};
+  CHECK_GE(kMaxInt, end - start);
+  int len = static_cast<int>(end - start);
+  function_->code = {builder_->AddBytes(base::Vector<const byte>(start, len)),
+                     static_cast<uint32_t>(len)};
 
   if (interpreter_) {
     // Add the code to the interpreter; do not generate compiled code.
-    interpreter_->SetFunctionCodeForTesting(function_, bytes.begin(),
-                                            bytes.end());
+    interpreter_->SetFunctionCodeForTesting(function_, start, end);
     return;
   }
 
@@ -617,18 +620,6 @@ void WasmFunctionCompiler::Build(base::Vector<const uint8_t> bytes) {
   ForDebugging for_debugging =
       native_module->IsInDebugState() ? kForDebugging : kNotForDebugging;
 
-  WasmFeatures unused_detected_features;
-  // Validate Wasm modules; asm.js is assumed to be always valid.
-  if (env.module->origin == kWasmOrigin) {
-    DecodeResult validation_result = ValidateFunctionBody(
-        env.enabled_features, env.module, &unused_detected_features, func_body);
-    if (validation_result.failed()) {
-      FATAL("Validation failed: %s",
-            validation_result.error().message().c_str());
-    }
-    env.module->set_function_validated(function_->func_index);
-  }
-
   base::Optional<WasmCompilationResult> result;
   if (builder_->test_execution_tier() ==
       TestExecutionTier::kLiftoffForFuzzing) {
@@ -642,11 +633,11 @@ void WasmFunctionCompiler::Build(base::Vector<const uint8_t> bytes) {
   } else {
     WasmCompilationUnit unit(function_->func_index, builder_->execution_tier(),
                              for_debugging);
+    WasmFeatures unused_detected_features;
     result.emplace(unit.ExecuteCompilation(
         &env, native_module->compilation_state()->GetWireBytesStorage().get(),
         nullptr, nullptr, &unused_detected_features));
   }
-  CHECK(result->succeeded());
   WasmCode* code = native_module->PublishCode(
       native_module->AddCompiledCode(std::move(*result)));
   DCHECK_NOT_NULL(code);

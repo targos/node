@@ -110,17 +110,24 @@ MaybeHandle<Code> Factory::CodeBuilder::BuildInternal(
                                                     AllocationType::kOld)
           : factory->NewByteArray(code_desc_.reloc_size, AllocationType::kOld);
 
-  Handle<Code> code;
+  Handle<CodeDataContainer> data_container;
   if (CompiledWithConcurrentBaseline()) {
-    code = local_isolate_->factory()->NewCode(0, AllocationType::kOld);
+    data_container = local_isolate_->factory()->NewCodeDataContainer(
+        0, AllocationType::kOld);
   } else {
-    code = factory->NewCode(0, AllocationType::kOld);
+    AllocationType allocation_type =
+        V8_EXTERNAL_CODE_SPACE_BOOL || is_executable_
+            ? AllocationType::kOld
+            : AllocationType::kReadOnly;
+    data_container = factory->NewCodeDataContainer(0, allocation_type);
   }
 
-  static constexpr bool kIsNotOffHeapTrampoline = false;
-  code->initialize_flags(kind_, builtin_, is_turbofanned_,
-                         kIsNotOffHeapTrampoline);
-  code->set_kind_specific_flags(kind_specific_flags_, kRelaxedStore);
+  if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+    static constexpr bool kIsNotOffHeapTrampoline = false;
+    data_container->initialize_flags(kind_, builtin_, is_turbofanned_,
+                                     kIsNotOffHeapTrampoline);
+  }
+  data_container->set_kind_specific_flags(kind_specific_flags_, kRelaxedStore);
 
   // Basic block profiling data for builtins is stored in the JS heap rather
   // than in separately-allocated C++ objects. Allocate that data now if
@@ -138,55 +145,55 @@ MaybeHandle<Code> Factory::CodeBuilder::BuildInternal(
     isolate_->heap()->SetBasicBlockProfilingData(new_list);
   }
 
-  static_assert(InstructionStream::kOnHeapBodyIsContiguous);
+  static_assert(Code::kOnHeapBodyIsContiguous);
   Heap* heap = isolate_->heap();
   CodePageCollectionMemoryModificationScope code_allocation(heap);
 
-  Handle<InstructionStream> instruction_stream;
+  Handle<Code> code;
   if (CompiledWithConcurrentBaseline()) {
-    if (!AllocateConcurrentSparkplugInstructionStream(retry_allocation_or_fail)
-             .ToHandle(&instruction_stream)) {
-      return {};
+    if (!AllocateConcurrentSparkplugCode(retry_allocation_or_fail)
+             .ToHandle(&code)) {
+      return MaybeHandle<Code>();
     }
-  } else if (!AllocateInstructionStream(retry_allocation_or_fail)
-                  .ToHandle(&instruction_stream)) {
-    return {};
+  } else if (!AllocateCode(retry_allocation_or_fail).ToHandle(&code)) {
+    return MaybeHandle<Code>();
   }
 
   {
-    InstructionStream raw_istream = *instruction_stream;
+    Code raw_code = *code;
+    constexpr bool kIsNotOffHeapTrampoline = false;
     DisallowGarbageCollection no_gc;
 
-    raw_istream.set_raw_instruction_size(code_desc_.instruction_size());
-    raw_istream.set_raw_metadata_size(code_desc_.metadata_size());
-    raw_istream.set_relocation_info(*reloc_info);
-    raw_istream.initialize_flags(kind_, is_turbofanned_, stack_slots_,
-                                 kIsNotOffHeapTrampoline);
-    raw_istream.set_builtin_id(builtin_);
+    raw_code.set_raw_instruction_size(code_desc_.instruction_size());
+    raw_code.set_raw_metadata_size(code_desc_.metadata_size());
+    raw_code.set_relocation_info(*reloc_info);
+    raw_code.initialize_flags(kind_, is_turbofanned_, stack_slots_,
+                              kIsNotOffHeapTrampoline);
+    raw_code.set_builtin_id(builtin_);
     // This might impact direct concurrent reads from TF if we are resetting
     // this field. We currently assume it's immutable thus a relaxed read (after
     // passing IsPendingAllocation).
-    raw_istream.set_inlined_bytecode_size(inlined_bytecode_size_);
-    raw_istream.set_osr_offset(osr_offset_);
-    raw_istream.set_code(*code, kReleaseStore);
+    raw_code.set_inlined_bytecode_size(inlined_bytecode_size_);
+    raw_code.set_osr_offset(osr_offset_);
+    raw_code.set_code_data_container(*data_container, kReleaseStore);
     if (kind_ == CodeKind::BASELINE) {
-      raw_istream.set_bytecode_or_interpreter_data(*interpreter_data_);
-      raw_istream.set_bytecode_offset_table(*position_table_);
+      raw_code.set_bytecode_or_interpreter_data(*interpreter_data_);
+      raw_code.set_bytecode_offset_table(*position_table_);
     } else {
-      raw_istream.set_deoptimization_data(*deoptimization_data_);
-      raw_istream.set_source_position_table(*position_table_);
+      raw_code.set_deoptimization_data(*deoptimization_data_);
+      raw_code.set_source_position_table(*position_table_);
     }
-    raw_istream.set_handler_table_offset(
+    raw_code.set_handler_table_offset(
         code_desc_.handler_table_offset_relative());
-    raw_istream.set_constant_pool_offset(
+    raw_code.set_constant_pool_offset(
         code_desc_.constant_pool_offset_relative());
-    raw_istream.set_code_comments_offset(
+    raw_code.set_code_comments_offset(
         code_desc_.code_comments_offset_relative());
-    raw_istream.set_unwinding_info_offset(
+    raw_code.set_unwinding_info_offset(
         code_desc_.unwinding_info_offset_relative());
 
     // Allow self references to created code object by patching the handle to
-    // point to the newly allocated InstructionStream object.
+    // point to the newly allocated Code object.
     Handle<Object> self_reference;
     if (self_reference_.ToHandle(&self_reference)) {
       DCHECK(self_reference->IsOddball());
@@ -195,9 +202,9 @@ MaybeHandle<Code> Factory::CodeBuilder::BuildInternal(
       DCHECK_NE(kind_, CodeKind::BASELINE);
       if (isolate_->IsGeneratingEmbeddedBuiltins()) {
         isolate_->builtins_constants_table_builder()->PatchSelfReference(
-            self_reference, instruction_stream);
+            self_reference, code);
       }
-      self_reference.PatchValue(*instruction_stream);
+      self_reference.PatchValue(*code);
     }
 
     // Likewise, any references to the basic block counters marker need to be
@@ -214,18 +221,16 @@ MaybeHandle<Code> Factory::CodeBuilder::BuildInternal(
     // like a handle) that are dereferenced during the copy to point directly
     // to the actual heap objects. These pointers can include references to
     // the code object itself, through the self_reference parameter.
-    raw_istream.CopyFromNoFlush(*reloc_info, heap, code_desc_);
+    raw_code.CopyFromNoFlush(*reloc_info, heap, code_desc_);
 
-    raw_istream.clear_padding();
+    raw_code.clear_padding();
 
     if (V8_EXTERNAL_CODE_SPACE_BOOL) {
-      raw_istream.set_main_cage_base(isolate_->cage_base(), kRelaxedStore);
+      raw_code.set_main_cage_base(isolate_->cage_base(), kRelaxedStore);
+      data_container->SetCodeAndEntryPoint(isolate_, raw_code);
     }
-    code->SetInstructionStreamAndEntryPoint(isolate_, raw_istream);
 #ifdef VERIFY_HEAP
-    if (v8_flags.verify_heap) {
-      HeapObject::VerifyCodePointer(isolate_, raw_istream);
-    }
+    if (v8_flags.verify_heap) HeapObject::VerifyCodePointer(isolate_, raw_code);
 #endif
 
     // Flush the instruction cache before changing the permissions.
@@ -233,13 +238,13 @@ MaybeHandle<Code> Factory::CodeBuilder::BuildInternal(
     // some older ARM kernels there is a bug which causes an access error on
     // cache flush instructions to trigger access error on non-writable memory.
     // See https://bugs.chromium.org/p/v8/issues/detail?id=8157
-    raw_istream.FlushICache();
+    raw_code.FlushICache();
   }
 
-  if (V8_UNLIKELY(profiler_data_ && v8_flags.turbo_profiling_verbose)) {
+  if (profiler_data_ && v8_flags.turbo_profiling_verbose) {
 #ifdef ENABLE_DISASSEMBLER
     std::ostringstream os;
-    instruction_stream->Disassemble(nullptr, os, isolate_);
+    code->Disassemble(nullptr, os, isolate_);
     if (!on_heap_profiler_data.is_null()) {
       Handle<String> disassembly =
           isolate_->factory()->NewStringFromAsciiChecked(os.str().c_str(),
@@ -255,13 +260,15 @@ MaybeHandle<Code> Factory::CodeBuilder::BuildInternal(
 }
 
 // TODO(victorgomes): Unify the two AllocateCodes
-MaybeHandle<InstructionStream> Factory::CodeBuilder::AllocateInstructionStream(
+MaybeHandle<Code> Factory::CodeBuilder::AllocateCode(
     bool retry_allocation_or_fail) {
   Heap* heap = isolate_->heap();
   HeapAllocator* allocator = heap->allocator();
   HeapObject result;
-  const AllocationType allocation_type = AllocationType::kCode;
-  const int object_size = InstructionStream::SizeFor(code_desc_.body_size());
+  AllocationType allocation_type = V8_EXTERNAL_CODE_SPACE_BOOL || is_executable_
+                                       ? AllocationType::kCode
+                                       : AllocationType::kReadOnly;
+  const int object_size = Code::SizeFor(code_desc_.body_size());
   if (retry_allocation_or_fail) {
     result = allocator->AllocateRawWith<HeapAllocator::kRetryOrFail>(
         object_size, allocation_type, AllocationOrigin::kRuntime);
@@ -269,42 +276,44 @@ MaybeHandle<InstructionStream> Factory::CodeBuilder::AllocateInstructionStream(
     result = allocator->AllocateRawWith<HeapAllocator::kLightRetry>(
         object_size, allocation_type, AllocationOrigin::kRuntime);
     // Return an empty handle if we cannot allocate the code object.
-    if (result.is_null()) return MaybeHandle<InstructionStream>();
+    if (result.is_null()) return MaybeHandle<Code>();
   }
 
   // The code object has not been fully initialized yet.  We rely on the
   // fact that no allocation will happen from this point on.
   DisallowGarbageCollection no_gc;
-  result.set_map_after_allocation(
-      *isolate_->factory()->instruction_stream_map(), SKIP_WRITE_BARRIER);
-  Handle<InstructionStream> code =
-      handle(InstructionStream::cast(result), isolate_);
-  DCHECK(IsAligned(code->address(), kCodeAlignment));
-  DCHECK_IMPLIES(
-      !V8_ENABLE_THIRD_PARTY_HEAP_BOOL && !heap->code_region().is_empty(),
-      heap->code_region().contains(code->address()));
+  result.set_map_after_allocation(*isolate_->factory()->code_map(),
+                                  SKIP_WRITE_BARRIER);
+  Handle<Code> code = handle(Code::cast(result), isolate_);
+  if (is_executable_) {
+    DCHECK(IsAligned(code->address(), kCodeAlignment));
+    DCHECK_IMPLIES(
+        !V8_ENABLE_THIRD_PARTY_HEAP_BOOL && !heap->code_region().is_empty(),
+        heap->code_region().contains(code->address()));
+  }
   return code;
 }
 
-MaybeHandle<InstructionStream>
-Factory::CodeBuilder::AllocateConcurrentSparkplugInstructionStream(
+MaybeHandle<Code> Factory::CodeBuilder::AllocateConcurrentSparkplugCode(
     bool retry_allocation_or_fail) {
   LocalHeap* heap = local_isolate_->heap();
-  const int object_size = InstructionStream::SizeFor(code_desc_.body_size());
+  AllocationType allocation_type = V8_EXTERNAL_CODE_SPACE_BOOL || is_executable_
+                                       ? AllocationType::kCode
+                                       : AllocationType::kReadOnly;
+  const int object_size = Code::SizeFor(code_desc_.body_size());
   HeapObject result;
-  if (!heap->AllocateRaw(object_size, AllocationType::kCode).To(&result)) {
-    return MaybeHandle<InstructionStream>();
+  if (!heap->AllocateRaw(object_size, allocation_type).To(&result)) {
+    return MaybeHandle<Code>();
   }
   CHECK(!result.is_null());
 
   // The code object has not been fully initialized yet.  We rely on the
   // fact that no allocation will happen from this point on.
   DisallowGarbageCollection no_gc;
-  result.set_map_after_allocation(
-      *local_isolate_->factory()->instruction_stream_map(), SKIP_WRITE_BARRIER);
-  Handle<InstructionStream> code =
-      handle(InstructionStream::cast(result), local_isolate_);
-  DCHECK(IsAligned(code->address(), kCodeAlignment));
+  result.set_map_after_allocation(*local_isolate_->factory()->code_map(),
+                                  SKIP_WRITE_BARRIER);
+  Handle<Code> code = handle(Code::cast(result), local_isolate_);
+  DCHECK_IMPLIES(is_executable_, IsAligned(code->address(), kCodeAlignment));
   return code;
 }
 
@@ -696,9 +705,7 @@ MaybeHandle<String> NewStringFromBytes(Isolate* isolate, PeekBytes peek_bytes,
                                        MessageTemplate message) {
   Decoder decoder(peek_bytes());
   if (decoder.is_invalid()) {
-    if (message != MessageTemplate::kNone) {
-      ThrowInvalidEncodedStringBytes(isolate, message);
-    }
+    ThrowInvalidEncodedStringBytes(isolate, message);
     return MaybeHandle<String>();
   }
 
@@ -748,9 +755,6 @@ MaybeHandle<String> NewStringFromUtf8Variant(Isolate* isolate,
       return NewStringFromBytes<StrictUtf8Decoder>(
           isolate, peek_bytes, allocation,
           MessageTemplate::kWasmTrapStringInvalidUtf8);
-    case unibrow::Utf8Variant::kUtf8NoTrap:
-      return NewStringFromBytes<StrictUtf8Decoder>(
-          isolate, peek_bytes, allocation, MessageTemplate::kNone);
     case unibrow::Utf8Variant::kWtf8:
       return NewStringFromBytes<Wtf8Decoder>(
           isolate, peek_bytes, allocation,
@@ -993,7 +997,7 @@ StringTransitionStrategy Factory::ComputeInternalizationStrategyForString(
   if (!internalized_map->is_null()) {
     return StringTransitionStrategy::kInPlace;
   }
-  if (InstanceTypeChecker::IsInternalizedString(map)) {
+  if (InstanceTypeChecker::IsInternalizedString(map.instance_type())) {
     return StringTransitionStrategy::kAlreadyTransitioned;
   }
   return StringTransitionStrategy::kCopy;
@@ -1666,7 +1670,7 @@ Handle<WasmInternalFunction> Factory::NewWasmInternalFunction(
 Handle<WasmJSFunctionData> Factory::NewWasmJSFunctionData(
     Address opt_call_target, Handle<JSReceiver> callable, int return_count,
     int parameter_count, Handle<PodArray<wasm::ValueType>> serialized_sig,
-    Handle<Code> wrapper_code, Handle<Map> rtt, wasm::Suspend suspend,
+    Handle<CodeT> wrapper_code, Handle<Map> rtt, wasm::Suspend suspend,
     wasm::Promise promise) {
   Handle<WasmApiFunctionRef> ref =
       NewWasmApiFunctionRef(callable, suspend, Handle<WasmInstanceObject>());
@@ -1699,7 +1703,7 @@ Handle<WasmResumeData> Factory::NewWasmResumeData(
 }
 
 Handle<WasmExportedFunctionData> Factory::NewWasmExportedFunctionData(
-    Handle<Code> export_wrapper, Handle<WasmInstanceObject> instance,
+    Handle<CodeT> export_wrapper, Handle<WasmInstanceObject> instance,
     Address call_target, Handle<Object> ref, int func_index,
     const wasm::FunctionSig* sig, uint32_t canonical_type_index,
     int wrapper_budget, Handle<Map> rtt, wasm::Promise promise) {
@@ -1718,9 +1722,12 @@ Handle<WasmExportedFunctionData> Factory::NewWasmExportedFunctionData(
   result.init_sig(isolate(), sig);
   result.set_canonical_type_index(canonical_type_index);
   result.set_wrapper_budget(wrapper_budget);
-  // We can't skip the write barrier because Code objects are not immovable.
-  result.set_c_wrapper_code(*BUILTIN_CODE(isolate(), Illegal),
-                            UPDATE_WRITE_BARRIER);
+  // We can't skip the write barrier when V8_EXTERNAL_CODE_SPACE is enabled
+  // because in this case the CodeT (CodeDataContainer) objects are not
+  // immovable.
+  result.set_c_wrapper_code(
+      *BUILTIN_CODE(isolate(), Illegal),
+      V8_EXTERNAL_CODE_SPACE_BOOL ? UPDATE_WRITE_BARRIER : SKIP_WRITE_BARRIER);
   result.set_packed_args_size(0);
   result.set_js_promise_flags(
       WasmFunctionData::SuspendField::encode(wasm::kNoSuspend) |
@@ -1730,7 +1737,7 @@ Handle<WasmExportedFunctionData> Factory::NewWasmExportedFunctionData(
 
 Handle<WasmCapiFunctionData> Factory::NewWasmCapiFunctionData(
     Address call_target, Handle<Foreign> embedder_data,
-    Handle<Code> wrapper_code, Handle<Map> rtt,
+    Handle<CodeT> wrapper_code, Handle<Map> rtt,
     Handle<PodArray<wasm::ValueType>> serialized_sig) {
   Handle<WasmApiFunctionRef> ref = NewWasmApiFunctionRef(
       Handle<JSReceiver>(), wasm::kNoSuspend, Handle<WasmInstanceObject>());
@@ -2478,24 +2485,76 @@ Handle<DeoptimizationLiteralArray> Factory::NewDeoptimizationLiteralArray(
       NewWeakFixedArray(length, AllocationType::kOld));
 }
 
-Handle<Code> Factory::NewOffHeapTrampolineFor(Handle<Code> code,
-                                              Address off_heap_entry) {
+Handle<CodeT> Factory::NewOffHeapTrampolineFor(Handle<CodeT> code,
+                                               Address off_heap_entry) {
   CHECK_NOT_NULL(isolate()->embedded_blob_code());
   CHECK_NE(0, isolate()->embedded_blob_code_size());
   CHECK(Builtins::IsIsolateIndependentBuiltin(*code));
 
+#ifdef V8_EXTERNAL_CODE_SPACE
   const int no_flags = 0;
-  Handle<Code> off_heap_trampoline = NewCode(no_flags, AllocationType::kOld);
+  Handle<CodeDataContainer> code_data_container =
+      NewCodeDataContainer(no_flags, AllocationType::kOld);
 
   const bool set_is_off_heap_trampoline = true;
-  off_heap_trampoline->initialize_flags(code->kind(), code->builtin_id(),
+  code_data_container->initialize_flags(code->kind(), code->builtin_id(),
                                         code->is_turbofanned(),
                                         set_is_off_heap_trampoline);
-  off_heap_trampoline->set_kind_specific_flags(
+  code_data_container->set_kind_specific_flags(
       code->kind_specific_flags(kRelaxedLoad), kRelaxedStore);
-  off_heap_trampoline->set_code_entry_point(isolate(),
+  code_data_container->set_code_entry_point(isolate(),
                                             code->code_entry_point());
-  return Handle<Code>::cast(off_heap_trampoline);
+  return Handle<CodeT>::cast(code_data_container);
+#else
+  bool generate_jump_to_instruction_stream =
+      Builtins::CodeObjectIsExecutable(code->builtin_id());
+  Handle<Code> result = Builtins::GenerateOffHeapTrampolineFor(
+      isolate(), off_heap_entry,
+      CodeDataContainerFromCodeT(*code).kind_specific_flags(kRelaxedLoad),
+      generate_jump_to_instruction_stream);
+
+  // Trampolines may not contain any metadata since all metadata offsets,
+  // stored on the Code object, refer to the off-heap metadata area.
+  CHECK_EQ(result->raw_metadata_size(), 0);
+
+  // The trampoline code object must inherit specific flags from the original
+  // builtin (e.g. the safepoint-table offset). We set them manually here.
+  {
+    DisallowGarbageCollection no_gc;
+    CodePageMemoryModificationScope code_allocation(*result);
+    Code raw_code = FromCodeT(*code);
+    Code raw_result = *result;
+
+    const bool set_is_off_heap_trampoline = true;
+    raw_result.initialize_flags(raw_code.kind(), raw_code.is_turbofanned(),
+                                raw_code.stack_slots(),
+                                set_is_off_heap_trampoline);
+    raw_result.set_builtin_id(raw_code.builtin_id());
+    raw_result.set_handler_table_offset(raw_code.handler_table_offset());
+    raw_result.set_constant_pool_offset(raw_code.constant_pool_offset());
+    raw_result.set_code_comments_offset(raw_code.code_comments_offset());
+    raw_result.set_unwinding_info_offset(raw_code.unwinding_info_offset());
+
+    // Replace the newly generated trampoline's RelocInfo ByteArray with the
+    // canonical one stored in the roots to avoid duplicating it for every
+    // single builtin.
+    ByteArray canonical_reloc_info =
+        generate_jump_to_instruction_stream
+            ? read_only_roots().off_heap_trampoline_relocation_info()
+            : read_only_roots().empty_byte_array();
+#ifdef DEBUG
+    // Verify that the contents are the same.
+    ByteArray reloc_info = raw_result.relocation_info();
+    DCHECK_EQ(reloc_info.length(), canonical_reloc_info.length());
+    for (int i = 0; i < reloc_info.length(); ++i) {
+      DCHECK_EQ(reloc_info.get(i), canonical_reloc_info.get(i));
+    }
+#endif
+    raw_result.set_relocation_info(canonical_reloc_info);
+  }
+
+  return ToCodeT(result, isolate());
+#endif  // V8_EXTERNAL_CODE_SPACE
 }
 
 Handle<BytecodeArray> Factory::CopyBytecodeArray(Handle<BytecodeArray> source) {
@@ -2645,7 +2704,7 @@ Handle<JSObject> Factory::NewJSObjectFromMap(
     Handle<AllocationSite> allocation_site) {
   // JSFunctions should be allocated using AllocateFunction to be
   // properly initialized.
-  DCHECK(!InstanceTypeChecker::IsJSFunction(*map));
+  DCHECK(!InstanceTypeChecker::IsJSFunction((map->instance_type())));
 
   // Both types of global objects should be allocated using
   // AllocateGlobalObject to be properly initialized.
@@ -3190,8 +3249,8 @@ MaybeHandle<JSBoundFunction> Factory::NewJSBoundFunction(
     Handle<JSReceiver> target_function, Handle<Object> bound_this,
     base::Vector<Handle<Object>> bound_args) {
   DCHECK(target_function->IsCallable());
-  static_assert(InstructionStream::kMaxArguments <= FixedArray::kMaxLength);
-  if (bound_args.length() >= InstructionStream::kMaxArguments) {
+  static_assert(Code::kMaxArguments <= FixedArray::kMaxLength);
+  if (bound_args.length() >= Code::kMaxArguments) {
     THROW_NEW_ERROR(isolate(),
                     NewRangeError(MessageTemplate::kTooManyArguments),
                     JSBoundFunction);
@@ -3358,13 +3417,13 @@ Handle<SharedFunctionInfo> Factory::NewSharedFunctionInfoForApiFunction(
 
 Handle<SharedFunctionInfo> Factory::NewSharedFunctionInfoForBuiltin(
     MaybeHandle<String> maybe_name, Builtin builtin, FunctionKind kind) {
-  Handle<SharedFunctionInfo> shared = NewSharedFunctionInfo(
-      maybe_name, MaybeHandle<InstructionStream>(), builtin, kind);
+  Handle<SharedFunctionInfo> shared =
+      NewSharedFunctionInfo(maybe_name, MaybeHandle<Code>(), builtin, kind);
   return shared;
 }
 
 Handle<SharedFunctionInfo> Factory::NewSharedFunctionInfoForWebSnapshot() {
-  return NewSharedFunctionInfo(empty_string(), MaybeHandle<InstructionStream>(),
+  return NewSharedFunctionInfo(empty_string(), MaybeHandle<Code>(),
                                Builtin::kNoBuiltinId,
                                FunctionKind::kNormalFunction);
 }
@@ -4035,7 +4094,7 @@ Handle<JSFunction> Factory::JSFunctionBuilder::Build() {
   PrepareMap();
   PrepareFeedbackCell();
 
-  Handle<Code> code = handle(sfi_->GetCode(), isolate_);
+  Handle<CodeT> code = handle(sfi_->GetCode(), isolate_);
   Handle<JSFunction> result = BuildRaw(code);
 
   if (code->kind() == CodeKind::BASELINE) {
@@ -4047,14 +4106,14 @@ Handle<JSFunction> Factory::JSFunctionBuilder::Build() {
   return result;
 }
 
-Handle<JSFunction> Factory::JSFunctionBuilder::BuildRaw(Handle<Code> code) {
+Handle<JSFunction> Factory::JSFunctionBuilder::BuildRaw(Handle<CodeT> code) {
   Isolate* isolate = isolate_;
   Factory* factory = isolate_->factory();
 
   Handle<Map> map = maybe_map_.ToHandleChecked();
   Handle<FeedbackCell> feedback_cell = maybe_feedback_cell_.ToHandleChecked();
 
-  DCHECK(InstanceTypeChecker::IsJSFunction(*map));
+  DCHECK(InstanceTypeChecker::IsJSFunction(map->instance_type()));
 
   // Allocation.
   JSFunction function = JSFunction::cast(factory->New(map, allocation_type_));

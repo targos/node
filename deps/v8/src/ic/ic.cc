@@ -1157,7 +1157,7 @@ MaybeObjectHandle LoadIC::ComputeHandler(LookupIterator* lookup) {
       UNREACHABLE();
   }
 
-  return MaybeObjectHandle(Handle<InstructionStream>::null());
+  return MaybeObjectHandle(Handle<Code>::null());
 }
 
 bool KeyedLoadIC::CanChangeToAllowOutOfBounds(Handle<Map> receiver_map) {

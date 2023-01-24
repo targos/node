@@ -319,25 +319,24 @@ V8_INLINE Token::Value Scanner::ScanIdentifierOrKeywordInner() {
 }
 
 V8_INLINE Token::Value Scanner::SkipWhiteSpace() {
-  if (!IsWhiteSpaceOrLineTerminator(c0_)) return Token::ILLEGAL;
+  int start_position = source_pos();
 
-  if (!next().after_line_terminator && unibrow::IsLineTerminator(c0_)) {
-    next().after_line_terminator = true;
-  }
+  // We won't skip behind the end of input.
+  DCHECK(!IsWhiteSpaceOrLineTerminator(kEndOfInput));
 
   // Advance as long as character is a WhiteSpace or LineTerminator.
-  base::uc32 hint = ' ';
-  AdvanceUntil([this, &hint](base::uc32 c0) {
-    if (V8_LIKELY(c0 == hint)) return false;
-    if (IsWhiteSpaceOrLineTerminator(c0)) {
-      if (!next().after_line_terminator && unibrow::IsLineTerminator(c0)) {
-        next().after_line_terminator = true;
-      }
-      hint = c0;
-      return false;
+  while (IsWhiteSpaceOrLineTerminator(c0_)) {
+    if (!next().after_line_terminator && unibrow::IsLineTerminator(c0_)) {
+      next().after_line_terminator = true;
     }
-    return true;
-  });
+    Advance();
+  }
+
+  // Return whether or not we skipped any characters.
+  if (source_pos() == start_position) {
+    DCHECK_NE('0', c0_);
+    return Token::ILLEGAL;
+  }
 
   return Token::WHITESPACE;
 }

@@ -658,15 +658,15 @@ void CodeGenerator::AssembleCodeStartRegisterCheck() {
 // jumps to the CompileLazyDeoptimizedCode builtin. In order to do this we need
 // to:
 //    1. read from memory the word that contains that bit, which can be found in
-//       the flags in the referenced {Code} object;
+//       the flags in the referenced {CodeDataContainer} object;
 //    2. test kMarkedForDeoptimizationBit in those flags; and
 //    3. if it is not zero then it jumps to the builtin.
 void CodeGenerator::BailoutIfDeoptimized() {
-  int offset = InstructionStream::kCodeOffset - InstructionStream::kHeaderSize;
+  int offset = Code::kCodeDataContainerOffset - Code::kHeaderSize;
   __ push(eax);  // Push eax so we can use it as a scratch register.
   __ mov(eax, Operand(kJavaScriptCallCodeStartRegister, offset));
-  __ test(FieldOperand(eax, Code::kKindSpecificFlagsOffset),
-          Immediate(1 << InstructionStream::kMarkedForDeoptimizationBit));
+  __ test(FieldOperand(eax, CodeDataContainer::kKindSpecificFlagsOffset),
+          Immediate(1 << Code::kMarkedForDeoptimizationBit));
   __ pop(eax);  // Restore eax.
 
   Label skip;
@@ -693,7 +693,8 @@ CodeGenerator::CodeGenResult CodeGenerator::AssembleArchInstruction(
         DCHECK_IMPLIES(
             instr->HasCallDescriptorFlag(CallDescriptor::kFixedTargetRegister),
             reg == kJavaScriptCallCodeStartRegister);
-        __ CallCodeObject(reg);
+        __ LoadCodeObjectEntry(reg, reg);
+        __ call(reg);
       }
       RecordCallPosition(instr);
       frame_access_state()->ClearSPDelta();
@@ -746,7 +747,8 @@ CodeGenerator::CodeGenResult CodeGenerator::AssembleArchInstruction(
         DCHECK_IMPLIES(
             instr->HasCallDescriptorFlag(CallDescriptor::kFixedTargetRegister),
             reg == kJavaScriptCallCodeStartRegister);
-        __ JumpCodeObject(reg);
+        __ LoadCodeObjectEntry(reg, reg);
+        __ jmp(reg);
       }
       frame_access_state()->ClearSPDelta();
       frame_access_state()->SetFrameAccessToDefault();
@@ -827,8 +829,7 @@ CodeGenerator::CodeGenResult CodeGenerator::AssembleArchInstruction(
         __ PushPC();
         int pc = __ pc_offset();
         __ pop(scratch);
-        __ sub(scratch,
-               Immediate(pc + InstructionStream::kHeaderSize - kHeapObjectTag));
+        __ sub(scratch, Immediate(pc + Code::kHeaderSize - kHeapObjectTag));
         __ add(scratch, Immediate::CodeRelativeOffset(&return_location));
         __ mov(MemOperand(ebp, WasmExitFrameConstants::kCallingPCOffset),
                scratch);
@@ -4295,10 +4296,10 @@ void CodeGenerator::PopTempStackSlots() {
   }
 }
 
-void CodeGenerator::MoveToTempLocation(InstructionOperand* source,
-                                       MachineRepresentation rep) {
+void CodeGenerator::MoveToTempLocation(InstructionOperand* source) {
   // Must be kept in sync with {MoveTempLocationTo}.
   DCHECK(!source->IsImmediate());
+  auto rep = LocationOperand::cast(source)->representation();
   if ((IsFloatingPoint(rep) &&
        !move_cycle_.pending_double_scratch_register_use)) {
     // The scratch double register is available.

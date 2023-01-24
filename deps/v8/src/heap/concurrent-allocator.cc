@@ -122,8 +122,7 @@ void ConcurrentAllocator::MarkLinearAllocationAreaBlack() {
     base::Optional<CodePageHeaderModificationScope> optional_rwx_write_scope;
     if (space_->identity() == CODE_SPACE) {
       optional_rwx_write_scope.emplace(
-          "Marking InstructionStream objects requires write access to the "
-          "Code page header");
+          "Marking Code objects requires write access to the Code page header");
     }
     Page::FromAllocationAreaAddress(top)->CreateBlackAreaBackground(top, limit);
   }
@@ -137,8 +136,7 @@ void ConcurrentAllocator::UnmarkLinearAllocationArea() {
     base::Optional<CodePageHeaderModificationScope> optional_rwx_write_scope;
     if (space_->identity() == CODE_SPACE) {
       optional_rwx_write_scope.emplace(
-          "Marking InstructionStream objects requires write access to the "
-          "Code page header");
+          "Marking Code objects requires write access to the Code page header");
     }
     Page::FromAllocationAreaAddress(top)->DestroyBlackAreaBackground(top,
                                                                      limit);

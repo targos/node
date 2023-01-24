@@ -157,8 +157,8 @@
 //     - DescriptorArray
 //     - PropertyCell
 //     - PropertyArray
-//     - InstructionStream
-//     - AbstractCode, a wrapper around InstructionStream or BytecodeArray
+//     - Code
+//     - AbstractCode, a wrapper around Code or BytecodeArray
 //     - Map
 //     - Foreign
 //     - SmallOrderedHashTable
@@ -316,18 +316,19 @@ class Object : public TaggedImpl<HeapObjectReferenceType::STRONG, Address> {
   HEAP_OBJECT_TYPE_LIST(IS_TYPE_FUNCTION_DECL)
   IS_TYPE_FUNCTION_DECL(HashTableBase)
   IS_TYPE_FUNCTION_DECL(SmallOrderedHashTable)
+  IS_TYPE_FUNCTION_DECL(CodeT)
 #undef IS_TYPE_FUNCTION_DECL
   V8_INLINE bool IsNumber(ReadOnlyRoots roots) const;
 
 // Oddball checks are faster when they are raw pointer comparisons, so the
 // isolate/read-only roots overloads should be preferred where possible.
-#define IS_TYPE_FUNCTION_DECL(Type, Value, _)           \
+#define IS_TYPE_FUNCTION_DECL(Type, Value)              \
   V8_INLINE bool Is##Type(Isolate* isolate) const;      \
   V8_INLINE bool Is##Type(LocalIsolate* isolate) const; \
   V8_INLINE bool Is##Type(ReadOnlyRoots roots) const;   \
   V8_INLINE bool Is##Type() const;
   ODDBALL_LIST(IS_TYPE_FUNCTION_DECL)
-  IS_TYPE_FUNCTION_DECL(NullOrUndefined, , /* unused */)
+  IS_TYPE_FUNCTION_DECL(NullOrUndefined, /* unused */)
 #undef IS_TYPE_FUNCTION_DECL
 
   V8_INLINE bool IsZero() const;
@@ -646,13 +647,11 @@ class Object : public TaggedImpl<HeapObjectReferenceType::STRONG, Address> {
   EXPORT_DECL_VERIFIER(Object)
 
 #ifdef VERIFY_HEAP
-  // Verify a pointer is a valid (non-InstructionStream) object pointer.
-  // When V8_EXTERNAL_CODE_SPACE is enabled InstructionStream objects are not
-  // allowed.
+  // Verify a pointer is a valid (non-Code) object pointer.
+  // When V8_EXTERNAL_CODE_SPACE is enabled Code objects are not allowed.
   static void VerifyPointer(Isolate* isolate, Object p);
   // Verify a pointer is a valid object pointer.
-  // InstructionStream objects are allowed regardless of the
-  // V8_EXTERNAL_CODE_SPACE mode.
+  // Code objects are allowed regardless of the V8_EXTERNAL_CODE_SPACE mode.
   static void VerifyAnyTagged(Isolate* isolate, Object p);
 #endif
 
@@ -692,8 +691,8 @@ class Object : public TaggedImpl<HeapObjectReferenceType::STRONG, Address> {
     }
   };
 
-  // For use with std::unordered_set/unordered_map when using both
-  // InstructionStream and non-InstructionStream objects as keys.
+  // For use with std::unordered_set/unordered_map when using both Code and
+  // non-Code objects as keys.
   struct KeyEqualSafe {
     bool operator()(const Object a, const Object b) const {
       return a.SafeEquals(b);

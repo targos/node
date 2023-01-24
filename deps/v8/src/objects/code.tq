@@ -26,4 +26,4 @@ extern class BytecodeArray extends FixedArrayBase {
   bytecode_age: uint16;
 }
 
-extern class Code extends HeapObject;
+extern class CodeDataContainer extends HeapObject;

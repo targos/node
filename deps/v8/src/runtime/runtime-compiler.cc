@@ -85,7 +85,7 @@ RUNTIME_FUNCTION(Runtime_InstallBaselineCode) {
                                             &is_compiled_scope);
   {
     DisallowGarbageCollection no_gc;
-    Code baseline_code = sfi->baseline_code(kAcquireLoad);
+    CodeT baseline_code = sfi->baseline_code(kAcquireLoad);
     function->set_code(baseline_code);
     if V8_LIKELY (!v8_flags.log_function_events) return baseline_code;
   }
@@ -126,8 +126,7 @@ RUNTIME_FUNCTION(Runtime_CompileOptimized) {
   }
 
   // As a pre- and post-condition of CompileOptimized, the function *must* be
-  // compiled, i.e. the installed InstructionStream object must not be
-  // CompileLazy.
+  // compiled, i.e. the installed Code object must not be CompileLazy.
   IsCompiledScope is_compiled_scope(function->shared(), isolate);
   DCHECK(is_compiled_scope.is_compiled());
 
@@ -251,8 +250,8 @@ bool DeoptExitIsInsideOsrLoop(Isolate* isolate, JSFunction function,
 
 bool TryGetOptimizedOsrCode(Isolate* isolate, FeedbackVector vector,
                             const interpreter::BytecodeArrayIterator& it,
-                            Code* code_out) {
-  base::Optional<Code> maybe_code =
+                            CodeT* code_out) {
+  base::Optional<CodeT> maybe_code =
       vector.GetOptimizedOsrCode(isolate, it.GetSlotOperand(2));
   if (maybe_code.has_value()) {
     *code_out = maybe_code.value();
@@ -290,8 +289,8 @@ void DeoptAllOsrLoopsContainingDeoptExit(Isolate* isolate, JSFunction function,
                                         deopt_exit_offset.ToInt());
 
   FeedbackVector vector = function.feedback_vector();
-  Code code;
-  base::SmallVector<Code, 8> osr_codes;
+  CodeT code;
+  base::SmallVector<CodeT, 8> osr_codes;
   // Visit before the first loop-with-deopt is found
   for (; !it.done(); it.Advance()) {
     // We're only interested in loop ranges.
@@ -369,7 +368,7 @@ RUNTIME_FUNCTION(Runtime_NotifyDeoptimized) {
   Handle<JSFunction> function = deoptimizer->function();
   // For OSR the optimized code isn't installed on the function, so get the
   // code object from deoptimizer.
-  Handle<InstructionStream> optimized_code = deoptimizer->compiled_code();
+  Handle<Code> optimized_code = deoptimizer->compiled_code();
   const DeoptimizeKind deopt_kind = deoptimizer->deopt_kind();
   const DeoptimizeReason deopt_reason =
       deoptimizer->GetDeoptInfo().deopt_reason;
@@ -396,8 +395,8 @@ RUNTIME_FUNCTION(Runtime_NotifyDeoptimized) {
     return ReadOnlyRoots(isolate).undefined_value();
   }
 
-  // Some eager deopts also don't invalidate InstructionStream (e.g. when
-  // preparing for OSR from Maglev to Turbofan).
+  // Some eager deopts also don't invalidate Code (e.g. when preparing for OSR
+  // from Maglev to Turbofan).
   if (IsDeoptimizationWithoutCodeInvalidation(deopt_reason)) {
     return ReadOnlyRoots(isolate).undefined_value();
   }
@@ -415,11 +414,11 @@ RUNTIME_FUNCTION(Runtime_NotifyDeoptimized) {
   // the loop should pay for the deoptimization costs.
   const BytecodeOffset osr_offset = optimized_code->osr_offset();
   if (osr_offset.IsNone()) {
-    Deoptimizer::DeoptimizeFunction(*function, ToCode(*optimized_code));
+    Deoptimizer::DeoptimizeFunction(*function, ToCodeT(*optimized_code));
     DeoptAllOsrLoopsContainingDeoptExit(isolate, *function, deopt_exit_offset);
   } else if (DeoptExitIsInsideOsrLoop(isolate, *function, deopt_exit_offset,
                                       osr_offset)) {
-    Deoptimizer::DeoptimizeFunction(*function, ToCode(*optimized_code));
+    Deoptimizer::DeoptimizeFunction(*function, ToCodeT(*optimized_code));
   }
 
   return ReadOnlyRoots(isolate).undefined_value();
@@ -461,9 +460,9 @@ void GetOsrOffsetAndFunctionForOSR(Isolate* isolate, BytecodeOffset* osr_offset,
   JavaScriptFrameIterator it(isolate);
   UnoptimizedFrame* frame = UnoptimizedFrame::cast(it.frame());
   DCHECK_IMPLIES(frame->is_interpreted(),
-                 frame->LookupCode().is_interpreter_trampoline_builtin());
+                 frame->LookupCodeT().is_interpreter_trampoline_builtin());
   DCHECK_IMPLIES(frame->is_baseline(),
-                 frame->LookupCode().kind() == CodeKind::BASELINE);
+                 frame->LookupCodeT().kind() == CodeKind::BASELINE);
 
   *osr_offset = BytecodeOffset(frame->GetBytecodeOffset());
   *function = handle(frame->function(), isolate);
@@ -480,7 +479,7 @@ Object CompileOptimizedOSR(Isolate* isolate, Handle<JSFunction> function,
           ? ConcurrencyMode::kConcurrent
           : ConcurrencyMode::kSynchronous;
 
-  Handle<Code> result;
+  Handle<CodeT> result;
   if (!Compiler::CompileOptimizedOSR(isolate, function, osr_offset, mode)
            .ToHandle(&result)) {
     // An empty result can mean one of two things:
@@ -546,7 +545,7 @@ RUNTIME_FUNCTION(Runtime_CompileOptimizedOSRFromMaglev) {
 
   JavaScriptFrameIterator it(isolate);
   MaglevFrame* frame = MaglevFrame::cast(it.frame());
-  DCHECK_EQ(frame->LookupCode().kind(), CodeKind::MAGLEV);
+  DCHECK_EQ(frame->LookupCodeT().kind(), CodeKind::MAGLEV);
   Handle<JSFunction> function = handle(frame->function(), isolate);
 
   // This path is only relevant for tests (all production configurations enable
@@ -565,8 +564,7 @@ RUNTIME_FUNCTION(Runtime_CompileOptimizedOSRFromMaglev) {
     //
     // We solve this synchronous OSR case by bailing out early to Ignition, and
     // letting it handle OSR. How do we trigger the early bailout? Returning
-    // any non-null InstructionStream from this function triggers the deopt in
-    // JumpLoop.
+    // any non-null Code from this function triggers the deopt in JumpLoop.
     return function->code();
   }
 

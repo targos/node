@@ -242,7 +242,7 @@ class WasmGCTester {
     NativeModule* native_module = instance_->module_object().native_module();
     Address wasm_call_target = instance_->GetCallTarget(function_index);
     Handle<Object> object_ref = instance_;
-    Handle<Code> c_wasm_entry =
+    Handle<CodeT> c_wasm_entry =
         compiler::CompileCWasmEntry(isolate_, sig, native_module->module());
     Execution::CallWasm(isolate_, c_wasm_entry, wasm_call_target, object_ref,
                         packer->argv());
@@ -2082,11 +2082,11 @@ WASM_COMPILED_EXEC_TEST(JsAccess) {
   FunctionSig sig_i_super(1, 1, kSupertypeToI);
 
   tester.DefineExportedFunction(
-      "typed_producer", &sig_t_v,
+      "disallowed", &sig_t_v,
       {WASM_STRUCT_NEW(type_index, WASM_I32V(42)), kExprEnd});
   // Same code, different signature.
   tester.DefineExportedFunction(
-      "untyped_producer", &sig_super_v,
+      "producer", &sig_super_v,
       {WASM_STRUCT_NEW(type_index, WASM_I32V(42)), kExprEnd});
   tester.DefineExportedFunction(
       "consumer", &sig_i_super,
@@ -2097,37 +2097,41 @@ WASM_COMPILED_EXEC_TEST(JsAccess) {
   tester.CompileModule();
   Isolate* isolate = tester.isolate();
   TryCatch try_catch(reinterpret_cast<v8::Isolate*>(isolate));
-  for (const char* producer : {"typed_producer", "untyped_producer"}) {
-    MaybeHandle<Object> maybe_result =
-        tester.CallExportedFunction(producer, 0, nullptr);
-    if (maybe_result.is_null()) {
-      FATAL("Calling %s failed: %s", producer,
-            *v8::String::Utf8Value(reinterpret_cast<v8::Isolate*>(isolate),
-                                   try_catch.Message()->Get()));
-    }
-    {
-      Handle<Object> args[] = {maybe_result.ToHandleChecked()};
-      maybe_result = tester.CallExportedFunction("consumer", 1, args);
-    }
-    if (maybe_result.is_null()) {
-      FATAL("Calling 'consumer' failed: %s",
-            *v8::String::Utf8Value(reinterpret_cast<v8::Isolate*>(isolate),
-                                   try_catch.Message()->Get()));
-    }
-    Handle<Object> result = maybe_result.ToHandleChecked();
-    CHECK(result->IsSmi());
-    CHECK_EQ(42, Smi::cast(*result).value());
-    // Calling {consumer} with any other object (e.g. the Smi we just got as
-    // {result}) should trap.
-    {
-      Handle<Object> args[] = {result};
-      maybe_result = tester.CallExportedFunction("consumer", 1, args);
-    }
-    CHECK(maybe_result.is_null());
-    CHECK(try_catch.HasCaught());
-    try_catch.Reset();
-    isolate->clear_pending_exception();
+  MaybeHandle<Object> maybe_result =
+      tester.CallExportedFunction("disallowed", 0, nullptr);
+  CHECK(maybe_result.is_null());
+  CHECK(try_catch.HasCaught());
+  try_catch.Reset();
+  isolate->clear_pending_exception();
+
+  maybe_result = tester.CallExportedFunction("producer", 0, nullptr);
+  if (maybe_result.is_null()) {
+    FATAL("Calling 'producer' failed: %s",
+          *v8::String::Utf8Value(reinterpret_cast<v8::Isolate*>(isolate),
+                                 try_catch.Message()->Get()));
   }
+  {
+    Handle<Object> args[] = {maybe_result.ToHandleChecked()};
+    maybe_result = tester.CallExportedFunction("consumer", 1, args);
+  }
+  if (maybe_result.is_null()) {
+    FATAL("Calling 'consumer' failed: %s",
+          *v8::String::Utf8Value(reinterpret_cast<v8::Isolate*>(isolate),
+                                 try_catch.Message()->Get()));
+  }
+  Handle<Object> result = maybe_result.ToHandleChecked();
+  CHECK(result->IsSmi());
+  CHECK_EQ(42, Smi::cast(*result).value());
+  // Calling {consumer} with any other object (e.g. the Smi we just got as
+  // {result}) should trap.
+  {
+    Handle<Object> args[] = {result};
+    maybe_result = tester.CallExportedFunction("consumer", 1, args);
+  }
+  CHECK(maybe_result.is_null());
+  CHECK(try_catch.HasCaught());
+  try_catch.Reset();
+  isolate->clear_pending_exception();
 }
 
 WASM_COMPILED_EXEC_TEST(WasmExternInternalize) {

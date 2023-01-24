@@ -39,7 +39,7 @@ extern runtime WasmArrayCopy(
 extern runtime WasmArrayNewSegment(
     Context, WasmInstanceObject, Smi, Smi, Smi, Map): Object;
 extern runtime WasmStringNewWtf8(
-    Context, WasmInstanceObject, Smi, Smi, Number, Number): String|Null;
+    Context, WasmInstanceObject, Smi, Smi, Number, Number): String;
 extern runtime WasmStringNewWtf8Array(
     Context, Smi, WasmArray, Smi, Smi): String;
 extern runtime WasmStringNewWtf16(
@@ -505,6 +505,7 @@ builtin WasmI64AtomicWait(
 // Type feedback collection support for `call_ref`.
 
 extern macro GetCodeEntry(Code): RawPtr;
+extern macro GetCodeEntry(CodeDataContainer): RawPtr;
 
 struct TargetAndInstance {
   target: RawPtr;
@@ -803,7 +804,7 @@ transitioning javascript builtin ExperimentalWasmConvertStringToArray(
 }
 
 builtin WasmStringNewWtf8(
-    offset: uint32, size: uint32, memory: Smi, utf8Variant: Smi): String|Null {
+    offset: uint32, size: uint32, memory: Smi, utf8Variant: Smi): String {
   const instance = LoadInstanceFromFrame();
   tail runtime::WasmStringNewWtf8(
       LoadContextFromInstance(instance), instance, memory, utf8Variant,

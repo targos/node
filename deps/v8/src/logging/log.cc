@@ -799,9 +799,8 @@ void JitLogger::LogRecordedBuffer(Handle<AbstractCode> code,
   JitCodeEvent event;
   event.type = JitCodeEvent::CODE_ADDED;
   event.code_start = reinterpret_cast<void*>(code->InstructionStart(cage_base));
-  event.code_type = code->IsInstructionStream(cage_base)
-                        ? JitCodeEvent::JIT_CODE
-                        : JitCodeEvent::BYTE_CODE;
+  event.code_type = code->IsCode(cage_base) ? JitCodeEvent::JIT_CODE
+                                            : JitCodeEvent::BYTE_CODE;
   event.code_len = code->InstructionSize(cage_base);
   Handle<SharedFunctionInfo> shared;
   if (maybe_shared.ToHandle(&shared) &&
@@ -873,9 +872,8 @@ void JitLogger::CodeMoveEvent(AbstractCode from, AbstractCode to) {
   PtrComprCageBase cage_base(isolate_);
   JitCodeEvent event;
   event.type = JitCodeEvent::CODE_MOVED;
-  event.code_type = from.IsInstructionStream(cage_base)
-                        ? JitCodeEvent::JIT_CODE
-                        : JitCodeEvent::BYTE_CODE;
+  event.code_type =
+      from.IsCode(cage_base) ? JitCodeEvent::JIT_CODE : JitCodeEvent::BYTE_CODE;
   event.code_start = reinterpret_cast<void*>(from.InstructionStart(cage_base));
   event.code_len = from.InstructionSize(cage_base);
   event.new_code_start =
@@ -1327,7 +1325,7 @@ void V8FileLogger::LogSourceCodeInformation(Handle<AbstractCode> code,
   if (hasInlined) {
     PodArray<InliningPosition> inlining_positions =
         DeoptimizationData::cast(
-            Handle<InstructionStream>::cast(code)->deoptimization_data())
+            Handle<Code>::cast(code)->deoptimization_data())
             .InliningPositions();
     for (int i = 0; i < inlining_positions.length(); i++) {
       InliningPosition inlining_pos = inlining_positions.get(i);
@@ -1348,7 +1346,7 @@ void V8FileLogger::LogSourceCodeInformation(Handle<AbstractCode> code,
   msg << V8FileLogger::kNext;
   if (hasInlined) {
     DeoptimizationData deopt_data = DeoptimizationData::cast(
-        Handle<InstructionStream>::cast(code)->deoptimization_data());
+        Handle<Code>::cast(code)->deoptimization_data());
     msg << std::hex;
     for (int i = 0; i <= maxInlinedId; i++) {
       msg << "S"
@@ -1370,13 +1368,14 @@ void V8FileLogger::LogCodeDisassemble(Handle<AbstractCode> code) {
       << V8FileLogger::kNext;
   {
     std::ostringstream stream;
-    if (code->IsInstructionStream(cage_base)) {
-#ifdef ENABLE_DISASSEMBLER
-      InstructionStream::cast(*code).Disassemble(nullptr, stream, isolate_);
-#endif
-    } else if (code->IsCode(cage_base)) {
+    if (code->IsCode(cage_base)) {
 #ifdef ENABLE_DISASSEMBLER
       Code::cast(*code).Disassemble(nullptr, stream, isolate_);
+#endif
+    } else if (V8_EXTERNAL_CODE_SPACE_BOOL &&
+               code->IsCodeDataContainer(cage_base)) {
+#ifdef ENABLE_DISASSEMBLER
+      CodeT::cast(*code).Disassemble(nullptr, stream, isolate_);
 #endif
     } else {
       BytecodeArray::cast(*code).Disassemble(stream);
@@ -1572,9 +1571,8 @@ void V8FileLogger::CodeDisableOptEvent(Handle<AbstractCode> code,
   msg.WriteToLogFile();
 }
 
-void V8FileLogger::ProcessDeoptEvent(Handle<InstructionStream> code,
-                                     SourcePosition position, const char* kind,
-                                     const char* reason) {
+void V8FileLogger::ProcessDeoptEvent(Handle<Code> code, SourcePosition position,
+                                     const char* kind, const char* reason) {
   MSG_BUILDER();
   msg << Event::kCodeDeopt << kNext << Time() << kNext << code->CodeSize()
       << kNext << reinterpret_cast<void*>(code->InstructionStart());
@@ -1595,16 +1593,15 @@ void V8FileLogger::ProcessDeoptEvent(Handle<InstructionStream> code,
   msg.WriteToLogFile();
 }
 
-void V8FileLogger::CodeDeoptEvent(Handle<InstructionStream> code,
-                                  DeoptimizeKind kind, Address pc,
-                                  int fp_to_sp_delta) {
+void V8FileLogger::CodeDeoptEvent(Handle<Code> code, DeoptimizeKind kind,
+                                  Address pc, int fp_to_sp_delta) {
   if (!is_logging() || !v8_flags.log_deopt) return;
   Deoptimizer::DeoptInfo info = Deoptimizer::GetDeoptInfo(*code, pc);
   ProcessDeoptEvent(code, info.position, Deoptimizer::MessageFor(kind),
                     DeoptimizeReasonToString(info.deopt_reason));
 }
 
-void V8FileLogger::CodeDependencyChangeEvent(Handle<InstructionStream> code,
+void V8FileLogger::CodeDependencyChangeEvent(Handle<Code> code,
                                              Handle<SharedFunctionInfo> sfi,
                                              const char* reason) {
   if (!is_logging() || !v8_flags.log_deopt) return;
@@ -1958,8 +1955,9 @@ EnumerateCompiledFunctions(Heap* heap) {
       // only on a type feedback vector. We should make this mroe precise.
       if (function.HasAttachedOptimizedCode() &&
           Script::cast(function.shared().script()).HasValidSource()) {
+        // TODO(v8:13261): use ToAbstractCode() here.
         record(function.shared(),
-               AbstractCode::cast(FromCode(function.code())));
+               AbstractCode::cast(FromCodeT(function.code())));
       }
     }
   }
@@ -2337,12 +2335,20 @@ void ExistingCodeLogger::LogCodeObjects() {
   for (HeapObject obj = iterator.Next(); !obj.is_null();
        obj = iterator.Next()) {
     InstanceType instance_type = obj.map(cage_base).instance_type();
-    // AbstactCode is InstructionStream|Code|BytecodeArray but we
-    // want to log code objects only once, thus we ignore InstructionStream
-    // objects which will be logged via corresponding Code.
-    if (InstanceTypeChecker::IsCode(instance_type) ||
-        InstanceTypeChecker::IsBytecodeArray(instance_type)) {
-      LogCodeObject(AbstractCode::cast(obj));
+    if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+      // In this case AbstactCode is Code|CodeDataContainer|BytecodeArray but
+      // we want to log code objects only once, thus we ignore Code objects
+      // which will be logged via corresponding CodeDataContainer.
+      if (InstanceTypeChecker::IsCodeT(instance_type) ||
+          InstanceTypeChecker::IsBytecodeArray(instance_type)) {
+        LogCodeObject(AbstractCode::cast(obj));
+      }
+    } else {
+      // In this case AbstactCode is Code|BytecodeArray.
+      if (InstanceTypeChecker::IsCode(instance_type) ||
+          InstanceTypeChecker::IsBytecodeArray(instance_type)) {
+        LogCodeObject(AbstractCode::cast(obj));
+      }
     }
   }
 }
@@ -2350,7 +2356,7 @@ void ExistingCodeLogger::LogCodeObjects() {
 void ExistingCodeLogger::LogBuiltins() {
   DCHECK(isolate_->builtins()->is_initialized());
   // The main "copy" of used builtins are logged by LogCodeObjects() while
-  // iterating Code objects.
+  // iterating CodeT objects.
   // TODO(v8:11880): Log other copies of remapped builtins once we
   // decide to remap them multiple times into the code range (for example
   // for arm64).
@@ -2371,26 +2377,25 @@ void ExistingCodeLogger::LogCompiledFunctions(
       SharedFunctionInfo::EnsureSourcePositionsAvailable(isolate_, shared);
     }
     if (shared->HasInterpreterData()) {
+      // TODO(v8:13261): use ToAbstractCode() here.
       LogExistingFunction(
           shared,
           Handle<AbstractCode>(
-              AbstractCode::cast(FromCode(shared->InterpreterTrampoline())),
+              AbstractCode::cast(FromCodeT(shared->InterpreterTrampoline())),
               isolate_));
     }
     if (shared->HasBaselineCode()) {
-      LogExistingFunction(
-          shared,
-          Handle<AbstractCode>(
-              AbstractCode::cast(FromCode(shared->baseline_code(kAcquireLoad))),
-              isolate_));
+      // TODO(v8:13261): use ToAbstractCode() here.
+      LogExistingFunction(shared, Handle<AbstractCode>(
+                                      AbstractCode::cast(FromCodeT(
+                                          shared->baseline_code(kAcquireLoad))),
+                                      isolate_));
     }
-    // Can't use .is_identical_to() because AbstractCode might be both
-    // InstructionStream and non-InstructionStream object and regular tagged
-    // comparison or compressed values might not be correct.
-    if (*pair.second ==
-        AbstractCode::cast(*BUILTIN_CODE(isolate_, CompileLazy))) {
+    // Can't use .is_identical_to() because AbstractCode might be both Code and
+    // non-Code object and regular tagged comparison or compressed values might
+    // not be correct when V8_EXTERNAL_CODE_SPACE is enabled.
+    if (*pair.second == ToAbstractCode(*BUILTIN_CODE(isolate_, CompileLazy)))
       continue;
-    }
     LogExistingFunction(pair.first, pair.second);
   }
 

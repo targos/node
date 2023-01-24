@@ -72,26 +72,26 @@ class RawMachineAssemblerTester : public HandleAndZoneScope,
 
   void GenerateCode() { Generate(); }
 
-  Handle<InstructionStream> GetInstructionStream() {
-    return handle(GetCode()->instruction_stream(), main_isolate());
-  }
-
   Handle<Code> GetCode() {
     Generate();
     return code_.ToHandleChecked();
   }
 
+  Handle<CodeT> GetCodeT() { return ToCodeT(GetCode(), main_isolate()); }
+
  protected:
   Address Generate() override {
     if (code_.is_null()) {
-      Schedule* schedule = ExportForTest();
+      Schedule* schedule = this->ExportForTest();
+      auto call_descriptor = this->call_descriptor();
+      Graph* graph = this->graph();
       OptimizedCompilationInfo info(base::ArrayVector("testing"), main_zone(),
                                     kind_);
       code_ = Pipeline::GenerateCodeForTesting(
-          &info, main_isolate(), call_descriptor(), graph(),
+          &info, main_isolate(), call_descriptor, graph,
           AssemblerOptions::Default(main_isolate()), schedule);
     }
-    return code_.ToHandleChecked()->entry();
+    return this->code_.ToHandleChecked()->entry();
   }
 
  private:

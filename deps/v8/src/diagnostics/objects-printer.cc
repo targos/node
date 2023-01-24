@@ -210,11 +210,11 @@ void HeapObject::HeapObjectPrint(std::ostream& os) {
       WasmExceptionPackage::cast(*this).WasmExceptionPackagePrint(os);
       break;
 #endif  // V8_ENABLE_WEBASSEMBLY
-    case INSTRUCTION_STREAM_TYPE:
-      InstructionStream::cast(*this).InstructionStreamPrint(os);
-      break;
     case CODE_TYPE:
       Code::cast(*this).CodePrint(os);
+      break;
+    case CODE_DATA_CONTAINER_TYPE:
+      CodeDataContainer::cast(*this).CodeDataContainerPrint(os);
       break;
     case JS_SET_KEY_VALUE_ITERATOR_TYPE:
     case JS_SET_VALUE_ITERATOR_TYPE:
@@ -321,7 +321,7 @@ bool JSObject::PrintProperties(std::ostream& os) {
       PropertyDetails details = descs.GetDetails(i);
       switch (details.location()) {
         case PropertyLocation::kField: {
-          FieldIndex field_index = FieldIndex::ForDetails(map(), details);
+          FieldIndex field_index = FieldIndex::ForDescriptor(map(), i);
           os << Brief(RawFastPropertyAt(field_index));
           break;
         }
@@ -1792,9 +1792,10 @@ void PropertyCell::PropertyCellPrint(std::ostream& os) {
   os << "\n";
 }
 
-void InstructionStream::InstructionStreamPrint(std::ostream& os) {
-  PrintHeader(os, "InstructionStream");
-  os << "\n - code: " << Brief(code(kAcquireLoad));
+void Code::CodePrint(std::ostream& os) {
+  PrintHeader(os, "Code");
+  os << "\n - code_data_container: "
+     << Brief(code_data_container(kAcquireLoad));
   if (is_builtin()) {
     os << "\n - builtin_id: " << Builtins::name(builtin_id());
   }
@@ -1804,16 +1805,18 @@ void InstructionStream::InstructionStreamPrint(std::ostream& os) {
 #endif
 }
 
-void Code::CodePrint(std::ostream& os) {
-  PrintHeader(os, "Code");
+void CodeDataContainer::CodeDataContainerPrint(std::ostream& os) {
+  PrintHeader(os, "CodeDataContainer");
+#ifdef V8_EXTERNAL_CODE_SPACE
   os << "\n - kind: " << CodeKindToString(kind());
   if (is_builtin()) {
     os << "\n - builtin: " << Builtins::name(builtin_id());
   }
   os << "\n - is_off_heap_trampoline: " << is_off_heap_trampoline();
-  os << "\n - instruction_stream: " << Brief(raw_instruction_stream());
+  os << "\n - code: " << Brief(raw_code());
   os << "\n - code_entry_point: "
      << reinterpret_cast<void*>(code_entry_point());
+#endif  // V8_EXTERNAL_CODE_SPACE
   os << "\n - kind_specific_flags: " << kind_specific_flags(kRelaxedLoad);
   os << "\n";
 }
@@ -3046,18 +3049,17 @@ V8_EXPORT_PRIVATE extern void _v8_internal_Print_Code(void* object) {
 
 #ifdef ENABLE_DISASSEMBLER
   i::StdoutStream os;
-  if (lookup_result.IsCode()) {
-    i::Code code = i::Code::cast(lookup_result.code());
+  if (lookup_result.IsCodeDataContainer()) {
+    i::CodeT code = i::CodeT::cast(lookup_result.code_data_container());
     code.Disassemble(nullptr, os, isolate, address);
   } else {
-    lookup_result.instruction_stream().Disassemble(nullptr, os, isolate,
-                                                   address);
+    lookup_result.code().Disassemble(nullptr, os, isolate, address);
   }
 #else   // ENABLE_DISASSEMBLER
-  if (lookup_result.IsCode()) {
-    lookup_result.code().Print();
+  if (lookup_result.IsCodeDataContainer()) {
+    lookup_result.code_data_container().Print();
   } else {
-    lookup_result.instruction_stream().Print();
+    lookup_result.code().Print();
   }
 #endif  // ENABLE_DISASSEMBLER
 }

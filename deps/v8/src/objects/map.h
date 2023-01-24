@@ -38,8 +38,8 @@ enum InstanceType : uint16_t;
   V(BytecodeArray)                      \
   V(CallHandlerInfo)                    \
   V(Cell)                               \
-  V(InstructionStream)                  \
   V(Code)                               \
+  V(CodeDataContainer)                  \
   V(DataHandler)                        \
   V(EmbedderDataArray)                  \
   V(EphemeronHashTable)                 \

@@ -595,8 +595,7 @@ CodePageCollectionMemoryModificationScope::
 }
 
 #ifdef V8_ENABLE_THIRD_PARTY_HEAP
-CodePageMemoryModificationScope::CodePageMemoryModificationScope(
-    InstructionStream code)
+CodePageMemoryModificationScope::CodePageMemoryModificationScope(Code code)
     :
 #if V8_HEAP_USE_PTHREAD_JIT_WRITE_PROTECT || V8_HEAP_USE_PKU_JIT_WRITE_PROTECT
       rwx_write_scope_("A part of CodePageMemoryModificationScope"),
@@ -605,8 +604,7 @@ CodePageMemoryModificationScope::CodePageMemoryModificationScope(
       scope_active_(false) {
 }
 #else
-CodePageMemoryModificationScope::CodePageMemoryModificationScope(
-    InstructionStream code)
+CodePageMemoryModificationScope::CodePageMemoryModificationScope(Code code)
     : CodePageMemoryModificationScope(BasicMemoryChunk::FromHeapObject(code)) {}
 #endif
 

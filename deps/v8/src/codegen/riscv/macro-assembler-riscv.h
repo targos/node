@@ -273,29 +273,16 @@ class V8_EXPORT_PRIVATE TurboAssembler : public TurboAssemblerBase {
     return rmode != RelocInfo::EXTERNAL_REFERENCE;
   }
   void PatchAndJump(Address target);
-  void Jump(Handle<CodeDataContainer> code, RelocInfo::Mode rmode, COND_ARGS);
+  void Jump(Handle<Code> code, RelocInfo::Mode rmode, COND_ARGS);
   void Jump(const ExternalReference& reference);
   void Call(Register target, COND_ARGS);
   void Call(Address target, RelocInfo::Mode rmode, COND_ARGS);
-  void Call(Handle<CodeDataContainer> code,
-            RelocInfo::Mode rmode = RelocInfo::CODE_TARGET, COND_ARGS);
+  void Call(Handle<Code> code, RelocInfo::Mode rmode = RelocInfo::CODE_TARGET,
+            COND_ARGS);
   void Call(Label* target);
   void LoadAddress(
       Register dst, Label* target,
       RelocInfo::Mode rmode = RelocInfo::INTERNAL_REFERENCE_ENCODED);
-
-  // Load the code entry point from the CodeDataContainer object.
-  void LoadCodeDataContainerEntry(Register destination,
-                                  Register code_data_container_object);
-  // Load code entry point from the CodeDataContainer object and compute
-  // Code object pointer out of it. Must not be used for CodeDataContainers
-  // corresponding to builtins, because their entry points values point to
-  // the embedded instruction stream in .text section.
-  void LoadCodeDataContainerCodeNonBuiltin(Register destination,
-                                           Register code_data_container_object);
-  void CallCodeDataContainerObject(Register code_data_container_object);
-  void JumpCodeDataContainerObject(Register code_data_container_object,
-                                   JumpMode jump_mode = JumpMode::kJump);
 
   // Load the builtin given by the Smi in |builtin| into the same
   // register.
@@ -305,6 +292,11 @@ class V8_EXPORT_PRIVATE TurboAssembler : public TurboAssemblerBase {
   void CallBuiltinByIndex(Register builtin);
   void CallBuiltin(Builtin builtin);
   void TailCallBuiltin(Builtin builtin);
+
+  void LoadCodeObjectEntry(Register destination, Register code_object);
+  void CallCodeObject(Register code_object);
+  void JumpCodeObject(Register code_object,
+                      JumpMode jump_mode = JumpMode::kJump);
 
   // Generates an instruction sequence s.t. the return address points to the
   // instruction following the call.
@@ -1376,7 +1368,7 @@ class V8_EXPORT_PRIVATE MacroAssembler : public TurboAssembler {
 
   // Tiering support.
   void AssertFeedbackVector(Register object,
-                            Register scratch) NOOP_UNLESS_DEBUG_CODE;
+                            Register scratch) NOOP_UNLESS_DEBUG_CODE
   void ReplaceClosureCodeWithOptimizedCode(Register optimized_code,
                                            Register closure);
   void GenerateTailCallToReturnedCode(Runtime::FunctionId function_id);
@@ -1483,9 +1475,8 @@ class V8_EXPORT_PRIVATE MacroAssembler : public TurboAssembler {
                                        ArgumentsCountType type,
                                        ArgumentsCountMode mode,
                                        Register scratch = no_reg);
-  void JumpIfCodeDataContainerIsMarkedForDeoptimization(
-      Register code_data_container, Register scratch,
-      Label* if_marked_for_deoptimization);
+  void JumpIfCodeTIsMarkedForDeoptimization(
+      Register codet, Register scratch, Label* if_marked_for_deoptimization);
   Operand ClearedValue() const;
 
   // Jump if the register contains a non-smi.

@@ -22,7 +22,8 @@ void StaticRootsTableGen::write(Isolate* isolate, const char* file) {
   static_assert(static_cast<int>(RootIndex::kFirstReadOnlyRoot) == 0);
 
   std::ofstream out(file);
-  const auto ro_roots = ReadOnlyRoots(isolate);
+  const auto roots = isolate->roots_table();
+  const auto size = static_cast<int>(RootIndex::kReadOnlyRootsCount);
 
   out << "// Copyright 2022 the V8 project authors. All rights reserved.\n"
       << "// Use of this source code is governed by a BSD-style license "
@@ -52,48 +53,28 @@ void StaticRootsTableGen::write(Isolate* isolate, const char* file) {
       << "namespace v8 {\n"
       << "namespace internal {\n"
       << "\n"
-      << "struct StaticReadOnlyRoot {\n";
-
-  // Output a symbol for every root. Ordered by ptr to make it easier to see the
-  // memory layout of the read only page.
-  const auto size = static_cast<int>(RootIndex::kReadOnlyRootsCount);
-  {
-    std::map<Tagged_t, std::list<std::string>> sorted_roots;
-#define ADD_ROOT(_, value, CamelName)                                    \
-  {                                                                      \
-    Tagged_t ptr =                                                       \
-        V8HeapCompressionScheme::CompressTagged(ro_roots.value().ptr()); \
-    sorted_roots[ptr].push_back(#CamelName);                             \
+      << "struct kStaticReadOnlyRoot {\n";
+  RootIndex pos = RootIndex::kFirstReadOnlyRoot;
+  for (; pos <= RootIndex::kLastReadOnlyRoot; ++pos) {
+    auto el = roots[pos];
+    auto n = roots.name(pos);
+    el = V8HeapCompressionScheme::CompressTagged(el);
+    out << "  static constexpr Tagged_t " << n << " =";
+    if (strlen(n) + 38 > 80) out << "\n     ";
+    out << " " << reinterpret_cast<void*>(el) << ";\n";
   }
-    READ_ONLY_ROOT_LIST(ADD_ROOT)
-#undef ADD_ROOT
-
-    for (auto& entry : sorted_roots) {
-      Tagged_t ptr = entry.first;
-      std::list<std::string>& names = entry.second;
-
-      for (std::string& name : names) {
-        out << "  static constexpr Tagged_t k" << name << " =";
-        if (name.length() + 39 > 80) out << "\n     ";
-        out << " " << reinterpret_cast<void*>(ptr) << ";\n";
-      }
-    }
-  }
-
-  out << "};\n";
-
-  // Output in order of roots table
-  out << "\nstatic constexpr std::array<Tagged_t, " << size
+  out << "};\n"
+      << "\nstatic constexpr std::array<Tagged_t, " << size
       << "> StaticReadOnlyRootsPointerTable = {\n";
-
-  {
-#define ENTRY(_1, _2, CamelName) \
-  { out << "    StaticReadOnlyRoot::k" << #CamelName << ",\n"; }
-    READ_ONLY_ROOT_LIST(ENTRY)
-#undef ENTRY
-    out << "};\n";
+  pos = RootIndex::kFirstReadOnlyRoot;
+  for (; pos <= RootIndex::kLastReadOnlyRoot; ++pos) {
+    auto el = roots[pos];
+    auto n = roots.name(pos);
+    el = V8HeapCompressionScheme::CompressTagged(el);
+    out << "    kStaticReadOnlyRoot::" << n << ",\n";
   }
-
+  out << "};\n";
+  CHECK_EQ(static_cast<int>(pos), size);
   out << "\n}  // namespace internal\n"
       << "}  // namespace v8\n"
       << "#endif  // V8_STATIC_ROOTS_BOOL\n"

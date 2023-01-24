@@ -39,10 +39,6 @@ class FixedArrayBuilder {
   explicit FixedArrayBuilder(Isolate* isolate, int initial_capacity);
   explicit FixedArrayBuilder(Handle<FixedArray> backing_store);
 
-  // Creates a FixedArrayBuilder which allocates its backing store lazily when
-  // EnsureCapacity is called.
-  static FixedArrayBuilder Lazy(Isolate* isolate);
-
   bool HasCapacity(int elements);
   void EnsureCapacity(Isolate* isolate, int elements);
 
@@ -55,9 +51,9 @@ class FixedArrayBuilder {
 
   int capacity();
 
- private:
-  explicit FixedArrayBuilder(Isolate* isolate);
+  Handle<JSArray> ToJSArray(Handle<JSArray> target_array);
 
+ private:
   Handle<FixedArray> array_;
   int length_;
   bool has_non_smi_elements_;

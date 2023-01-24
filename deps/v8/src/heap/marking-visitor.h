@@ -43,7 +43,7 @@ class MarkingVisitorBase : public HeapVisitor<int, ConcreteVisitor> {
                      WeakObjects::Local* local_weak_objects, Heap* heap,
                      unsigned mark_compact_epoch,
                      base::EnumSet<CodeFlushMode> code_flush_mode,
-                     bool trace_embedder_fields,
+                     bool is_embedder_tracing_enabled,
                      bool should_keep_ages_unchanged)
       : HeapVisitor<int, ConcreteVisitor>(heap),
         local_marking_worklists_(local_marking_worklists),
@@ -51,7 +51,7 @@ class MarkingVisitorBase : public HeapVisitor<int, ConcreteVisitor> {
         heap_(heap),
         mark_compact_epoch_(mark_compact_epoch),
         code_flush_mode_(code_flush_mode),
-        trace_embedder_fields_(trace_embedder_fields),
+        is_embedder_tracing_enabled_(is_embedder_tracing_enabled),
         should_keep_ages_unchanged_(should_keep_ages_unchanged),
         should_mark_shared_heap_(heap->ShouldMarkSharedHeap())
 #ifdef V8_ENABLE_SANDBOX
@@ -101,10 +101,8 @@ class MarkingVisitorBase : public HeapVisitor<int, ConcreteVisitor> {
   V8_INLINE void VisitCodePointer(HeapObject host, CodeObjectSlot slot) final {
     VisitCodePointerImpl(host, slot);
   }
-  V8_INLINE void VisitEmbeddedPointer(InstructionStream host,
-                                      RelocInfo* rinfo) final;
-  V8_INLINE void VisitCodeTarget(InstructionStream host,
-                                 RelocInfo* rinfo) final;
+  V8_INLINE void VisitEmbeddedPointer(Code host, RelocInfo* rinfo) final;
+  V8_INLINE void VisitCodeTarget(Code host, RelocInfo* rinfo) final;
   void VisitCustomWeakPointers(HeapObject host, ObjectSlot start,
                                ObjectSlot end) final {
     // Weak list pointers should be ignored during marking. The lists are
@@ -191,7 +189,7 @@ class MarkingVisitorBase : public HeapVisitor<int, ConcreteVisitor> {
   Heap* const heap_;
   const unsigned mark_compact_epoch_;
   const base::EnumSet<CodeFlushMode> code_flush_mode_;
-  const bool trace_embedder_fields_;
+  const bool is_embedder_tracing_enabled_;
   const bool should_keep_ages_unchanged_;
   const bool should_mark_shared_heap_;
 #ifdef V8_ENABLE_SANDBOX
@@ -220,9 +218,9 @@ class YoungGenerationMarkingVisitorBase
   V8_INLINE void VisitCodePointer(HeapObject host,
                                   CodeObjectSlot slot) override {
     CHECK(V8_EXTERNAL_CODE_SPACE_BOOL);
-    // InstructionStream slots never appear in new space because
-    // Code objects, the only object that can contain code pointers, are
-    // always allocated in the old space.
+    // Code slots never appear in new space because CodeDataContainers, the
+    // only object that can contain code pointers, are always allocated in
+    // the old space.
     UNREACHABLE();
   }
 
@@ -234,15 +232,13 @@ class YoungGenerationMarkingVisitorBase
     VisitPointerImpl(host, slot);
   }
 
-  V8_INLINE void VisitCodeTarget(InstructionStream host,
-                                 RelocInfo* rinfo) final {
-    // InstructionStream objects are not expected in new space.
+  V8_INLINE void VisitCodeTarget(Code host, RelocInfo* rinfo) final {
+    // Code objects are not expected in new space.
     UNREACHABLE();
   }
 
-  V8_INLINE void VisitEmbeddedPointer(InstructionStream host,
-                                      RelocInfo* rinfo) final {
-    // InstructionStream objects are not expected in new space.
+  V8_INLINE void VisitEmbeddedPointer(Code host, RelocInfo* rinfo) final {
+    // Code objects are not expected in new space.
     UNREACHABLE();
   }
 

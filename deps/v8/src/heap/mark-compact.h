@@ -191,11 +191,11 @@ class MainMarkingVisitor final
                      WeakObjects::Local* local_weak_objects, Heap* heap,
                      unsigned mark_compact_epoch,
                      base::EnumSet<CodeFlushMode> code_flush_mode,
-                     bool trace_embedder_fields,
+                     bool embedder_tracing_enabled,
                      bool should_keep_ages_unchanged)
       : MarkingVisitorBase<MainMarkingVisitor<MarkingState>, MarkingState>(
             local_marking_worklists, local_weak_objects, heap,
-            mark_compact_epoch, code_flush_mode, trace_embedder_fields,
+            mark_compact_epoch, code_flush_mode, embedder_tracing_enabled,
             should_keep_ages_unchanged),
         marking_state_(marking_state) {}
 
@@ -216,8 +216,7 @@ class MainMarkingVisitor final
   template <typename TSlot>
   void RecordSlot(HeapObject object, TSlot slot, HeapObject target);
 
-  void RecordRelocSlot(InstructionStream host, RelocInfo* rinfo,
-                       HeapObject target);
+  void RecordRelocSlot(Code host, RelocInfo* rinfo, HeapObject target);
 
   MarkingState* marking_state() { return marking_state_; }
 
@@ -264,7 +263,7 @@ class CollectorBase {
 
   MarkingWorklists* marking_worklists() { return &marking_worklists_; }
 
-  MarkingWorklists::Local* local_marking_worklists() const {
+  MarkingWorklists::Local* local_marking_worklists() {
     return local_marking_worklists_.get();
   }
 
@@ -300,8 +299,6 @@ class CollectorBase {
   void StartSweepSpace(PagedSpace* space);
   void StartSweepNewSpace();
   void SweepLargeSpace(LargeObjectSpace* space);
-
-  bool IsCppHeapMarkingFinished() const;
 
   Heap* heap_;
   GarbageCollector garbage_collector_;
@@ -392,14 +389,12 @@ class MarkCompactCollector final : public CollectorBase {
 
   static V8_EXPORT_PRIVATE bool IsMapOrForwarded(Map map);
 
-  static bool ShouldRecordRelocSlot(InstructionStream host, RelocInfo* rinfo,
+  static bool ShouldRecordRelocSlot(Code host, RelocInfo* rinfo,
                                     HeapObject target);
-  static RecordRelocSlotInfo ProcessRelocInfo(InstructionStream host,
-                                              RelocInfo* rinfo,
+  static RecordRelocSlotInfo ProcessRelocInfo(Code host, RelocInfo* rinfo,
                                               HeapObject target);
 
-  static void RecordRelocSlot(InstructionStream host, RelocInfo* rinfo,
-                              HeapObject target);
+  static void RecordRelocSlot(Code host, RelocInfo* rinfo, HeapObject target);
   V8_INLINE static void RecordSlot(HeapObject object, ObjectSlot slot,
                                    HeapObject target);
   V8_INLINE static void RecordSlot(HeapObject object, HeapObjectSlot slot,
@@ -503,10 +498,6 @@ class MarkCompactCollector final : public CollectorBase {
   // heaps.
   void MarkObjectsFromClientHeaps();
   void MarkObjectsFromClientHeap(Isolate* client);
-
-  // Mark the entry in the external pointer table for the given isolates
-  // WaiterQueueNode.
-  void MarkWaiterQueueNode(Isolate* isolate);
 
   // Updates pointers to shared objects from client heaps.
   void UpdatePointersInClientHeaps();

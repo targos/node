@@ -84,7 +84,7 @@ type string constexpr 'const char*';
 type RawPtr generates 'TNode<RawPtrT>' constexpr 'void*';
 type ExternalPointer
     generates 'TNode<ExternalPointerT>' constexpr 'ExternalPointer_t';
-type InstructionStream extends HeapObject generates 'TNode<InstructionStream>';
+type Code extends HeapObject generates 'TNode<Code>';
 type BuiltinPtr extends Smi generates 'TNode<BuiltinPtr>';
 type Context extends HeapObject generates 'TNode<Context>';
 type NativeContext extends Context;

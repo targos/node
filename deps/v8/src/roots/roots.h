@@ -71,7 +71,7 @@ class Symbol;
   V(Map, one_byte_internalized_string_map, OneByteInternalizedStringMap)       \
   V(Map, scope_info_map, ScopeInfoMap)                                         \
   V(Map, shared_function_info_map, SharedFunctionInfoMap)                      \
-  V(Map, instruction_stream_map, InstructionStreamMap)                         \
+  V(Map, code_map, CodeMap)                                                    \
   V(Map, cell_map, CellMap)                                                    \
   V(Map, global_property_cell_map, GlobalPropertyCellMap)                      \
   V(Map, foreign_map, ForeignMap)                                              \
@@ -99,7 +99,7 @@ class Symbol;
   V(Map, bigint_map, BigIntMap)                                                \
   V(Map, object_boilerplate_description_map, ObjectBoilerplateDescriptionMap)  \
   V(Map, bytecode_array_map, BytecodeArrayMap)                                 \
-  V(Map, code_map, CodeMap)                                                    \
+  V(Map, code_data_container_map, CodeDataContainerMap)                        \
   V(Map, coverage_info_map, CoverageInfoMap)                                   \
   V(Map, fixed_double_array_map, FixedDoubleArrayMap)                          \
   V(Map, global_dictionary_map, GlobalDictionaryMap)                           \
@@ -218,6 +218,13 @@ class Symbol;
   V(HeapObject, self_reference_marker, SelfReferenceMarker)                    \
   /* Marker for basic-block usage counters array during code-generation */     \
   V(Oddball, basic_block_counters_marker, BasicBlockCountersMarker)            \
+  /* Canonical off-heap trampoline data */                                     \
+  V(ByteArray, off_heap_trampoline_relocation_info,                            \
+    OffHeapTrampolineRelocationInfo)                                           \
+  V(HeapObject, trampoline_trivial_code_data_container,                        \
+    TrampolineTrivialCodeDataContainer)                                        \
+  V(HeapObject, trampoline_promise_rejection_code_data_container,              \
+    TrampolinePromiseRejectionCodeDataContainer)                               \
   /* Canonical scope infos */                                                  \
   V(ScopeInfo, global_this_binding_scope_info, GlobalThisBindingScopeInfo)     \
   V(ScopeInfo, empty_function_scope_info, EmptyFunctionScopeInfo)              \
@@ -604,7 +611,7 @@ class ReadOnlyRoots {
       static_cast<size_t>(RootIndex::kReadOnlyRootsCount);
 
   V8_INLINE explicit ReadOnlyRoots(Heap* heap);
-  V8_INLINE explicit ReadOnlyRoots(const Isolate* isolate);
+  V8_INLINE explicit ReadOnlyRoots(Isolate* isolate);
   V8_INLINE explicit ReadOnlyRoots(LocalIsolate* isolate);
 
   // For `v8_enable_map_packing=true`, this will return a packed (also untagged)

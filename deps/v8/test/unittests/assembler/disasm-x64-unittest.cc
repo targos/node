@@ -49,7 +49,7 @@ using DisasmX64Test = TestWithIsolate;
 
 namespace {
 
-Handle<Code> CreateDummyCode(Isolate* isolate) {
+Handle<CodeT> CreateDummyCode(Isolate* isolate) {
   i::byte buffer[128];
   Assembler assm(AssemblerOptions{},
                  ExternalAssemblerBuffer(buffer, sizeof(buffer)));
@@ -59,7 +59,7 @@ Handle<Code> CreateDummyCode(Isolate* isolate) {
   assm.GetCode(isolate, &desc);
   Handle<Code> code =
       Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
-  return code;
+  return ToCodeT(code, isolate);
 }
 
 }  // namespace
@@ -82,7 +82,7 @@ TEST_F(DisasmX64Test, DisasmX64) {
   __ bind(&L2);
   __ call(rcx);
   __ nop();
-  Handle<Code> ic = CreateDummyCode(isolate());
+  Handle<CodeT> ic = CreateDummyCode(isolate());
   __ call(ic, RelocInfo::CODE_TARGET);
   __ nop();
 

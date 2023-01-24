@@ -56,10 +56,7 @@ namespace compiler {
   V(X64Word64AtomicOrUint64)                               \
   V(X64Word64AtomicXorUint64)                              \
   V(X64Word64AtomicExchangeUint64)                         \
-  V(X64Word64AtomicCompareExchangeUint64)                  \
-  V(X64Movdqu256)                                          \
-  V(X64S256Load32Splat)                                    \
-  V(X64S256Load64Splat)
+  V(X64Word64AtomicCompareExchangeUint64)
 
 #define TARGET_ARCH_OPCODE_LIST(V)                   \
   TARGET_ARCH_OPCODE_WITH_MEMORY_ACCESS_MODE_LIST(V) \
@@ -416,9 +413,7 @@ namespace compiler {
   V(X64Blendvpd)                                     \
   V(X64Blendvps)                                     \
   V(X64Pblendvb)                                     \
-  V(X64TraceInstruction)                             \
-  V(X64F32x8Add)                                     \
-  V(X64F32x8Sub)
+  V(X64TraceInstruction)
 
 // Addressing modes represent the "shape" of inputs to an instruction.
 // Many instructions support multiple addressing modes. Addressing modes

@@ -169,8 +169,8 @@ static constexpr StoreType GetStoreType(WasmOpcode opcode) {
 
 // Decoder error with explicit PC and format arguments.
 template <typename ValidationTag, typename... Args>
-V8_NOINLINE V8_PRESERVE_MOST void DecodeError(Decoder* decoder, const byte* pc,
-                                              const char* str, Args&&... args) {
+void DecodeError(Decoder* decoder, const byte* pc, const char* str,
+                 Args&&... args) {
   if constexpr (!ValidationTag::validate) UNREACHABLE();
   static_assert(sizeof...(Args) > 0);
   if constexpr (ValidationTag::full_validation) {
@@ -182,8 +182,7 @@ V8_NOINLINE V8_PRESERVE_MOST void DecodeError(Decoder* decoder, const byte* pc,
 
 // Decoder error with explicit PC and no format arguments.
 template <typename ValidationTag>
-V8_NOINLINE V8_PRESERVE_MOST void DecodeError(Decoder* decoder, const byte* pc,
-                                              const char* str) {
+void DecodeError(Decoder* decoder, const byte* pc, const char* str) {
   if constexpr (!ValidationTag::validate) UNREACHABLE();
   if constexpr (ValidationTag::full_validation) {
     decoder->error(pc, str);
@@ -194,8 +193,7 @@ V8_NOINLINE V8_PRESERVE_MOST void DecodeError(Decoder* decoder, const byte* pc,
 
 // Decoder error without explicit PC, but with format arguments.
 template <typename ValidationTag, typename... Args>
-V8_NOINLINE V8_PRESERVE_MOST void DecodeError(Decoder* decoder, const char* str,
-                                              Args&&... args) {
+void DecodeError(Decoder* decoder, const char* str, Args&&... args) {
   if constexpr (!ValidationTag::validate) UNREACHABLE();
   static_assert(sizeof...(Args) > 0);
   if constexpr (ValidationTag::full_validation) {
@@ -207,8 +205,7 @@ V8_NOINLINE V8_PRESERVE_MOST void DecodeError(Decoder* decoder, const char* str,
 
 // Decoder error without explicit PC and without format arguments.
 template <typename ValidationTag>
-V8_NOINLINE V8_PRESERVE_MOST void DecodeError(Decoder* decoder,
-                                              const char* str) {
+void DecodeError(Decoder* decoder, const char* str) {
   if constexpr (!ValidationTag::validate) UNREACHABLE();
   if constexpr (ValidationTag::full_validation) {
     decoder->error(str);
@@ -1264,7 +1261,7 @@ class FastZoneVector {
   }
 
  private:
-  V8_NOINLINE V8_PRESERVE_MOST void Grow(int slots_needed, Zone* zone) {
+  V8_NOINLINE void Grow(int slots_needed, Zone* zone) {
     size_t new_capacity = std::max(
         size_t{8}, base::bits::RoundUpToPowerOfTwo(size() + slots_needed));
     CHECK_GE(kMaxUInt32, new_capacity);
@@ -1417,7 +1414,7 @@ class WasmDecoder : public Decoder {
   // Shorthand that forwards to the {DecodeError} functions above, passing our
   // {ValidationTag}.
   template <typename... Args>
-  V8_INLINE void DecodeError(Args... args) {
+  void DecodeError(Args... args) {
     wasm::DecodeError<ValidationTag>(this, std::forward<Args>(args)...);
   }
 
@@ -1492,7 +1489,7 @@ class WasmDecoder : public Decoder {
     }
     imm.global = &module_->globals[imm.index];
 
-    if constexpr (decoding_mode == kConstantExpression) {
+    if (decoding_mode == kConstantExpression) {
       if (!VALIDATE(!imm.global->mutability)) {
         this->DecodeError(pc,
                           "mutable globals cannot be used in constant "
@@ -2243,7 +2240,6 @@ class WasmDecoder : public Decoder {
           case kExprArrayLen:
             return length;
           case kExprStringNewUtf8:
-          case kExprStringNewUtf8Try:
           case kExprStringNewLossyUtf8:
           case kExprStringNewWtf8:
           case kExprStringEncodeUtf8:
@@ -2494,7 +2490,6 @@ class WasmDecoder : public Decoder {
           case kExprStringViewIterNext:
             return { 1, 1 };
           case kExprStringNewUtf8:
-          case kExprStringNewUtf8Try:
           case kExprStringNewLossyUtf8:
           case kExprStringNewWtf8:
           case kExprStringNewWtf16:
@@ -2782,7 +2777,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
       control_.emplace_back(kControlBlock, kStackDepth, kInitStackDepth,
                             this->pc_, kReachable);
       Control* c = &control_.back();
-      if constexpr (decoding_mode == kFunctionBody) {
+      if (decoding_mode == kFunctionBody) {
         InitMerge(&c->start_merge, 0, [](uint32_t) -> Value { UNREACHABLE(); });
         InitMerge(&c->end_merge,
                   static_cast<uint32_t>(this->sig_->return_count()),
@@ -3035,7 +3030,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
 
 #define BUILD_SIMPLE_OPCODE(op, _, sig, ...)                \
   DECODE(op) {                                              \
-    if constexpr (decoding_mode == kConstantExpression) {   \
+    if (decoding_mode == kConstantExpression) {             \
       if (!VALIDATE(this->enabled_.has_extended_const())) { \
         NonConstError(this, kExpr##op);                     \
         return 0;                                           \
@@ -3322,7 +3317,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
 
   DECODE(End) {
     DCHECK(!control_.empty());
-    if constexpr (decoding_mode == kFunctionBody) {
+    if (decoding_mode == kFunctionBody) {
       Control* c = &control_.back();
       if (c->is_incomplete_try()) {
         // Catch-less try, fall through to the implicit catch-all.
@@ -3896,13 +3891,13 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
   // Hence just list all implementations explicitly here, which also gives more
   // freedom to use the same implementation for different opcodes.
 #define DECODE_IMPL(opcode) DECODE_IMPL2(kExpr##opcode, opcode)
-#define DECODE_IMPL2(opcode, name)                        \
-  if (idx == opcode) {                                    \
-    if constexpr (decoding_mode == kConstantExpression) { \
-      return &WasmFullDecoder::NonConstError;             \
-    } else {                                              \
-      return &WasmFullDecoder::Decode##name;              \
-    }                                                     \
+#define DECODE_IMPL2(opcode, name)              \
+  if (idx == opcode) {                          \
+    if (decoding_mode == kConstantExpression) { \
+      return &WasmFullDecoder::NonConstError;   \
+    } else {                                    \
+      return &WasmFullDecoder::Decode##name;    \
+    }                                           \
   }
 #define DECODE_IMPL_CONST(opcode) DECODE_IMPL_CONST2(kExpr##opcode, opcode)
 #define DECODE_IMPL_CONST2(opcode, name) \
@@ -4180,9 +4175,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
     ValueType index_type = this->module_->is_memory64 ? kWasmI64 : kWasmI32;
     Value index = Peek(0, 0, index_type);
     Value result = CreateValue(kWasmS128);
-    uintptr_t op_size =
-        transform == LoadTransformationKind::kExtend ? 8 : type.size();
-    if (V8_LIKELY(!CheckStaticallyOutOfBounds(op_size, imm.offset))) {
+    if (V8_LIKELY(!CheckStaticallyOutOfBounds(type.size(), imm.offset))) {
       CALL_INTERFACE_IF_OK_AND_REACHABLE(LoadTransform, type, transform, imm,
                                          index, &result);
     }
@@ -4305,7 +4298,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
   }
 
   uint32_t DecodeSimdOpcode(WasmOpcode opcode, uint32_t opcode_length) {
-    if constexpr (decoding_mode == kConstantExpression) {
+    if (decoding_mode == kConstantExpression) {
       // Currently, only s128.const is allowed in constant expressions.
       if (opcode != kExprS128Const) {
         this->DecodeError("opcode %s is not allowed in constant expressions",
@@ -4474,7 +4467,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
   }
 
 #define NON_CONST_ONLY                                                    \
-  if constexpr (decoding_mode == kConstantExpression) {                   \
+  if (decoding_mode == kConstantExpression) {                             \
     this->DecodeError("opcode %s is not allowed in constant expressions", \
                       this->SafeOpcodeNameAt(this->pc()));                \
     return 0;                                                             \
@@ -5723,14 +5716,12 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
   int DecodeStringNewWtf8(unibrow::Utf8Variant variant,
                           uint32_t opcode_length) {
     NON_CONST_ONLY
-    bool null_on_invalid = variant == unibrow::Utf8Variant::kUtf8NoTrap;
     MemoryIndexImmediate memory(this, this->pc_ + opcode_length, validate);
     if (!this->Validate(this->pc_ + opcode_length, memory)) return 0;
     ValueType addr_type = this->module_->is_memory64 ? kWasmI64 : kWasmI32;
     Value offset = Peek(1, 0, addr_type);
     Value size = Peek(0, 1, kWasmI32);
-    Value result = CreateValue(ValueType::RefMaybeNull(
-        HeapType::kString, null_on_invalid ? kNullable : kNonNullable));
+    Value result = CreateValue(ValueType::Ref(HeapType::kString));
     CALL_INTERFACE_IF_OK_AND_REACHABLE(StringNewWtf8, memory, variant, offset,
                                        size, &result);
     Drop(2);
@@ -5826,9 +5817,6 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
     switch (opcode) {
       case kExprStringNewUtf8:
         return DecodeStringNewWtf8(unibrow::Utf8Variant::kUtf8, opcode_length);
-      case kExprStringNewUtf8Try:
-        return DecodeStringNewWtf8(unibrow::Utf8Variant::kUtf8NoTrap,
-                                   opcode_length);
       case kExprStringNewLossyUtf8:
         return DecodeStringNewWtf8(unibrow::Utf8Variant::kLossyUtf8,
                                    opcode_length);
@@ -6341,7 +6329,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
   }
 
   void PushMergeValues(Control* c, Merge<Value>* merge) {
-    if constexpr (decoding_mode == kConstantExpression) return;
+    if (decoding_mode == kConstantExpression) return;
     DCHECK_EQ(c, &control_.back());
     DCHECK(merge == &c->start_merge || merge == &c->end_merge);
     stack_.shrink_to(c->stack_depth);
@@ -6544,7 +6532,7 @@ class WasmFullDecoder : public WasmDecoder<ValidationTag, decoding_mode> {
     for (int i = arity - 1, depth = drop_values; i >= 0; --i, ++depth) {
       Peek(depth, i, (*merge)[i].type);
     }
-    if constexpr (push_branch_values) {
+    if (push_branch_values) {
       uint32_t inserted_value_count =
           static_cast<uint32_t>(EnsureStackArguments(drop_values + arity));
       if (inserted_value_count > 0) {

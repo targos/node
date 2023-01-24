@@ -79,9 +79,10 @@ if (simdSupported) {
     ],
   });
 }
+const functionIdx = {};
 
 for (const [name, code] of Object.entries(testCases)) {
-  builder.addFunction(name, makeSig([], []))
+  functionIdx[name] = builder.addFunction(name, makeSig([], []))
   .exportFunc()
   .addBody([
     // Some call that allocates a feedback vector.
@@ -95,7 +96,7 @@ for (const [name, code] of Object.entries(testCases)) {
     // allocation of this slot can be skipped. However, this should be treated
     // consistently between liftoff and turbofan.
     kExprCallFunction, callee.index,
-  ]);
+  ]).index;
 }
 
 const instance = builder.instantiate();
@@ -109,11 +110,11 @@ function run(fct) {
   }
 }
 
-for (const [name, code] of Object.entries(testCases)) {
+for (const [name, index] of Object.entries(functionIdx)) {
   print(`Test ${name}`);
   // Create feedback vectors in liftoff compilation.
   for (let i = 0; i < 5; ++i) run(instance.exports[name]);
   // Force turbofan compilation.
-  %WasmTierUpFunction(instance.exports[name]);
+  %WasmTierUpFunction(instance, index);
   run(instance.exports[name]);
 }

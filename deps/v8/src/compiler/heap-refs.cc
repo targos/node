@@ -71,8 +71,7 @@ bool IsReadOnlyHeapObjectForCompiler(PtrComprCageBase cage_base,
   // TODO(jgruber): Remove this compiler-specific predicate and use the plain
   // heap predicate instead. This would involve removing the special cases for
   // builtins.
-  return (object.IsInstructionStream(cage_base) &&
-          InstructionStream::cast(object).is_builtin()) ||
+  return (object.IsCode(cage_base) && Code::cast(object).is_builtin()) ||
          ReadOnlyHeap::Contains(object);
 }
 
@@ -1048,6 +1047,22 @@ ObjectData* JSHeapBroker::TryGetOrCreateData(Handle<Object> object,
   }
 HEAP_BROKER_OBJECT_LIST(DEFINE_IS_AND_AS)
 #undef DEFINE_IS_AND_AS
+
+bool ObjectRef::IsCodeT() const {
+#ifdef V8_EXTERNAL_CODE_SPACE
+  return IsCodeDataContainer();
+#else
+  return IsCode();
+#endif
+}
+
+CodeTRef ObjectRef::AsCodeT() const {
+#ifdef V8_EXTERNAL_CODE_SPACE
+  return AsCodeDataContainer();
+#else
+  return AsCode();
+#endif
+}
 
 bool ObjectRef::IsSmi() const { return data()->is_smi(); }
 
@@ -2201,8 +2216,8 @@ BIMODAL_ACCESSOR(JSFunction, SharedFunctionInfo, shared)
 #undef JSFUNCTION_BIMODAL_ACCESSOR_WITH_DEP
 #undef JSFUNCTION_BIMODAL_ACCESSOR_WITH_DEP_C
 
-CodeRef JSFunctionRef::code() const {
-  Code code = object()->code(kAcquireLoad);
+CodeTRef JSFunctionRef::code() const {
+  CodeT code = object()->code(kAcquireLoad);
   return MakeRefAssumeMemoryFence(broker(), code);
 }
 
@@ -2287,7 +2302,7 @@ std::ostream& operator<<(std::ostream& os, const ObjectRef& ref) {
 
 namespace {
 
-unsigned GetInlinedBytecodeSizeImpl(InstructionStream code) {
+unsigned GetInlinedBytecodeSizeImpl(Code code) {
   unsigned value = code.inlined_bytecode_size();
   if (value > 0) {
     // Don't report inlined bytecode size if the code object was already
@@ -2299,20 +2314,24 @@ unsigned GetInlinedBytecodeSizeImpl(InstructionStream code) {
 
 }  // namespace
 
-unsigned InstructionStreamRef::GetInlinedBytecodeSize() const {
+unsigned CodeRef::GetInlinedBytecodeSize() const {
   return GetInlinedBytecodeSizeImpl(*object());
 }
 
-unsigned CodeRef::GetInlinedBytecodeSize() const {
-  Code code = *object();
-  if (code.is_off_heap_trampoline()) {
+unsigned CodeDataContainerRef::GetInlinedBytecodeSize() const {
+#ifdef V8_EXTERNAL_CODE_SPACE
+  CodeDataContainer codet = *object();
+  if (codet.is_off_heap_trampoline()) {
     return 0;
   }
 
-  // Safe to do a relaxed conversion to InstructionStream here since
-  // Code::instruction_stream field is modified only by GC and the
-  // Code was acquire-loaded.
-  return GetInlinedBytecodeSizeImpl(code.instruction_stream(kRelaxedLoad));
+  // Safe to do a relaxed conversion to Code here since CodeT::code field is
+  // modified only by GC and the CodeT was acquire-loaded.
+  Code code = codet.code(kRelaxedLoad);
+  return GetInlinedBytecodeSizeImpl(code);
+#else
+  UNREACHABLE();
+#endif  // V8_EXTERNAL_CODE_SPACE
 }
 
 #undef BIMODAL_ACCESSOR

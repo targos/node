@@ -1306,17 +1306,16 @@ PipelineCompilationJob::Status PipelineCompilationJob::FinalizeJobImpl(
 
 void PipelineCompilationJob::RegisterWeakObjectsInOptimizedCode(
     Isolate* isolate, Handle<NativeContext> context, Handle<Code> code) {
-  Handle<InstructionStream> istream(code->instruction_stream(), isolate);
   std::vector<Handle<Map>> maps;
   DCHECK(code->is_optimized_code());
   {
     DisallowGarbageCollection no_gc;
     PtrComprCageBase cage_base(isolate);
     int const mode_mask = RelocInfo::EmbeddedObjectModeMask();
-    for (RelocIterator it(*istream, mode_mask); !it.done(); it.next()) {
+    for (RelocIterator it(*code, mode_mask); !it.done(); it.next()) {
       DCHECK(RelocInfo::IsEmbeddedObjectMode(it.rinfo()->rmode()));
       HeapObject target_object = it.rinfo()->target_object(cage_base);
-      if (istream->IsWeakObjectInOptimizedCode(target_object)) {
+      if (code->IsWeakObjectInOptimizedCode(target_object)) {
         if (target_object.IsMap(cage_base)) {
           maps.push_back(handle(Map::cast(target_object), isolate));
         }
@@ -2488,8 +2487,8 @@ struct InstructionSelectionPhase {
 struct BitcastElisionPhase {
   DECL_PIPELINE_PHASE_CONSTANTS(BitcastElision)
 
-  void Run(PipelineData* data, Zone* temp_zone, bool is_builtin) {
-    BitcastElider bitcast_optimizer(temp_zone, data->graph(), is_builtin);
+  void Run(PipelineData* data, Zone* temp_zone) {
+    BitcastElider bitcast_optimizer(temp_zone, data->graph());
     bitcast_optimizer.Reduce();
   }
 };
@@ -3765,9 +3764,9 @@ MaybeHandle<Code> Pipeline::GenerateCodeForTesting(
   {
     LocalIsolateScope local_isolate_scope(data.broker(), info,
                                           isolate->main_thread_local_isolate());
-    if (!pipeline.CreateGraph()) return {};
+    if (!pipeline.CreateGraph()) return MaybeHandle<Code>();
     // We selectively Unpark inside OptimizeGraph.
-    if (!pipeline.OptimizeGraph(&linkage)) return {};
+    if (!pipeline.OptimizeGraph(&linkage)) return MaybeHandle<Code>();
 
     pipeline.AssembleCode(&linkage);
   }
@@ -3787,7 +3786,7 @@ MaybeHandle<Code> Pipeline::GenerateCodeForTesting(
     if (!will_retire_broker) *out_broker = data.ReleaseBroker();
     return code;
   }
-  return {};
+  return MaybeHandle<Code>();
 }
 
 // static
@@ -3828,7 +3827,7 @@ MaybeHandle<Code> Pipeline::GenerateCodeForTesting(
       pipeline.CommitDependencies(code)) {
     return code;
   }
-  return {};
+  return MaybeHandle<Code>();
 }
 
 // static
@@ -3931,7 +3930,9 @@ bool PipelineImpl::SelectInstructions(Linkage* linkage) {
                               data->debug_name(), &temp_zone);
   }
 
-  Run<BitcastElisionPhase>(Builtins::IsBuiltinId(data->info()->builtin()));
+  if (Builtins::IsBuiltinId(data->info()->builtin())) {
+    Run<BitcastElisionPhase>();
+  }
 
   data->InitializeInstructionSequence(call_descriptor);
 

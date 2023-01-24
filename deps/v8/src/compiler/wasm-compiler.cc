@@ -3030,9 +3030,17 @@ Node* WasmGraphBuilder::BuildCallRef(const wasm::FunctionSig* sig,
     Node* wrapper_code = gasm_->LoadImmutableFromObject(
         MachineType::TaggedPointer(), function,
         wasm::ObjectAccess::ToTagged(WasmInternalFunction::kCodeOffset));
-    Node* call_target = gasm_->LoadFromObject(
-        MachineType::Pointer(), wrapper_code,
-        wasm::ObjectAccess::ToTagged(Code::kCodeEntryPointOffset));
+    Node* call_target;
+    if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+      call_target =
+          gasm_->LoadFromObject(MachineType::Pointer(), wrapper_code,
+                                wasm::ObjectAccess::ToTagged(
+                                    CodeDataContainer::kCodeEntryPointOffset));
+    } else {
+      call_target = gasm_->IntAdd(
+          wrapper_code, gasm_->IntPtrConstant(
+                            wasm::ObjectAccess::ToTagged(Code::kHeaderSize)));
+    }
     gasm_->Goto(&end_label, call_target);
   }
 
@@ -5414,15 +5422,13 @@ Node* WasmGraphBuilder::ArrayNew(uint32_t array_index,
     gasm_->Goto(&loop, Int32Constant(0));
   }
   gasm_->Bind(&loop);
+  if (initial_value == nullptr) initial_value = DefaultValue(element_type);
   {
     Node* index = loop.PhiAt(0);
     Node* check = gasm_->UintLessThan(index, length);
     gasm_->GotoIfNot(check, &done);
-    gasm_->ArraySet(
-        a, index,
-        initial_value != nullptr ? initial_value : DefaultValue(element_type),
-        type);
-    index = gasm_->Int32Add(index, Int32Constant(1));
+    gasm_->ArraySet(a, index, initial_value, type);
+    index = gasm_->IntAdd(index, Int32Constant(1));
     gasm_->Goto(&loop, index);
   }
   gasm_->Bind(&done);
@@ -6518,7 +6524,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
             if (type.kind() == wasm::kRefNull) {
               auto done =
                   gasm_->MakeLabel(MachineRepresentation::kTaggedPointer);
-              // Null gets passed as-is.
+              // Do not wrap {null}.
               gasm_->GotoIf(IsNull(node), &done, node);
               gasm_->Goto(&done,
                           gasm_->LoadFromObject(
@@ -6540,37 +6546,25 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
           case wasm::HeapType::kString:
           case wasm::HeapType::kExtern:
           case wasm::HeapType::kAny:
+            return node;
           case wasm::HeapType::kNone:
           case wasm::HeapType::kNoFunc:
           case wasm::HeapType::kNoExtern:
           case wasm::HeapType::kI31:
-            return node;
-          default: {
+            UNREACHABLE();
+          default:
             DCHECK(type.has_index());
             if (module_->has_signature(type.ref_index())) {
               // Typed function. Extract the external function.
-              if (type.kind() == wasm::kRefNull) {
-                auto done =
-                    gasm_->MakeLabel(MachineRepresentation::kTaggedPointer);
-                // Null gets passed as-is.
-                gasm_->GotoIf(IsNull(node), &done, node);
-                gasm_->Goto(&done,
-                            gasm_->LoadFromObject(
-                                MachineType::TaggedPointer(), node,
-                                wasm::ObjectAccess::ToTagged(
-                                    WasmInternalFunction::kExternalOffset)));
-                gasm_->Bind(&done);
-                return done.PhiAt(0);
-              } else {
-                return gasm_->LoadFromObject(
-                    MachineType::TaggedPointer(), node,
-                    wasm::ObjectAccess::ToTagged(
-                        WasmInternalFunction::kExternalOffset));
-              }
-            } else {
-              return node;
+              return gasm_->LoadFromObject(
+                  MachineType::TaggedPointer(), node,
+                  wasm::ObjectAccess::ToTagged(
+                      WasmInternalFunction::kExternalOffset));
             }
-          }
+            // If this is reached, then IsJSCompatibleSignature() is too
+            // permissive.
+            // TODO(7748): Figure out a JS interop story for arrays and structs.
+            UNREACHABLE();
         }
       case wasm::kRtt:
       case wasm::kI8:
@@ -6582,6 +6576,11 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
         UNREACHABLE();
     }
   }
+
+  enum UnwrapExternalFunctions : bool {
+    kUnwrapWasmExternalFunctions = true,
+    kLeaveFunctionsAlone = false
+  };
 
   Node* BuildChangeBigIntToInt64(Node* input, Node* context,
                                  Node* frame_state) {
@@ -6639,6 +6638,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
           case wasm::HeapType::kNoFunc:
           case wasm::HeapType::kNoExtern:
           case wasm::HeapType::kI31:
+            UNREACHABLE();
           case wasm::HeapType::kAny:
           case wasm::HeapType::kFunc:
           case wasm::HeapType::kStruct:
@@ -6648,6 +6648,8 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
             // Make sure ValueType fits in a Smi.
             static_assert(wasm::ValueType::kLastUsedBit + 1 <= kSmiValueSize);
 
+            // The instance node is always defined: if an instance is not
+            // available, it is the undefined value.
             if (type.has_index()) {
               DCHECK_NOT_NULL(module);
               uint32_t canonical_index =
@@ -6957,7 +6959,8 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
     }
   }
 
-  void BuildJSToWasmWrapper(bool is_import, bool do_conversion = true,
+  void BuildJSToWasmWrapper(const wasm::WasmModule* module, bool is_import,
+                            bool do_conversion = true,
                             Node* frame_state = nullptr) {
     const int wasm_param_count = static_cast<int>(sig_->parameter_count());
 
@@ -6970,7 +6973,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
         Linkage::GetJSCallContextParamIndex(wasm_param_count + 1), "%context");
     Node* function_data = gasm_->LoadFunctionDataFromJSFunction(js_closure);
 
-    if (!wasm::IsJSCompatibleSignature(sig_)) {
+    if (!wasm::IsJSCompatibleSignature(sig_, module_, enabled_features_)) {
       // Throw a TypeError. Use the js_context of the calling javascript
       // function (passed as a parameter), such that the generated code is
       // js_context independent.
@@ -7021,7 +7024,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
     for (int i = 0; i < wasm_param_count; ++i) {
       if (do_conversion) {
         args[i + 1] = FromJS(params[i + 1], js_context, sig_->GetParam(i),
-                             module_, frame_state);
+                             module, frame_state);
       } else {
         Node* wasm_param = params[i + 1];
 
@@ -7576,7 +7579,7 @@ class WasmWrapperGraphBuilder : public WasmGraphBuilder {
     Node* context = Param(Linkage::GetJSCallContextParamIndex(wasm_count + 1));
 
     // Throw a TypeError if the signature is incompatible with JavaScript.
-    if (!wasm::IsJSCompatibleSignature(sig_)) {
+    if (!wasm::IsJSCompatibleSignature(sig_, module_, enabled_features_)) {
       BuildCallToRuntimeWithContext(Runtime::kWasmThrowJSTypeError, context,
                                     nullptr, 0);
       TerminateThrow(effect(), control());
@@ -7754,7 +7757,7 @@ void BuildInlinedJSToWasmWrapper(Zone* zone, MachineGraph* mcgraph,
                                   WasmGraphBuilder::kNoSpecialParameterMode,
                                   isolate, spt,
                                   StubCallMode::kCallBuiltinPointer, features);
-  builder.BuildJSToWasmWrapper(false, false, frame_state);
+  builder.BuildJSToWasmWrapper(module, false, false, frame_state);
 }
 
 std::unique_ptr<TurbofanCompilationJob> NewJSToWasmCompilationJob(
@@ -7778,7 +7781,7 @@ std::unique_ptr<TurbofanCompilationJob> NewJSToWasmCompilationJob(
       zone.get(), mcgraph, sig, module,
       WasmGraphBuilder::kNoSpecialParameterMode, isolate, nullptr,
       StubCallMode::kCallBuiltinPointer, enabled_features);
-  builder.BuildJSToWasmWrapper(is_import);
+  builder.BuildJSToWasmWrapper(module, is_import);
 
   //----------------------------------------------------------------------------
   // Create the compilation job.
@@ -7912,9 +7915,10 @@ bool ResolveBoundJSFastApiFunction(const wasm::FunctionSig* expected_sig,
   return IsSupportedWasmFastApiFunction(expected_sig, shared);
 }
 
-WasmImportData ResolveWasmImportCall(Handle<JSReceiver> callable,
-                                     const wasm::FunctionSig* expected_sig,
-                                     uint32_t expected_canonical_type_index) {
+WasmImportData ResolveWasmImportCall(
+    Handle<JSReceiver> callable, const wasm::FunctionSig* expected_sig,
+    uint32_t expected_canonical_type_index, const wasm::WasmModule* module,
+    const wasm::WasmFeatures& enabled_features) {
   Isolate* isolate = callable->GetIsolate();
   if (WasmExportedFunction::IsWasmExportedFunction(*callable)) {
     auto imported_function = Handle<WasmExportedFunction>::cast(callable);
@@ -7950,7 +7954,7 @@ WasmImportData ResolveWasmImportCall(Handle<JSReceiver> callable,
     return {WasmImportCallKind::kWasmToCapi, callable, wasm::kNoSuspend};
   }
   // Assuming we are calling to JS, check whether this would be a runtime error.
-  if (!wasm::IsJSCompatibleSignature(expected_sig)) {
+  if (!wasm::IsJSCompatibleSignature(expected_sig, module, enabled_features)) {
     return {WasmImportCallKind::kRuntimeTypeError, callable, wasm::kNoSuspend};
   }
   // Check if this can be a JS fast API call.
@@ -8359,9 +8363,10 @@ MaybeHandle<Code> CompileWasmToJSWrapper(Isolate* isolate,
   if (job->ExecuteJob(isolate->counters()->runtime_call_stats()) ==
           CompilationJob::FAILED ||
       job->FinalizeJob(isolate) == CompilationJob::FAILED) {
-    return {};
+    return Handle<Code>();
   }
-  return job->compilation_info()->code();
+  Handle<Code> code = job->compilation_info()->code();
+  return code;
 }
 
 MaybeHandle<Code> CompileJSToJSWrapper(Isolate* isolate,
@@ -8408,11 +8413,13 @@ MaybeHandle<Code> CompileJSToJSWrapper(Isolate* isolate,
       job->FinalizeJob(isolate) == CompilationJob::FAILED) {
     return {};
   }
-  return job->compilation_info()->code();
+  Handle<Code> code = job->compilation_info()->code();
+
+  return code;
 }
 
-Handle<Code> CompileCWasmEntry(Isolate* isolate, const wasm::FunctionSig* sig,
-                               const wasm::WasmModule* module) {
+Handle<CodeT> CompileCWasmEntry(Isolate* isolate, const wasm::FunctionSig* sig,
+                                const wasm::WasmModule* module) {
   std::unique_ptr<Zone> zone = std::make_unique<Zone>(
       isolate->allocator(), ZONE_NAME, kCompressGraphZone);
   Graph* graph = zone->New<Graph>(zone.get());
@@ -8461,7 +8468,7 @@ Handle<Code> CompileCWasmEntry(Isolate* isolate, const wasm::FunctionSig* sig,
            CompilationJob::FAILED);
   CHECK_NE(job->FinalizeJob(isolate), CompilationJob::FAILED);
 
-  return job->compilation_info()->code();
+  return ToCodeT(job->compilation_info()->code(), isolate);
 }
 
 namespace {

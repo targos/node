@@ -20,7 +20,6 @@
 #include "src/deoptimizer/translation-array.h"
 #include "src/execution/frame-constants.h"
 #include "src/interpreter/bytecode-register.h"
-#include "src/maglev/maglev-assembler-inl.h"
 #include "src/maglev/maglev-code-gen-state.h"
 #include "src/maglev/maglev-compilation-unit.h"
 #include "src/maglev/maglev-graph-labeller.h"
@@ -31,6 +30,14 @@
 #include "src/maglev/maglev-regalloc-data.h"
 #include "src/objects/code-inl.h"
 #include "src/utils/identity-map.h"
+
+#ifdef V8_TARGET_ARCH_ARM64
+#include "src/maglev/arm64/maglev-assembler-arm64-inl.h"
+#elif V8_TARGET_ARCH_X64
+#include "src/maglev/x64/maglev-assembler-x64-inl.h"
+#else
+#error "Maglev does not supported this architecture."
+#endif
 
 namespace v8 {
 namespace internal {
@@ -44,10 +51,12 @@ template <typename RegisterT>
 struct RegisterTHelper;
 template <>
 struct RegisterTHelper<Register> {
+  static constexpr Register kScratch = kScratchRegister;
   static constexpr RegList kAllocatableRegisters = kAllocatableGeneralRegisters;
 };
 template <>
 struct RegisterTHelper<DoubleRegister> {
+  static constexpr DoubleRegister kScratch = kScratchDoubleReg;
   static constexpr DoubleRegList kAllocatableRegisters =
       kAllocatableDoubleRegisters;
 };
@@ -86,12 +95,14 @@ struct RegisterTHelper<DoubleRegister> {
 // be emitted at the end, once all the parallel moves are done.
 template <typename RegisterT>
 class ParallelMoveResolver {
+  static constexpr RegisterT kScratchRegT =
+      RegisterTHelper<RegisterT>::kScratch;
+
   static constexpr auto kAllocatableRegistersT =
       RegisterTHelper<RegisterT>::kAllocatableRegisters;
 
  public:
-  explicit ParallelMoveResolver(MaglevAssembler* masm)
-      : masm_(masm), scratch_(RegisterT::no_reg()) {}
+  explicit ParallelMoveResolver(MaglevAssembler* masm) : masm_(masm) {}
 
   void RecordMove(ValueNode* source_node, compiler::InstructionOperand source,
                   compiler::AllocatedOperand target) {
@@ -108,9 +119,7 @@ class ParallelMoveResolver {
     RecordMoveToRegister(source_node, source, target_reg);
   }
 
-  void EmitMoves(RegisterT scratch) {
-    DCHECK(!scratch_.is_valid());
-    scratch_ = scratch;
+  void EmitMoves() {
     for (RegisterT reg : kAllocatableRegistersT) {
       StartEmitMoveChain(reg);
       ValueNode* materializing_register_move =
@@ -126,8 +135,8 @@ class ParallelMoveResolver {
       StartEmitMoveChain(moves_from_stack_slot_.begin()->first);
     }
     for (auto [stack_slot, node] : materializing_stack_slot_moves_) {
-      node->LoadToRegister(masm_, scratch_);
-      __ Move(StackSlot{stack_slot}, scratch_);
+      node->LoadToRegister(masm_, kScratchRegT);
+      __ Move(StackSlot{stack_slot}, kScratchRegT);
     }
   }
 
@@ -283,10 +292,10 @@ class ParallelMoveResolver {
     // chain start.
     if (has_cycle) {
       if (!scratch_has_cycle_start_) {
-        Pop(scratch_);
+        Pop(kScratchRegT);
         scratch_has_cycle_start_ = true;
       }
-      EmitMovesFromSource(scratch_, std::move(targets));
+      EmitMovesFromSource(kScratchRegT, std::move(targets));
       scratch_has_cycle_start_ = false;
       __ RecordComment("--   * End of cycle");
     } else {
@@ -304,9 +313,9 @@ class ParallelMoveResolver {
         __ RecordComment("--   * Cycle");
         DCHECK(!scratch_has_cycle_start_);
         if constexpr (std::is_same_v<ChainStartT, int32_t>) {
-          __ Move(scratch_, StackSlot{chain_start});
+          __ Move(kScratchRegT, StackSlot{chain_start});
         } else {
-          __ Move(scratch_, chain_start);
+          __ Move(kScratchRegT, chain_start);
         }
         scratch_has_cycle_start_ = true;
         return true;
@@ -369,10 +378,10 @@ class ParallelMoveResolver {
       // Otherwise, cache the slot value on the scratch register, clobbering it
       // if necessary.
       if (scratch_has_cycle_start_) {
-        Push(scratch_);
+        Push(kScratchRegT);
         scratch_has_cycle_start_ = false;
       }
-      register_with_slot_value = scratch_;
+      register_with_slot_value = kScratchRegT;
     }
 
     // Now emit moves from that cached register instead of from the stack slot.
@@ -390,7 +399,6 @@ class ParallelMoveResolver {
   MaglevAssembler* masm() const { return masm_; }
 
   MaglevAssembler* const masm_;
-  RegisterT scratch_;
 
   // Keep moves to/from registers and stack slots separate -- there are a fixed
   // number of registers but an infinite number of stack slots, so the register
@@ -468,28 +476,19 @@ class ExceptionHandlerTrampolineBuilder {
             : deopt_info->top_frame().as_interpreted();
 
     // TODO(v8:7700): Handle inlining.
+
     ParallelMoveResolver<Register> direct_moves(masm_);
     MoveVector materialising_moves;
     bool save_accumulator = false;
     RecordMoves(lazy_frame.unit(), catch_block, lazy_frame.frame_state(),
                 &direct_moves, &materialising_moves, &save_accumulator);
+
     __ BindJumpTarget(&handler_info->trampoline_entry);
     __ RecordComment("-- Exception handler trampoline START");
     EmitMaterialisationsAndPushResults(materialising_moves, save_accumulator);
-
     __ RecordComment("EmitMoves");
-// TODO(victorgomes): Add a scratch register scope to MaglevAssembler and
-// remove this arch depedent code.
-#ifdef V8_TARGET_ARCH_ARM64
-    UseScratchRegisterScope temps(masm_);
-    Register scratch = temps.AcquireX();
-#elif V8_TARGET_ARCH_X64
-    Register scratch = kScratchRegister;
-#else
-#error "Maglev does not supported this architecture."
-#endif
-    direct_moves.EmitMoves(scratch);
-    EmitPopMaterialisedResults(materialising_moves, save_accumulator, scratch);
+    direct_moves.EmitMoves();
+    EmitPopMaterialisedResults(materialising_moves, save_accumulator);
     __ Jump(catch_block->label());
     __ RecordComment("-- Exception handler trampoline END");
   }
@@ -572,22 +571,21 @@ class ExceptionHandlerTrampolineBuilder {
   }
 
   void EmitPopMaterialisedResults(const MoveVector& moves,
-                                  bool save_accumulator,
-                                  Register scratch) const {
+                                  bool save_accumulator) const {
     if (moves.size() == 0) return;
     __ RecordComment("EmitPopMaterialisedResults");
     for (const Move& move : base::Reversed(moves)) {
       const ValueLocation& target = move.target;
       Register target_reg = target.operand().IsAnyRegister()
                                 ? target.AssignedGeneralRegister()
-                                : scratch;
+                                : kScratchRegister;
       if (IsConstantNode(move.source->opcode())) {
         __ MaterialiseValueNode(target_reg, move.source);
       } else {
         __ Pop(target_reg);
       }
-      if (target_reg == scratch) {
-        __ Move(masm_->ToMemOperand(target.operand()), scratch);
+      if (target_reg == kScratchRegister) {
+        __ Move(masm_->ToMemOperand(target.operand()), kScratchRegister);
       }
     }
     if (save_accumulator) __ Pop(kReturnRegister0);
@@ -656,11 +654,6 @@ class MaglevCodeGeneratingNodeProcessor {
         }
       }
     }
-
-    MaglevAssembler::ScratchRegisterScope scratch_scope(masm());
-    scratch_scope.Include(node->general_temporaries());
-    scratch_scope.IncludeDouble(node->double_temporaries());
-
     node->GenerateCode(masm(), state);
 
     if (std::is_base_of<ValueNode, NodeT>::value) {
@@ -696,19 +689,6 @@ class MaglevCodeGeneratingNodeProcessor {
     }
 
     int predecessor_id = state.block()->predecessor_id();
-
-// TODO(victorgomes): Add a scratch register scope to MaglevAssembler and
-// remove this arch depedent code.
-#ifdef V8_TARGET_ARCH_ARM64
-    UseScratchRegisterScope temps(masm_);
-    Register scratch = temps.AcquireX();
-    DoubleRegister double_scratch = temps.AcquireD();
-#elif V8_TARGET_ARCH_X64
-    Register scratch = kScratchRegister;
-    DoubleRegister double_scratch = kScratchDoubleReg;
-#else
-#error "Maglev does not supported this architecture."
-#endif
 
     // TODO(leszeks): Move these to fields, to allow their data structure
     // allocations to be reused. Will need some sort of state resetting.
@@ -775,7 +755,7 @@ class MaglevCodeGeneratingNodeProcessor {
           }
         });
 
-    register_moves.EmitMoves(scratch);
+    register_moves.EmitMoves();
 
     __ RecordComment("--   Double gap moves:");
 
@@ -795,7 +775,7 @@ class MaglevCodeGeneratingNodeProcessor {
           }
         });
 
-    double_register_moves.EmitMoves(double_scratch);
+    double_register_moves.EmitMoves();
   }
 
   Isolate* isolate() const { return masm_->isolate(); }
@@ -1266,9 +1246,8 @@ void MaglevCodeGenerator::EmitDeopts() {
   // Deoptimization exits must be as small as possible, since their count grows
   // with function size. These labels are an optimization which extracts the
   // (potentially large) instruction sequence for the final jump to the
-  // deoptimization entry into a single spot per InstructionStream object. All
-  // deopt exits can then near-call to this label. Note: not used on all
-  // architectures.
+  // deoptimization entry into a single spot per Code object. All deopt exits
+  // can then near-call to this label. Note: not used on all architectures.
   Label eager_deopt_entry;
   Label lazy_deopt_entry;
   __ MaybeEmitDeoptBuiltinsCall(
@@ -1339,7 +1318,7 @@ void MaglevCodeGenerator::EmitExceptionHandlerTrampolines() {
 
 void MaglevCodeGenerator::EmitMetadata() {
   // Final alignment before starting on the metadata section.
-  masm()->Align(InstructionStream::kMetadataAlignment);
+  masm()->Align(Code::kMetadataAlignment);
 
   safepoint_table_builder_.Emit(masm());
 

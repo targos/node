@@ -231,8 +231,14 @@ const size_t kShortBuiltinCallsOldSpaceSizeThreshold = size_t{2} * GB;
 
 #ifdef V8_EXTERNAL_CODE_SPACE
 #define V8_EXTERNAL_CODE_SPACE_BOOL true
+// This flag enables the mode when V8 does not create trampoline Code objects
+// for builtins. It should be enough to have only CodeDataContainer objects.
+class CodeDataContainer;
+using CodeT = CodeDataContainer;
 #else
 #define V8_EXTERNAL_CODE_SPACE_BOOL false
+class Code;
+using CodeT = Code;
 #endif
 
 // V8_HEAP_USE_PTHREAD_JIT_WRITE_PROTECT controls how V8 sets permissions for
@@ -867,8 +873,8 @@ using RuntimeArguments = Arguments<ArgumentsType::kRuntime>;
 using JavaScriptArguments = Arguments<ArgumentsType::kJS>;
 class Assembler;
 class ClassScope;
-class InstructionStream;
 class Code;
+class CodeDataContainer;
 class CodeSpace;
 class Context;
 class DeclarationScope;
@@ -989,10 +995,9 @@ using HeapObjectSlot = SlotTraits::THeapObjectSlot;
 using OffHeapObjectSlot = SlotTraits::TOffHeapObjectSlot;
 
 // A CodeObjectSlot instance describes a kTaggedSize-sized field ("slot")
-// holding a strong pointer to a InstructionStream object. The InstructionStream
-// object slots might be compressed and since code space might be allocated off
-// the main heap the load operations require explicit cage base value for code
-// space.
+// holding a strong pointer to a Code object. The Code object slots might be
+// compressed and since code space might be allocated off the main heap
+// the load operations require explicit cage base value for code space.
 using CodeObjectSlot = SlotTraits::TCodeObjectSlot;
 
 using WeakSlotCallback = bool (*)(FullObjectSlot pointer);
@@ -1029,10 +1034,10 @@ constexpr int kSpaceTagSize = 4;
 static_assert(FIRST_SPACE == 0);
 
 enum class AllocationType : uint8_t {
-  kYoung,  // Regular object allocated in NEW_SPACE or NEW_LO_SPACE
-  kOld,    // Regular object allocated in OLD_SPACE or LO_SPACE
-  kCode,   // InstructionStream object allocated in CODE_SPACE or CODE_LO_SPACE
-  kMap,    // Map object allocated in OLD_SPACE
+  kYoung,      // Regular object allocated in NEW_SPACE or NEW_LO_SPACE
+  kOld,        // Regular object allocated in OLD_SPACE or LO_SPACE
+  kCode,       // Code object allocated in CODE_SPACE or CODE_LO_SPACE
+  kMap,        // Map object allocated in OLD_SPACE
   kReadOnly,   // Object allocated in RO_SPACE
   kSharedOld,  // Regular object allocated in OLD_SPACE in the shared heap
   kSharedMap,  // Map object in OLD_SPACE in the shared heap
@@ -2057,8 +2062,7 @@ enum class IcCheckType { kElement, kProperty };
 
 // Helper stubs can be called in different ways depending on where the target
 // code is located and how the call sequence is expected to look like:
-//  - CodeObject: Call on-heap {Code} object via
-//  {RelocInfo::CODE_TARGET}.
+//  - CodeObject: Call on-heap {Code} object via {RelocInfo::CODE_TARGET}.
 //  - WasmRuntimeStub: Call native {WasmCode} stub via
 //    {RelocInfo::WASM_STUB_CALL}.
 //  - BuiltinPointer: Call a builtin based on a builtin pointer with dynamic

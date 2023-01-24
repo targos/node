@@ -159,6 +159,7 @@ class Typer::Visitor : public Reducer {
       DECLARE_IMPOSSIBLE_CASE(Uint64MulHigh)
       DECLARE_IMPOSSIBLE_CASE(Word64Equal)
       DECLARE_IMPOSSIBLE_CASE(Int32LessThan)
+      DECLARE_IMPOSSIBLE_CASE(Int32LessThanOrEqual)
       DECLARE_IMPOSSIBLE_CASE(Int64LessThan)
       DECLARE_IMPOSSIBLE_CASE(Int64LessThanOrEqual)
       DECLARE_IMPOSSIBLE_CASE(Uint64LessThan)
@@ -2286,10 +2287,6 @@ Type Typer::Visitor::TypeStringLength(Node* node) {
 }
 
 Type Typer::Visitor::TypeStringSubstring(Node* node) { return Type::String(); }
-
-Type Typer::Visitor::TypeFunctionLength(Node* node) {
-  return Type::Range(0, InstructionStream::kMaxArguments, zone());
-}
 
 Type Typer::Visitor::TypeCheckBounds(Node* node) {
   return typer_->operation_typer_.CheckBounds(Operand(node, 0),

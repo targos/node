@@ -292,7 +292,7 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
   // This sets the branch destination.
   // This is for calls and branches within generated code.
   inline static void deserialization_set_special_target_at(
-      Address instruction_payload, InstructionStream code, Address target);
+      Address instruction_payload, Code code, Address target);
 
   // Get the size of the special target encoded at 'instruction_payload'.
   inline static int deserialization_special_target_size(
@@ -320,7 +320,7 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
   RegList* GetScratchRegisterList() { return &scratch_register_list_; }
 
   // ---------------------------------------------------------------------------
-  // InstructionStream generation
+  // Code generation
 
   template <class T, int size, int lo, int hi>
   inline T getfield(T value) {
@@ -1043,7 +1043,7 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
   }
 
   // ---------------------------------------------------------------------------
-  // InstructionStream generation
+  // Code generation
 
   // Insert the smallest number of nop instructions
   // possible to align the pc offset to a multiple
@@ -1359,7 +1359,8 @@ class V8_EXPORT_PRIVATE Assembler : public AssemblerBase {
  public:
   byte* buffer_pos() const { return buffer_start_; }
 
-  // InstructionStream generation
+
+  // Code generation
   // The relocation writer's position is at least kGap bytes below the end of
   // the generated instructions. This is so that multi-instruction sequences do
   // not have to check for overflow. The same is true for writes of large

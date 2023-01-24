@@ -69,7 +69,7 @@ void PlatformEmbeddedFileWriterAIX::AlignToCodeAlignment() {
 }
 
 void PlatformEmbeddedFileWriterAIX::AlignToDataAlignment() {
-  static_assert((1 << 3) >= InstructionStream::kMetadataAlignment);
+  static_assert((1 << 3) >= Code::kMetadataAlignment);
   fprintf(fp_, ".align 3\n");
 }
 

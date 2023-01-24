@@ -338,8 +338,6 @@ ArchOpcode GetLoadOpcode(LoadRepresentation load_rep) {
       opcode = kX64Movdqu;
       break;
     case MachineRepresentation::kSimd256:  // Fall through.
-      opcode = kX64Movdqu256;
-      break;
     case MachineRepresentation::kNone:     // Fall through.
     case MachineRepresentation::kMapWord:  // Fall through.
       UNREACHABLE();
@@ -378,7 +376,6 @@ ArchOpcode GetStoreOpcode(StoreRepresentation store_rep) {
     case MachineRepresentation::kSimd128:
       return kX64Movdqu;
     case MachineRepresentation::kSimd256:  // Fall through.
-      return kX64Movdqu256;
     case MachineRepresentation::kNone:     // Fall through.
     case MachineRepresentation::kMapWord:  // Fall through.
       UNREACHABLE();
@@ -511,13 +508,6 @@ void InstructionSelector::VisitLoadTransform(Node* node) {
       break;
     case LoadTransformation::kS128Load64Zero:
       opcode = kX64Movsd;
-      break;
-    // Simd256
-    case LoadTransformation::kS256Load32Splat:
-      opcode = kX64S256Load32Splat;
-      break;
-    case LoadTransformation::kS256Load64Splat:
-      opcode = kX64S256Load64Splat;
       break;
     default:
       UNREACHABLE();
@@ -3367,10 +3357,6 @@ VISIT_ATOMIC_BINOP(Xor)
   V(S128Or)                        \
   V(S128Xor)
 
-#define SIMD256_BINOP_SSE_AVX_LIST(V) \
-  V(F32x8Add)                         \
-  V(F32x8Sub)
-
 #define SIMD_BINOP_LIST(V) \
   V(F64x2Min)              \
   V(F64x2Max)              \
@@ -3617,19 +3603,9 @@ SIMD_BINOP_LIST(VISIT_SIMD_BINOP)
            g.UseRegister(node->InputAt(0)), g.UseRegister(node->InputAt(1))); \
     }                                                                         \
   }
-#define VISIT_SIMD256_BINOP(Opcode)                                         \
-  void InstructionSelector::Visit##Opcode(Node* node) {                     \
-    X64OperandGenerator g(this);                                            \
-    Emit(kX64##Opcode, g.DefineAsRegister(node),                            \
-         g.UseRegister(node->InputAt(0)), g.UseRegister(node->InputAt(1))); \
-  }
-
 SIMD_BINOP_SSE_AVX_LIST(VISIT_SIMD_BINOP)
-SIMD256_BINOP_SSE_AVX_LIST(VISIT_SIMD256_BINOP)
 #undef VISIT_SIMD_BINOP
-#undef VISIT_SIMD256_BINOP
 #undef SIMD_BINOP_SSE_AVX_LIST
-#undef SIMD256_BINOP_SSE_AVX_LIST
 
 void InstructionSelector::VisitV128AnyTrue(Node* node) {
   X64OperandGenerator g(this);

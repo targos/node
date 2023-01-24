@@ -42,8 +42,7 @@ void MapInference::SetGuarded() { maps_state_ = kReliableOrGuarded; }
 bool MapInference::HaveMaps() const { return !maps_.empty(); }
 
 bool MapInference::AllOfInstanceTypesAreJSReceiver() const {
-  return AllOfInstanceTypesUnsafe(
-      static_cast<bool (*)(InstanceType)>(&InstanceTypeChecker::IsJSReceiver));
+  return AllOfInstanceTypesUnsafe(InstanceTypeChecker::IsJSReceiver);
 }
 
 bool MapInference::AllOfInstanceTypesAre(InstanceType type) const {

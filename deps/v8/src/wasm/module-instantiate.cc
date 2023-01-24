@@ -814,7 +814,7 @@ MaybeHandle<WasmInstanceObject> InstanceBuilder::Build() {
     uint32_t canonical_sig_index =
         module_->isorecursive_canonical_type_ids[module_->functions[start_index]
                                                      .sig_index];
-    Handle<Code> wrapper_code =
+    Handle<CodeT> wrapper_code =
         JSToWasmWrapperCompilationUnit::CompileJSToWasmWrapper(
             isolate_, function.sig, canonical_sig_index, module_,
             function.imported);
@@ -1128,8 +1128,8 @@ bool InstanceBuilder::ProcessImportedFunction(
   uint32_t sig_index = module_->functions[func_index].sig_index;
   uint32_t canonical_type_index =
       module_->isorecursive_canonical_type_ids[sig_index];
-  auto resolved = compiler::ResolveWasmImportCall(js_receiver, expected_sig,
-                                                  canonical_type_index);
+  auto resolved = compiler::ResolveWasmImportCall(
+      js_receiver, expected_sig, canonical_type_index, module_, enabled_);
   compiler::WasmImportCallKind kind = resolved.kind;
   js_receiver = resolved.callable;
   switch (kind) {
@@ -1595,8 +1595,8 @@ void InstanceBuilder::CompileImportWrappers(
     uint32_t sig_index = module_->functions[func_index].sig_index;
     uint32_t canonical_type_index =
         module_->isorecursive_canonical_type_ids[sig_index];
-    auto resolved =
-        compiler::ResolveWasmImportCall(js_receiver, sig, canonical_type_index);
+    auto resolved = compiler::ResolveWasmImportCall(
+        js_receiver, sig, canonical_type_index, module_, enabled_);
     compiler::WasmImportCallKind kind = resolved.kind;
     if (kind == compiler::WasmImportCallKind::kWasmToWasm ||
         kind == compiler::WasmImportCallKind::kLinkError ||

@@ -185,9 +185,8 @@ static void CheckNumber(Isolate* isolate, double value, const char* string) {
   CHECK(String::cast(*print_string).IsOneByteEqualTo(base::CStrVector(string)));
 }
 
-void CheckEmbeddedObjectsAreEqual(Isolate* isolate,
-                                  Handle<InstructionStream> lhs,
-                                  Handle<InstructionStream> rhs) {
+void CheckEmbeddedObjectsAreEqual(Isolate* isolate, Handle<Code> lhs,
+                                  Handle<Code> rhs) {
   int mode_mask = RelocInfo::ModeMask(RelocInfo::FULL_EMBEDDED_OBJECT);
   PtrComprCageBase cage_base(isolate);
   RelocIterator lhs_it(*lhs, mode_mask);
@@ -214,31 +213,25 @@ static void CheckFindCodeObject(Isolate* isolate) {
 
   CodeDesc desc;
   assm.GetCode(isolate, &desc);
-  Handle<InstructionStream> code(
-      Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING)
-          .Build()
-          ->instruction_stream(),
-      isolate);
-  CHECK(code->IsInstructionStream(cage_base));
+  Handle<Code> code =
+      Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
+  CHECK(code->IsCode(cage_base));
 
   HeapObject obj = HeapObject::cast(*code);
   Address obj_addr = obj.address();
 
   for (int i = 0; i < obj.Size(cage_base); i += kTaggedSize) {
     CodeLookupResult lookup_result = isolate->FindCodeObject(obj_addr + i);
-    CHECK_EQ(*code, lookup_result.instruction_stream());
+    CHECK_EQ(*code, lookup_result.code());
   }
 
-  Handle<InstructionStream> copy(
-      Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING)
-          .Build()
-          ->instruction_stream(),
-      isolate);
+  Handle<Code> copy =
+      Factory::CodeBuilder(isolate, desc, CodeKind::FOR_TESTING).Build();
   HeapObject obj_copy = HeapObject::cast(*copy);
   CodeLookupResult not_right = isolate->FindCodeObject(
       obj_copy.address() + obj_copy.Size(cage_base) / 2);
-  CHECK_NE(not_right.instruction_stream(), *code);
-  CHECK_EQ(not_right.instruction_stream(), *copy);
+  CHECK_NE(not_right.code(), *code);
+  CHECK_EQ(not_right.code(), *copy);
 }
 
 
@@ -1033,10 +1026,10 @@ static int ObjectsFoundInHeap(Heap* heap, Handle<Object> objs[], int size) {
   for (HeapObject obj = iterator.Next(); !obj.is_null();
        obj = iterator.Next()) {
     for (int i = 0; i < size; i++) {
-      // V8_EXTERNAL_CODE_SPACE specific: we might be comparing
-      // InstructionStream object with non-InstructionStream object here and it
-      // might produce false positives because operator== for tagged values
-      // compares only lower 32 bits when pointer compression is enabled.
+      // V8_EXTERNAL_CODE_SPACE specific: we might be comparing Code object
+      // with non-Code object here and it might produce false positives because
+      // operator== for tagged values compares only lower 32 bits when pointer
+      // compression is enabled.
       if (objs[i]->ptr() == obj.ptr()) {
         found_count++;
       }
@@ -4194,7 +4187,7 @@ TEST(EnsureAllocationSiteDependentCodesProcessed) {
     CHECK_EQ(dependency.length(), DependentCode::kSlotsPerEntry);
     MaybeObject code = dependency.Get(0 + DependentCode::kCodeSlotOffset);
     CHECK(code->IsWeak());
-    CHECK_EQ(bar_handle->code(), Code::cast(code->GetHeapObjectAssumeWeak()));
+    CHECK_EQ(bar_handle->code(), CodeT::cast(code->GetHeapObjectAssumeWeak()));
     Smi groups = dependency.Get(0 + DependentCode::kGroupsSlotOffset).ToSmi();
     CHECK_EQ(static_cast<DependentCode::DependencyGroups>(groups.value()),
              DependentCode::kAllocationSiteTransitionChangedGroup |
@@ -4323,7 +4316,7 @@ TEST(CellsInOptimizedCodeAreWeak) {
 
   if (!isolate->use_optimizer()) return;
   HandleScope outer_scope(heap->isolate());
-  Handle<InstructionStream> code;
+  Handle<Code> code;
   {
     LocalContext context;
     HandleScope scope(heap->isolate());
@@ -4347,7 +4340,7 @@ TEST(CellsInOptimizedCodeAreWeak) {
         *v8::Local<v8::Function>::Cast(CcTest::global()
                                            ->Get(context.local(), v8_str("bar"))
                                            .ToLocalChecked())));
-    code = handle(FromCode(bar->code()), isolate);
+    code = handle(FromCodeT(bar->code()), isolate);
     code = scope.CloseAndEscape(code);
   }
 
@@ -4372,7 +4365,7 @@ TEST(ObjectsInOptimizedCodeAreWeak) {
 
   if (!isolate->use_optimizer()) return;
   HandleScope outer_scope(heap->isolate());
-  Handle<InstructionStream> code;
+  Handle<Code> code;
   {
     LocalContext context;
     HandleScope scope(heap->isolate());
@@ -4394,7 +4387,7 @@ TEST(ObjectsInOptimizedCodeAreWeak) {
         *v8::Local<v8::Function>::Cast(CcTest::global()
                                            ->Get(context.local(), v8_str("bar"))
                                            .ToLocalChecked())));
-    code = handle(FromCode(bar->code()), isolate);
+    code = handle(FromCodeT(bar->code()), isolate);
     code = scope.CloseAndEscape(code);
   }
 
@@ -4419,7 +4412,7 @@ TEST(NewSpaceObjectsInOptimizedCode) {
 
   if (!isolate->use_optimizer()) return;
   HandleScope outer_scope(isolate);
-  Handle<InstructionStream> code;
+  Handle<Code> code;
   {
     LocalContext context;
     HandleScope scope(isolate);
@@ -4460,7 +4453,7 @@ TEST(NewSpaceObjectsInOptimizedCode) {
     HeapVerifier::VerifyHeap(CcTest::heap());
 #endif
     CHECK(!bar->code().marked_for_deoptimization());
-    code = handle(FromCode(bar->code()), isolate);
+    code = handle(FromCodeT(bar->code()), isolate);
     code = scope.CloseAndEscape(code);
   }
 
@@ -4484,7 +4477,7 @@ TEST(ObjectsInEagerlyDeoptimizedCodeAreWeak) {
 
   if (!isolate->use_optimizer()) return;
   HandleScope outer_scope(heap->isolate());
-  Handle<InstructionStream> code;
+  Handle<Code> code;
   {
     LocalContext context;
     HandleScope scope(heap->isolate());
@@ -4507,7 +4500,7 @@ TEST(ObjectsInEagerlyDeoptimizedCodeAreWeak) {
         *v8::Local<v8::Function>::Cast(CcTest::global()
                                            ->Get(context.local(), v8_str("bar"))
                                            .ToLocalChecked())));
-    code = handle(FromCode(bar->code()), isolate);
+    code = handle(FromCodeT(bar->code()), isolate);
     code = scope.CloseAndEscape(code);
   }
 
@@ -4522,7 +4515,7 @@ TEST(ObjectsInEagerlyDeoptimizedCodeAreWeak) {
   CHECK(code->embedded_objects_cleared());
 }
 
-static Handle<InstructionStream> DummyOptimizedCode(Isolate* isolate) {
+static Handle<Code> DummyOptimizedCode(Isolate* isolate) {
   i::byte buffer[i::Assembler::kDefaultBufferSize];
   MacroAssembler masm(isolate, v8::internal::CodeObjectRequired::kYes,
                       ExternalAssemblerBuffer(buffer, sizeof(buffer)));
@@ -4538,13 +4531,10 @@ static Handle<InstructionStream> DummyOptimizedCode(Isolate* isolate) {
 #endif
   masm.Drop(2);
   masm.GetCode(isolate, &desc);
-  Handle<InstructionStream> code(
-      Factory::CodeBuilder(isolate, desc, CodeKind::TURBOFAN)
-          .set_self_reference(masm.CodeObject())
-          .Build()
-          ->instruction_stream(),
-      isolate);
-  CHECK(code->IsInstructionStream());
+  Handle<Code> code = Factory::CodeBuilder(isolate, desc, CodeKind::TURBOFAN)
+                          .set_self_reference(masm.CodeObject())
+                          .Build();
+  CHECK(code->IsCode());
   return code;
 }
 
@@ -5309,7 +5299,7 @@ TEST(PreprocessStackTrace) {
       Object::GetProperty(isolate, exception, key).ToHandleChecked();
   Handle<Object> code =
       Object::GetElement(isolate, stack_trace, 3).ToHandleChecked();
-  CHECK(code->IsInstructionStream());
+  CHECK(code->IsCode());
 
   CcTest::CollectAllAvailableGarbage();
 
@@ -5322,7 +5312,7 @@ TEST(PreprocessStackTrace) {
   for (int i = 0; i < array_length; i++) {
     Handle<Object> element =
         Object::GetElement(isolate, stack_trace, i).ToHandleChecked();
-    CHECK(!element->IsInstructionStream());
+    CHECK(!element->IsCode());
   }
 }
 
@@ -6538,7 +6528,7 @@ HEAP_TEST(RegressMissingWriteBarrierInAllocate) {
   Handle<Map> map;
   {
     AlwaysAllocateScopeForTesting always_allocate(heap);
-    map = isolate->factory()->NewMap(BIGINT_TYPE, HeapNumber::kSize);
+    map = isolate->factory()->NewMap(HEAP_NUMBER_TYPE, HeapNumber::kSize);
   }
   CHECK(heap->incremental_marking()->black_allocation());
   Handle<HeapObject> object;
@@ -6873,33 +6863,27 @@ UNINITIALIZED_TEST(RestoreHeapLimit) {
       reinterpret_cast<Isolate*>(v8::Isolate::New(create_params));
   Heap* heap = isolate->heap();
   Factory* factory = isolate->factory();
-
+  OutOfMemoryState state;
+  state.heap = heap;
+  state.oom_triggered = false;
+  heap->AddNearHeapLimitCallback(NearHeapLimitCallback, &state);
+  heap->AutomaticallyRestoreInitialHeapLimit(0.5);
+  const int kFixedArrayLength = 1000000;
   {
-    DisableConservativeStackScanningScopeForTesting no_stack_scanning(heap);
-
-    OutOfMemoryState state;
-    state.heap = heap;
-    state.oom_triggered = false;
-    heap->AddNearHeapLimitCallback(NearHeapLimitCallback, &state);
-    heap->AutomaticallyRestoreInitialHeapLimit(0.5);
-    const int kFixedArrayLength = 1000000;
-    {
-      HandleScope handle_scope(isolate);
-      while (!state.oom_triggered) {
-        factory->NewFixedArray(kFixedArrayLength);
-      }
+    HandleScope handle_scope(isolate);
+    while (!state.oom_triggered) {
+      factory->NewFixedArray(kFixedArrayLength);
     }
-    heap->MemoryPressureNotification(MemoryPressureLevel::kCritical, true);
-    state.oom_triggered = false;
-    {
-      HandleScope handle_scope(isolate);
-      while (!state.oom_triggered) {
-        factory->NewFixedArray(kFixedArrayLength);
-      }
-    }
-    CHECK_EQ(state.current_heap_limit, state.initial_heap_limit);
   }
-
+  heap->MemoryPressureNotification(MemoryPressureLevel::kCritical, true);
+  state.oom_triggered = false;
+  {
+    HandleScope handle_scope(isolate);
+    while (!state.oom_triggered) {
+      factory->NewFixedArray(kFixedArrayLength);
+    }
+  }
+  CHECK_EQ(state.current_heap_limit, state.initial_heap_limit);
   reinterpret_cast<v8::Isolate*>(isolate)->Dispose();
 }
 
@@ -7014,7 +6998,7 @@ TEST(CodeObjectRegistry) {
   Heap* heap = isolate->heap();
   CodePageCollectionMemoryModificationScopeForTesting code_scope(heap);
 
-  Handle<InstructionStream> code1;
+  Handle<Code> code1;
   HandleScope outer_scope(heap->isolate());
   Address code2_address;
   {
@@ -7022,7 +7006,7 @@ TEST(CodeObjectRegistry) {
     CHECK(HeapTester::CodeEnsureLinearAllocationArea(
         heap, MemoryChunkLayout::MaxRegularCodeObjectSize()));
     code1 = DummyOptimizedCode(isolate);
-    Handle<InstructionStream> code2 = DummyOptimizedCode(isolate);
+    Handle<Code> code2 = DummyOptimizedCode(isolate);
     code2_address = code2->address();
 
     CHECK_EQ(MemoryChunk::FromHeapObject(*code1),

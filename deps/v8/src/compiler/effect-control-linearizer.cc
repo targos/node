@@ -180,7 +180,6 @@ class EffectControlLinearizer {
   Node* LowerStringEqual(Node* node);
   Node* LowerStringLessThan(Node* node);
   Node* LowerStringLessThanOrEqual(Node* node);
-  Node* LowerFunctionLength(Node* node);
   Node* LowerBigIntAdd(Node* node, Node* frame_state);
   Node* LowerBigIntSubtract(Node* node, Node* frame_state);
   Node* LowerBigIntMultiply(Node* node, Node* frame_state);
@@ -1275,9 +1274,6 @@ bool EffectControlLinearizer::TryWireInStateEffect(Node* node,
       break;
     case IrOpcode::kStringLessThanOrEqual:
       result = LowerStringLessThanOrEqual(node);
-      break;
-    case IrOpcode::kFunctionLength:
-      result = LowerFunctionLength(node);
       break;
     case IrOpcode::kBigIntAdd:
       result = LowerBigIntAdd(node, frame_state);
@@ -4309,11 +4305,6 @@ Node* EffectControlLinearizer::LowerStringFromSingleCharCode(Node* node) {
     Node* vfalse1 =
         __ Allocate(AllocationType::kYoung,
                     __ IntPtrConstant(SeqTwoByteString::SizeFor(1)));
-    __ Store(StoreRepresentation(MachineRepresentation::kTaggedSigned,
-                                 kNoWriteBarrier),
-             vfalse1,
-             SeqTwoByteString::SizeFor(1) - kObjectAlignment - kHeapObjectTag,
-             __ SmiConstant(0));
     __ StoreField(AccessBuilder::ForMap(), vfalse1,
                   __ HeapConstant(factory()->string_map()));
     __ StoreField(AccessBuilder::ForNameRawHashField(), vfalse1,
@@ -4410,11 +4401,6 @@ Node* EffectControlLinearizer::LowerStringFromSingleCodePoint(Node* node) {
       Node* vfalse1 =
           __ Allocate(AllocationType::kYoung,
                       __ IntPtrConstant(SeqTwoByteString::SizeFor(1)));
-      __ Store(StoreRepresentation(MachineRepresentation::kTaggedSigned,
-                                   kNoWriteBarrier),
-               vfalse1,
-               SeqTwoByteString::SizeFor(1) - kObjectAlignment - kHeapObjectTag,
-               __ SmiConstant(0));
       __ StoreField(AccessBuilder::ForMap(), vfalse1,
                     __ HeapConstant(factory()->string_map()));
       __ StoreField(AccessBuilder::ForNameRawHashField(), vfalse1,
@@ -4455,11 +4441,6 @@ Node* EffectControlLinearizer::LowerStringFromSingleCodePoint(Node* node) {
     Node* vfalse0 =
         __ Allocate(AllocationType::kYoung,
                     __ IntPtrConstant(SeqTwoByteString::SizeFor(2)));
-    __ Store(StoreRepresentation(MachineRepresentation::kTaggedSigned,
-                                 kNoWriteBarrier),
-             vfalse0,
-             SeqTwoByteString::SizeFor(2) - kObjectAlignment - kHeapObjectTag,
-             __ SmiConstant(0));
     __ StoreField(AccessBuilder::ForMap(), vfalse0,
                   __ HeapConstant(factory()->string_map()));
     __ StoreField(AccessBuilder::ForNameRawHashField(), vfalse0,
@@ -4579,14 +4560,6 @@ Node* EffectControlLinearizer::LowerStringLessThan(Node* node) {
 Node* EffectControlLinearizer::LowerStringLessThanOrEqual(Node* node) {
   return LowerStringComparison(
       Builtins::CallableFor(isolate(), Builtin::kStringLessThanOrEqual), node);
-}
-
-Node* EffectControlLinearizer::LowerFunctionLength(Node* node) {
-  Node* subject = node->InputAt(0);
-
-  auto shared =
-      __ LoadField(AccessBuilder::ForJSFunctionSharedFunctionInfo(), subject);
-  return __ LoadField(AccessBuilder::ForSharedFunctionInfoLength(), shared);
 }
 
 Node* EffectControlLinearizer::LowerBigIntAdd(Node* node, Node* frame_state) {

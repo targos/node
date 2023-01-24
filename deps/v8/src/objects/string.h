@@ -721,10 +721,6 @@ class SeqString : public TorqueGeneratedSeqString<SeqString, String> {
   // Zero out only the padding bytes of this string.
   void ClearPadding();
 
-#ifdef VERIFY_HEAP
-  V8_EXPORT_PRIVATE void SeqStringVerify(Isolate* isolate);
-#endif
-
   TQ_OBJECT_CONSTRUCTORS(SeqString)
 };
 

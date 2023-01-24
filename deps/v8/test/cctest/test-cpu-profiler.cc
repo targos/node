@@ -94,7 +94,7 @@ TEST(StartStop) {
   CodeEntryStorage storage;
   CpuProfilesCollection profiles(isolate);
   ProfilerCodeObserver code_observer(isolate, storage);
-  Symbolizer symbolizer(code_observer.instruction_stream_map());
+  Symbolizer symbolizer(code_observer.code_map());
   std::unique_ptr<ProfilerEventsProcessor> processor(
       new SamplingEventsProcessor(
           isolate, &symbolizer, &code_observer, &profiles,
@@ -178,8 +178,7 @@ TEST(CodeEvents) {
   CodeEntryStorage storage;
   CpuProfilesCollection* profiles = new CpuProfilesCollection(isolate);
   ProfilerCodeObserver code_observer(isolate, storage);
-  Symbolizer* symbolizer =
-      new Symbolizer(code_observer.instruction_stream_map());
+  Symbolizer* symbolizer = new Symbolizer(code_observer.code_map());
   ProfilerEventsProcessor* processor = new SamplingEventsProcessor(
       isolate, symbolizer, &code_observer, profiles,
       v8::base::TimeDelta::FromMicroseconds(100), true);
@@ -208,20 +207,20 @@ TEST(CodeEvents) {
   processor->StopSynchronously();
 
   // Check the state of the symbolizer.
-  CodeEntry* aaa = symbolizer->instruction_stream_map()->FindEntry(
-      aaa_code->InstructionStart(cage_base));
+  CodeEntry* aaa =
+      symbolizer->code_map()->FindEntry(aaa_code->InstructionStart(cage_base));
   CHECK(aaa);
   CHECK_EQ(0, strcmp(aaa_str, aaa->name()));
 
-  CodeEntry* comment = symbolizer->instruction_stream_map()->FindEntry(
+  CodeEntry* comment = symbolizer->code_map()->FindEntry(
       comment_code->InstructionStart(cage_base));
   CHECK(comment);
   CHECK_EQ(0, strcmp("comment", comment->name()));
 
-  CHECK(!symbolizer->instruction_stream_map()->FindEntry(
+  CHECK(!symbolizer->code_map()->FindEntry(
       comment2_code->InstructionStart(cage_base)));
 
-  CodeEntry* comment2 = symbolizer->instruction_stream_map()->FindEntry(
+  CodeEntry* comment2 = symbolizer->code_map()->FindEntry(
       moved_code->InstructionStart(cage_base));
   CHECK(comment2);
   CHECK_EQ(0, strcmp("comment2", comment2->name()));
@@ -246,8 +245,7 @@ TEST(TickEvents) {
   CpuProfilesCollection* profiles = new CpuProfilesCollection(isolate);
   ProfilerCodeObserver* code_observer =
       new ProfilerCodeObserver(isolate, storage);
-  Symbolizer* symbolizer =
-      new Symbolizer(code_observer->instruction_stream_map());
+  Symbolizer* symbolizer = new Symbolizer(code_observer->code_map());
   ProfilerEventsProcessor* processor = new SamplingEventsProcessor(
       CcTest::i_isolate(), symbolizer, code_observer, profiles,
       v8::base::TimeDelta::FromMicroseconds(100), true);
@@ -317,15 +315,15 @@ TEST(CodeMapClearedBetweenProfilesWithLazyLogging) {
   CHECK(profile);
 
   // Check that the code map is empty.
-  InstructionStreamMap* instruction_stream_map = profiler.code_map_for_test();
-  CHECK_EQ(instruction_stream_map->size(), 0);
+  CodeMap* code_map = profiler.code_map_for_test();
+  CHECK_EQ(code_map->size(), 0);
 
   profiler.DeleteProfile(profile);
 
   // Create code between profiles. This should not be logged yet.
   i::Handle<i::AbstractCode> code2(CreateCode(isolate, &env), isolate);
 
-  CHECK(!instruction_stream_map->FindEntry(code2->InstructionStart(isolate)));
+  CHECK(!code_map->FindEntry(code2->InstructionStart(isolate)));
 }
 
 TEST(CodeMapNotClearedBetweenProfilesWithEagerLogging) {
@@ -345,35 +343,33 @@ TEST(CodeMapNotClearedBetweenProfilesWithEagerLogging) {
 
   PtrComprCageBase cage_base(isolate);
   // Check that our code is still in the code map.
-  InstructionStreamMap* instruction_stream_map = profiler.code_map_for_test();
+  CodeMap* code_map = profiler.code_map_for_test();
   CodeEntry* code1_entry =
-      instruction_stream_map->FindEntry(code1->InstructionStart(cage_base));
+      code_map->FindEntry(code1->InstructionStart(cage_base));
   CHECK(code1_entry);
   CHECK_EQ(0, strcmp("function_1", code1_entry->name()));
 
   profiler.DeleteProfile(profile);
 
   // We should still have an entry in kEagerLogging mode.
-  code1_entry =
-      instruction_stream_map->FindEntry(code1->InstructionStart(cage_base));
+  code1_entry = code_map->FindEntry(code1->InstructionStart(cage_base));
   CHECK(code1_entry);
   CHECK_EQ(0, strcmp("function_1", code1_entry->name()));
 
   // Create code between profiles. This should be logged too.
   i::Handle<i::AbstractCode> code2(CreateCode(isolate, &env), isolate);
-  CHECK(instruction_stream_map->FindEntry(code2->InstructionStart(cage_base)));
+  CHECK(code_map->FindEntry(code2->InstructionStart(cage_base)));
 
   profiler.StartProfiling("");
   CpuProfile* profile2 = profiler.StopProfiling("");
   CHECK(profile2);
 
   // Check that we still have code map entries for both code objects.
-  code1_entry =
-      instruction_stream_map->FindEntry(code1->InstructionStart(cage_base));
+  code1_entry = code_map->FindEntry(code1->InstructionStart(cage_base));
   CHECK(code1_entry);
   CHECK_EQ(0, strcmp("function_1", code1_entry->name()));
   CodeEntry* code2_entry =
-      instruction_stream_map->FindEntry(code2->InstructionStart(cage_base));
+      code_map->FindEntry(code2->InstructionStart(cage_base));
   CHECK(code2_entry);
   CHECK_EQ(0, strcmp("function_2", code2_entry->name()));
 
@@ -381,12 +377,10 @@ TEST(CodeMapNotClearedBetweenProfilesWithEagerLogging) {
 
   // Check that we still have code map entries for both code objects, even after
   // the last profile is deleted.
-  code1_entry =
-      instruction_stream_map->FindEntry(code1->InstructionStart(cage_base));
+  code1_entry = code_map->FindEntry(code1->InstructionStart(cage_base));
   CHECK(code1_entry);
   CHECK_EQ(0, strcmp("function_1", code1_entry->name()));
-  code2_entry =
-      instruction_stream_map->FindEntry(code2->InstructionStart(cage_base));
+  code2_entry = code_map->FindEntry(code2->InstructionStart(cage_base));
   CHECK(code2_entry);
   CHECK_EQ(0, strcmp("function_2", code2_entry->name()));
 }
@@ -417,8 +411,7 @@ TEST(Issue1398) {
   CpuProfilesCollection* profiles = new CpuProfilesCollection(isolate);
   ProfilerCodeObserver* code_observer =
       new ProfilerCodeObserver(isolate, storage);
-  Symbolizer* symbolizer =
-      new Symbolizer(code_observer->instruction_stream_map());
+  Symbolizer* symbolizer = new Symbolizer(code_observer->code_map());
   ProfilerEventsProcessor* processor = new SamplingEventsProcessor(
       CcTest::i_isolate(), symbolizer, code_observer, profiles,
       v8::base::TimeDelta::FromMicroseconds(100), true);
@@ -1306,8 +1299,7 @@ static void TickLines(bool optimize) {
   CpuProfilesCollection* profiles = new CpuProfilesCollection(isolate);
   ProfilerCodeObserver* code_observer =
       new ProfilerCodeObserver(isolate, storage);
-  Symbolizer* symbolizer =
-      new Symbolizer(code_observer->instruction_stream_map());
+  Symbolizer* symbolizer = new Symbolizer(code_observer->code_map());
   ProfilerEventsProcessor* processor = new SamplingEventsProcessor(
       CcTest::i_isolate(), symbolizer, code_observer, profiles,
       v8::base::TimeDelta::FromMicroseconds(100), true);
@@ -1341,8 +1333,7 @@ static void TickLines(bool optimize) {
   CHECK(profile);
 
   // Check the state of the symbolizer.
-  CodeEntry* func_entry =
-      symbolizer->instruction_stream_map()->FindEntry(code_address);
+  CodeEntry* func_entry = symbolizer->code_map()->FindEntry(code_address);
   CHECK(func_entry);
   CHECK_EQ(0, strcmp(func_name, func_entry->name()));
   const i::SourcePositionTable* line_info = func_entry->line_info();
@@ -3548,7 +3539,7 @@ TEST(LowPrecisionSamplingStartStopInternal) {
   CodeEntryStorage storage;
   CpuProfilesCollection profiles(isolate);
   ProfilerCodeObserver code_observer(isolate, storage);
-  Symbolizer symbolizer(code_observer.instruction_stream_map());
+  Symbolizer symbolizer(code_observer.code_map());
   std::unique_ptr<ProfilerEventsProcessor> processor(
       new SamplingEventsProcessor(
           isolate, &symbolizer, &code_observer, &profiles,
@@ -3676,8 +3667,7 @@ TEST(ProflilerSubsampling) {
   CpuProfilesCollection* profiles = new CpuProfilesCollection(isolate);
   ProfilerCodeObserver* code_observer =
       new ProfilerCodeObserver(isolate, storage);
-  Symbolizer* symbolizer =
-      new Symbolizer(code_observer->instruction_stream_map());
+  Symbolizer* symbolizer = new Symbolizer(code_observer->code_map());
   ProfilerEventsProcessor* processor =
       new SamplingEventsProcessor(isolate, symbolizer, code_observer, profiles,
                                   v8::base::TimeDelta::FromMicroseconds(1),
@@ -3723,8 +3713,7 @@ TEST(DynamicResampling) {
   CpuProfilesCollection* profiles = new CpuProfilesCollection(isolate);
   ProfilerCodeObserver* code_observer =
       new ProfilerCodeObserver(isolate, storage);
-  Symbolizer* symbolizer =
-      new Symbolizer(code_observer->instruction_stream_map());
+  Symbolizer* symbolizer = new Symbolizer(code_observer->code_map());
   ProfilerEventsProcessor* processor =
       new SamplingEventsProcessor(isolate, symbolizer, code_observer, profiles,
                                   v8::base::TimeDelta::FromMicroseconds(1),
@@ -3796,8 +3785,7 @@ TEST(DynamicResamplingWithBaseInterval) {
   CpuProfilesCollection* profiles = new CpuProfilesCollection(isolate);
   ProfilerCodeObserver* code_observer =
       new ProfilerCodeObserver(isolate, storage);
-  Symbolizer* symbolizer =
-      new Symbolizer(code_observer->instruction_stream_map());
+  Symbolizer* symbolizer = new Symbolizer(code_observer->code_map());
   ProfilerEventsProcessor* processor =
       new SamplingEventsProcessor(isolate, symbolizer, code_observer, profiles,
                                   v8::base::TimeDelta::FromMicroseconds(1),
@@ -4272,7 +4260,7 @@ int GetSourcePositionEntryCount(i::Isolate* isolate, const char* source,
   i::Handle<i::JSFunction> function = i::Handle<i::JSFunction>::cast(
       v8::Utils::OpenHandle(*CompileRun(source)));
   if (function->ActiveTierIsIgnition()) return -1;
-  i::Handle<i::InstructionStream> code(i::FromCode(function->code()), isolate);
+  i::Handle<i::Code> code(i::FromCodeT(function->code()), isolate);
   i::SourcePositionTableIterator iterator(
       ByteArray::cast(code->source_position_table()));
 
@@ -4552,12 +4540,11 @@ TEST(FastApiCPUProfiler) {
   // Check that the CodeEntry is the expected one, i.e. the fast callback.
   CodeEntry* code_entry =
       reinterpret_cast<const ProfileNode*>(api_func_node)->entry();
-  InstructionStreamMap* instruction_stream_map =
-      reinterpret_cast<CpuProfile*>(profile)
-          ->cpu_profiler()
-          ->code_map_for_test();
-  CodeEntry* expected_code_entry = instruction_stream_map->FindEntry(
-      reinterpret_cast<Address>(c_func.GetAddress()));
+  CodeMap* code_map = reinterpret_cast<CpuProfile*>(profile)
+                          ->cpu_profiler()
+                          ->code_map_for_test();
+  CodeEntry* expected_code_entry =
+      code_map->FindEntry(reinterpret_cast<Address>(c_func.GetAddress()));
   CHECK_EQ(code_entry, expected_code_entry);
 
   int foo_ticks = foo_node->GetHitCount();
@@ -4600,7 +4587,7 @@ TEST(BytecodeFlushEventsEagerLogging) {
       CcTest::heap());
 
   CpuProfiler profiler(i_isolate, kDebugNaming, kEagerLogging);
-  InstructionStreamMap* instruction_stream_map = profiler.code_map_for_test();
+  CodeMap* code_map = profiler.code_map_for_test();
 
   {
     v8::HandleScope scope(isolate);
@@ -4632,7 +4619,7 @@ TEST(BytecodeFlushEventsEagerLogging) {
         function->shared().GetBytecodeArray(i_isolate);
     i::Address bytecode_start = compiled_data.GetFirstBytecodeAddress();
 
-    CHECK(instruction_stream_map->FindEntry(bytecode_start));
+    CHECK(code_map->FindEntry(bytecode_start));
 
     // The code will survive at least two GCs.
     CcTest::CollectAllGarbage();
@@ -4649,7 +4636,7 @@ TEST(BytecodeFlushEventsEagerLogging) {
     CHECK(!function->shared().is_compiled());
     CHECK(!function->is_compiled());
 
-    CHECK(!instruction_stream_map->FindEntry(bytecode_start));
+    CHECK(!code_map->FindEntry(bytecode_start));
   }
 }
 
@@ -4670,8 +4657,8 @@ TEST(ClearUnusedWithEagerLogging) {
   CpuProfiler profiler(isolate, kDebugNaming, kEagerLogging, profiles, nullptr,
                        nullptr, code_observer);
 
-  InstructionStreamMap* instruction_stream_map = profiler.code_map_for_test();
-  size_t initial_size = instruction_stream_map->size();
+  CodeMap* code_map = profiler.code_map_for_test();
+  size_t initial_size = code_map->size();
   size_t profiler_size = profiler.GetEstimatedMemoryUsage();
 
   {
@@ -4683,7 +4670,7 @@ TEST(ClearUnusedWithEagerLogging) {
     CompileRun(
         "function some_func() {}"
         "some_func();");
-    CHECK_GT(instruction_stream_map->size(), initial_size);
+    CHECK_GT(code_map->size(), initial_size);
     CHECK_GT(profiler.GetEstimatedMemoryUsage(), profiler_size);
     CHECK_GT(profiler.GetAllProfilersMemorySize(isolate), profiler_size);
   }
@@ -4694,8 +4681,8 @@ TEST(ClearUnusedWithEagerLogging) {
 
   CcTest::CollectAllGarbage();
 
-  // Verify that the InstructionStreamMap's size is unchanged post-GC.
-  CHECK_EQ(instruction_stream_map->size(), initial_size);
+  // Verify that the CodeMap's size is unchanged post-GC.
+  CHECK_EQ(code_map->size(), initial_size);
   CHECK_EQ(profiler.GetEstimatedMemoryUsage(), profiler_size);
   CHECK_EQ(profiler.GetAllProfilersMemorySize(isolate), profiler_size);
 }

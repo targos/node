@@ -5,7 +5,6 @@
 #include "src/heap/sweeper.h"
 
 #include <algorithm>
-#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -284,9 +283,6 @@ void Sweeper::StartSweeperTasks() {
                                 old_snapshot_large_pages_set.end();
                        }));
 #endif  // DEBUG
-  }
-  if (promoted_pages_for_iteration_count_ > 0) {
-    promoted_page_iteration_in_progress_.store(true, std::memory_order_release);
   }
   if (v8_flags.concurrent_sweeping && sweeping_in_progress_ &&
       !heap_->delay_sweeper_tasks_for_testing_) {
@@ -722,18 +718,14 @@ class PromotedPageRecordMigratedSlotVisitor
     VisitPointer(host, key);
   }
 
-  void VisitCodeTarget(InstructionStream host, RelocInfo* rinfo) final {
-    UNREACHABLE();
-  }
-  void VisitEmbeddedPointer(InstructionStream host, RelocInfo* rinfo) final {
+  void VisitCodeTarget(Code host, RelocInfo* rinfo) final { UNREACHABLE(); }
+  void VisitEmbeddedPointer(Code host, RelocInfo* rinfo) final {
     UNREACHABLE();
   }
 
   // Entries that are skipped for recording.
-  inline void VisitExternalReference(InstructionStream host,
-                                     RelocInfo* rinfo) final {}
-  inline void VisitInternalReference(InstructionStream host,
-                                     RelocInfo* rinfo) final {}
+  inline void VisitExternalReference(Code host, RelocInfo* rinfo) final {}
+  inline void VisitInternalReference(Code host, RelocInfo* rinfo) final {}
   inline void VisitExternalPointer(HeapObject host, ExternalPointerSlot slot,
                                    ExternalPointerTag tag) final {}
 
@@ -854,7 +846,7 @@ void Sweeper::RawIteratePromotedPageForRememberedSets(
                 ->bitmap(chunk)
                 ->AllBitsClearInRange(chunk->AddressToMarkbitIndex(free_start),
                                       chunk->AddressToMarkbitIndex(free_end)));
-        AtomicZapBlock(free_start, size);
+        ZapCode(free_start, size);
         heap_->CreateFillerObjectAtSweeper(free_start, static_cast<int>(size));
       }
       Map map = object.map(cage_base, kAcquireLoad);
@@ -868,7 +860,7 @@ void Sweeper::RawIteratePromotedPageForRememberedSets(
           heap_->non_atomic_marking_state()->bitmap(chunk)->AllBitsClearInRange(
               chunk->AddressToMarkbitIndex(free_start),
               chunk->AddressToMarkbitIndex(chunk->area_end())));
-      AtomicZapBlock(free_start, size);
+      ZapCode(free_start, size);
       heap_->CreateFillerObjectAtSweeper(free_start, static_cast<int>(size));
     }
   }
@@ -876,16 +868,18 @@ void Sweeper::RawIteratePromotedPageForRememberedSets(
   chunk->set_concurrent_sweeping_state(Page::ConcurrentSweepingState::kDone);
 }
 
-bool Sweeper::IsIteratingPromotedPages() const {
-  return promoted_page_iteration_in_progress_.load(std::memory_order_acquire);
-}
-
 void Sweeper::WaitForPromotedPagesIteration() {
   if (!sweeping_in_progress()) return;
-  if (!IsIteratingPromotedPages()) return;
+  if (iterated_promoted_pages_count_ ==
+      base::AsAtomicPtr(&promoted_pages_for_iteration_count_)
+          ->load(std::memory_order_relaxed))
+    return;
   base::MutexGuard guard(&promoted_pages_iteration_notification_mutex_);
   // Check again that iteration is not yet finished.
-  if (!IsIteratingPromotedPages()) return;
+  if (iterated_promoted_pages_count_ ==
+      base::AsAtomicPtr(&promoted_pages_for_iteration_count_)
+          ->load(std::memory_order_relaxed))
+    return;
   promoted_pages_iteration_notification_variable_.Wait(
       &promoted_pages_iteration_notification_mutex_);
 }
@@ -894,7 +888,6 @@ void Sweeper::NotifyPromotedPagesIterationFinished() {
   DCHECK_EQ(iterated_promoted_pages_count_,
             promoted_pages_for_iteration_count_);
   base::MutexGuard guard(&promoted_pages_iteration_notification_mutex_);
-  promoted_page_iteration_in_progress_.store(false, std::memory_order_release);
   promoted_pages_iteration_notification_variable_.NotifyAll();
 }
 
@@ -1048,9 +1041,9 @@ void Sweeper::AddNewSpacePage(Page* page) {
 }
 
 void Sweeper::AddPromotedPageForIteration(MemoryChunk* chunk) {
-  DCHECK(!heap_->ShouldReduceMemory());
   DCHECK(chunk->owner_identity() == OLD_SPACE ||
          chunk->owner_identity() == LO_SPACE);
+  base::MutexGuard guard(&promoted_pages_iteration_mutex_);
   DCHECK_IMPLIES(v8_flags.concurrent_sweeping,
                  !job_handle_ || !job_handle_->IsValid());
   DCHECK_GE(chunk->area_size(),
@@ -1066,9 +1059,16 @@ void Sweeper::AddPromotedPageForIteration(MemoryChunk* chunk) {
   DCHECK_EQ(Page::ConcurrentSweepingState::kDone,
             chunk->concurrent_sweeping_state());
   chunk->set_concurrent_sweeping_state(Page::ConcurrentSweepingState::kPending);
-  base::MutexGuard guard(&promoted_pages_iteration_mutex_);
-  sweeping_list_for_promoted_page_iteration_.push_back(chunk);
-  promoted_pages_for_iteration_count_++;
+  if (heap_->ShouldReduceMemory()) {
+    // For memory reducing GCs, iterate pages immediately to avoid delaying
+    // array buffer sweeping.
+    RawIteratePromotedPageForRememberedSets(
+        chunk, &local_pretenuring_feedback_,
+        &snapshot_old_to_new_remembered_sets_);
+  } else {
+    sweeping_list_for_promoted_page_iteration_.push_back(chunk);
+    promoted_pages_for_iteration_count_++;
+  }
 }
 
 void Sweeper::AddPageImpl(AllocationSpace space, Page* page,

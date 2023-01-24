@@ -267,23 +267,17 @@ extern macro Allocate(
 const kAllocateBaseFlags: constexpr AllocationFlag =
     AllocationFlag::kAllowLargeObjectAllocation;
 macro AllocateFromNew(
-    sizeInBytes: intptr, map: Map, pretenured: bool,
-    clearPadding: bool): UninitializedHeapObject {
+    sizeInBytes: intptr, map: Map, pretenured: bool): UninitializedHeapObject {
   dcheck(ValidAllocationSize(sizeInBytes, map));
-  let res: UninitializedHeapObject;
   if (pretenured) {
-    res = Allocate(
+    return Allocate(
         sizeInBytes,
         %RawConstexprCast<constexpr AllocationFlag>(
             %RawConstexprCast<constexpr int32>(kAllocateBaseFlags) |
             %RawConstexprCast<constexpr int32>(AllocationFlag::kPretenured)));
   } else {
-    res = Allocate(sizeInBytes, kAllocateBaseFlags);
+    return Allocate(sizeInBytes, kAllocateBaseFlags);
   }
-  if (clearPadding) {
-    *unsafe::NewReference<Zero>(res, sizeInBytes - kObjectAlignment) = kZero;
-  }
-  return res;
 }
 
 macro InitializeFieldsFromIterator<T: type, Iterator: type>(

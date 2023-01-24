@@ -181,13 +181,12 @@ uint32_t DefaultEmbeddedBlobDataSize() {
 
 namespace {
 // These variables provide access to the current embedded blob without requiring
-// an isolate instance. This is needed e.g. by
-// InstructionStream::InstructionStart, which may not have access to an isolate
-// but still needs to access the embedded blob. The variables are initialized by
-// each isolate in Init(). Writes and reads are relaxed since we can guarantee
-// that the current thread has initialized these variables before accessing
-// them. Different threads may race, but this is fine since they all attempt to
-// set the same values of the blob pointer and size.
+// an isolate instance. This is needed e.g. by Code::InstructionStart, which may
+// not have access to an isolate but still needs to access the embedded blob.
+// The variables are initialized by each isolate in Init(). Writes and reads are
+// relaxed since we can guarantee that the current thread has initialized these
+// variables before accessing them. Different threads may race, but this is fine
+// since they all attempt to set the same values of the blob pointer and size.
 
 std::atomic<const uint8_t*> current_embedded_blob_code_(nullptr);
 std::atomic<uint32_t> current_embedded_blob_code_size_(0);
@@ -441,37 +440,69 @@ size_t Isolate::HashIsolateForEmbeddedBlob() {
   // Hash data sections of builtin code objects.
   for (Builtin builtin = Builtins::kFirst; builtin <= Builtins::kLast;
        ++builtin) {
-    Code code = builtins()->code(builtin);
+    CodeT codet = builtins()->code(builtin);
 
-    DCHECK(Internals::HasHeapObjectTag(code.ptr()));
-    uint8_t* const code_ptr = reinterpret_cast<uint8_t*>(code.address());
+    if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+      DCHECK(Internals::HasHeapObjectTag(codet.ptr()));
+      uint8_t* const code_ptr = reinterpret_cast<uint8_t*>(codet.address());
 
-    // These static asserts ensure we don't miss relevant fields. We don't
-    // hash code cage base and code entry point. Other data fields must
-    // remain the same.
-    static_assert(Code::kCodePointerFieldsStrongEndOffset ==
-                  Code::kCodeEntryPointOffset);
+      // These static asserts ensure we don't miss relevant fields. We don't
+      // hash code cage base and code entry point. Other data fields must
+      // remain the same.
+      static_assert(CodeDataContainer::kCodePointerFieldsStrongEndOffset ==
+                    CodeDataContainer::kCodeEntryPointOffset);
 
-    static_assert(Code::kCodeEntryPointOffsetEnd + 1 == Code::kFlagsOffset);
-    static_assert(Code::kFlagsOffsetEnd + 1 == Code::kBuiltinIdOffset);
-    static_assert(Code::kBuiltinIdOffsetEnd + 1 ==
-                  Code::kKindSpecificFlagsOffset);
-    static_assert(Code::kKindSpecificFlagsOffsetEnd + 1 ==
-                  Code::kUnalignedSize);
-    constexpr int kStartOffset = Code::kFlagsOffset;
+      static_assert(CodeDataContainer::kCodeEntryPointOffsetEnd + 1 ==
+                    CodeDataContainer::kFlagsOffset);
+      static_assert(CodeDataContainer::kFlagsOffsetEnd + 1 ==
+                    CodeDataContainer::kBuiltinIdOffset);
+      static_assert(CodeDataContainer::kBuiltinIdOffsetEnd + 1 ==
+                    CodeDataContainer::kKindSpecificFlagsOffset);
+      static_assert(CodeDataContainer::kKindSpecificFlagsOffsetEnd + 1 ==
+                    CodeDataContainer::kUnalignedSize);
+      constexpr int kStartOffset = CodeDataContainer::kFlagsOffset;
 
-    // |is_off_heap_trampoline| is false during builtins compilation (since
-    // the builtins are not trampolines yet) but it's true for off-heap
-    // builtin trampolines. The rest of the data fields should be the same.
-    // So we temporarily set |is_off_heap_trampoline| to true during hash
-    // computation.
-    bool is_off_heap_trampoline_sav = code.is_off_heap_trampoline();
-    code.set_is_off_heap_trampoline_for_hash(true);
+      // |is_off_heap_trampoline| is false during builtins compilation (since
+      // the builtins are not trampolines yet) but it's true for off-heap
+      // builtin trampolines. The rest of the data fields should be the same.
+      // So we temporarily set |is_off_heap_trampoline| to true during hash
+      // computation.
+      bool is_off_heap_trampoline_sav = codet.is_off_heap_trampoline();
+      codet.set_is_off_heap_trampoline_for_hash(true);
 
-    for (int j = kStartOffset; j < Code::kUnalignedSize; j++) {
-      hash = base::hash_combine(hash, size_t{code_ptr[j]});
+      for (int j = kStartOffset; j < CodeDataContainer::kUnalignedSize; j++) {
+        hash = base::hash_combine(hash, size_t{code_ptr[j]});
+      }
+      codet.set_is_off_heap_trampoline_for_hash(is_off_heap_trampoline_sav);
+#endif  // V8_EXTERNAL_CODE_SPACE
+    } else {
+      Code code = FromCodeT(codet);
+
+      DCHECK(Internals::HasHeapObjectTag(code.ptr()));
+      uint8_t* const code_ptr = reinterpret_cast<uint8_t*>(code.address());
+
+      // These static asserts ensure we don't miss relevant fields. We don't
+      // hash pointer compression base, instruction/metadata size value and
+      // flags since they change when creating the off-heap trampolines. Other
+      // data fields must remain the same.
+#ifdef V8_EXTERNAL_CODE_SPACE
+      static_assert(Code::kMainCageBaseUpper32BitsOffset == Code::kDataStart);
+      static_assert(Code::kInstructionSizeOffset ==
+                    Code::kMainCageBaseUpper32BitsOffsetEnd + 1);
+#else
+      static_assert(Code::kInstructionSizeOffset == Code::kDataStart);
+#endif  // V8_EXTERNAL_CODE_SPACE
+      static_assert(Code::kMetadataSizeOffset ==
+                    Code::kInstructionSizeOffsetEnd + 1);
+      static_assert(Code::kFlagsOffset == Code::kMetadataSizeOffsetEnd + 1);
+      static_assert(Code::kBuiltinIndexOffset == Code::kFlagsOffsetEnd + 1);
+      static constexpr int kStartOffset = Code::kBuiltinIndexOffset;
+
+      for (int j = kStartOffset; j < Code::kUnalignedHeaderSize; j++) {
+        hash = base::hash_combine(hash, size_t{code_ptr[j]});
+      }
     }
-    code.set_is_off_heap_trampoline_for_hash(is_off_heap_trampoline_sav);
   }
 
   // The builtins constants table is also tightly tied to embedded builtins.
@@ -692,7 +723,7 @@ StackTraceFailureMessage::StackTraceFailureMessage(
     FixedStringAllocator fixed(&js_stack_trace_[0], buffer_length - 1);
     StringStream accumulator(&fixed, StringStream::kPrintObjectConcise);
     isolate->PrintStack(&accumulator, Isolate::kPrintStackVerbose);
-    // Keeping a reference to the last code objects to increase likelihood that
+    // Keeping a reference to the last code objects to increase likelyhood that
     // they get included in the minidump.
     const size_t code_objects_length = arraysize(code_objects_);
     size_t i = 0;
@@ -770,7 +801,7 @@ class CallSiteBuilder {
 
     Handle<Object> receiver(combinator->native_context().promise_function(),
                             isolate_);
-    Handle<Code> code(combinator->code(), isolate_);
+    Handle<CodeT> code(combinator->code(), isolate_);
 
     // TODO(mmarchini) save Promises list from the Promise combinator
     Handle<FixedArray> parameters = isolate_->factory()->empty_fixed_array();
@@ -1996,7 +2027,7 @@ Object Isolate::UnwindAndFindHandler() {
       CHECK(frame->is_java_script());
 
       if (frame->is_turbofan()) {
-        InstructionStream code = frame->LookupCode().instruction_stream();
+        Code code = frame->LookupCodeT().code();
         // The debugger triggers lazy deopt for the "to-be-restarted" frame
         // immediately when the CDP event arrives while paused.
         CHECK(code.marked_for_deoptimization());
@@ -2019,7 +2050,7 @@ Object Isolate::UnwindAndFindHandler() {
       DCHECK(!frame->is_maglev());
 
       debug()->clear_restart_frame();
-      Code code = *BUILTIN_CODE(this, RestartFrameTrampoline);
+      CodeT code = *BUILTIN_CODE(this, RestartFrameTrampoline);
       return FoundHandler(Context(), code.InstructionStart(), 0,
                           code.constant_pool(), kNullAddress, frame->fp(),
                           visited_frames);
@@ -2035,7 +2066,7 @@ Object Isolate::UnwindAndFindHandler() {
         thread_local_top()->handler_ = handler->next_address();
 
         // Gather information from the handler.
-        Code code = frame->LookupCode().code();
+        CodeT code = frame->LookupCodeT().codet();
         HandlerTable table(code);
         return FoundHandler(Context(), code.InstructionStart(this, frame->pc()),
                             table.LookupReturn(0), code.constant_pool(),
@@ -2047,7 +2078,7 @@ Object Isolate::UnwindAndFindHandler() {
       case StackFrame::C_WASM_ENTRY: {
         StackHandler* handler = frame->top_handler();
         thread_local_top()->handler_ = handler->next_address();
-        InstructionStream code = frame->LookupCode().instruction_stream();
+        Code code = frame->LookupCodeT().code();
         HandlerTable table(code);
         Address instruction_start = code.InstructionStart(this, frame->pc());
         int return_offset = static_cast<int>(frame->pc() - instruction_start);
@@ -2107,7 +2138,7 @@ Object Isolate::UnwindAndFindHandler() {
         int offset = opt_frame->LookupExceptionHandlerInTable(nullptr, nullptr);
         if (offset < 0) break;
         // The code might be an optimized code or a turbofanned builtin.
-        Code code = frame->LookupCode().ToCode();
+        CodeT code = frame->LookupCodeT().ToCodeT();
         // Compute the stack pointer from the frame pointer. This ensures
         // that argument slots on the stack are dropped as returning would.
         Address return_sp = frame->fp() +
@@ -2141,7 +2172,7 @@ Object Isolate::UnwindAndFindHandler() {
 
         // The code might be a dynamically generated stub or a turbofanned
         // embedded builtin.
-        Code code = stub_frame->LookupCode().ToCode();
+        CodeT code = stub_frame->LookupCodeT().ToCodeT();
         if (code.kind() != CodeKind::BUILTIN || !code.is_turbofanned() ||
             !code.has_handler_table()) {
           break;
@@ -2191,7 +2222,7 @@ Object Isolate::UnwindAndFindHandler() {
 
         if (frame->is_baseline()) {
           BaselineFrame* sp_frame = BaselineFrame::cast(js_frame);
-          InstructionStream code = sp_frame->LookupCode().instruction_stream();
+          Code code = sp_frame->LookupCodeT().code();
           DCHECK(!code.is_off_heap_trampoline());
           intptr_t pc_offset = sp_frame->GetPCForBytecodeOffset(offset);
           // Patch the context register directly on the frame, so that we don't
@@ -2204,7 +2235,7 @@ Object Isolate::UnwindAndFindHandler() {
           InterpretedFrame::cast(js_frame)->PatchBytecodeOffset(
               static_cast<int>(offset));
 
-          Code code = *BUILTIN_CODE(this, InterpreterEnterAtBytecode);
+          CodeT code = *BUILTIN_CODE(this, InterpreterEnterAtBytecode);
           // We subtract a frame from visited_frames because otherwise the
           // shadow stack will drop the underlying interpreter entry trampoline
           // in which the handler runs.
@@ -2236,7 +2267,7 @@ Object Isolate::UnwindAndFindHandler() {
 
         // Reconstruct the stack pointer from the frame pointer.
         Address return_sp = js_frame->fp() - js_frame->GetSPToFPDelta();
-        Code code = js_frame->LookupCode().code();
+        CodeT code = js_frame->LookupCodeT().codet();
         return FoundHandler(Context(), code.InstructionStart(), 0,
                             code.constant_pool(), return_sp, frame->fp(),
                             visited_frames);
@@ -2253,8 +2284,8 @@ Object Isolate::UnwindAndFindHandler() {
       USE(removed);
       // If there were any materialized objects, the code should be
       // marked for deopt.
-      DCHECK_IMPLIES(removed,
-                     frame->LookupCode().ToCode().marked_for_deoptimization());
+      DCHECK_IMPLIES(
+          removed, frame->LookupCodeT().ToCodeT().marked_for_deoptimization());
     }
   }
 
@@ -2353,7 +2384,7 @@ Isolate::CatchType Isolate::PredictExceptionCatcher() {
       }
 
       case StackFrame::STUB: {
-        CodeLookupResult code = frame->LookupCode();
+        CodeLookupResult code = frame->LookupCodeT();
         if (code.kind() != CodeKind::BUILTIN || !code.has_handler_table() ||
             !code.is_turbofanned()) {
           break;
@@ -2365,7 +2396,7 @@ Isolate::CatchType Isolate::PredictExceptionCatcher() {
       }
 
       case StackFrame::JAVA_SCRIPT_BUILTIN_CONTINUATION_WITH_CATCH: {
-        CodeLookupResult code = frame->LookupCode();
+        CodeLookupResult code = frame->LookupCodeT();
         CatchType prediction = ToCatchType(code.GetBuiltinCatchPrediction());
         if (prediction != NOT_CAUGHT) return prediction;
         break;
@@ -2832,7 +2863,7 @@ Handle<Object> Isolate::GetPromiseOnStackOnThrow() {
     if (frame->is_java_script()) {
       catch_prediction = PredictException(JavaScriptFrame::cast(frame));
     } else if (frame->type() == StackFrame::STUB) {
-      CodeLookupResult code = frame->LookupCode();
+      CodeLookupResult code = frame->LookupCodeT();
       if (code.kind() != CodeKind::BUILTIN || !code.has_handler_table() ||
           !code.is_turbofanned()) {
         continue;
@@ -2937,31 +2968,6 @@ bool Isolate::IsSharedArrayBufferConstructorEnabled(Handle<Context> context) {
     return sharedarraybuffer_constructor_enabled_callback()(api_context);
   }
   return false;
-}
-
-bool Isolate::IsWasmGCEnabled(Handle<Context> context) {
-#ifdef V8_ENABLE_WEBASSEMBLY
-  if (wasm_gc_enabled_callback()) {
-    v8::Local<v8::Context> api_context = v8::Utils::ToLocal(context);
-    return wasm_gc_enabled_callback()(api_context);
-  }
-  return v8_flags.experimental_wasm_gc;
-#else
-  return false;
-#endif
-}
-
-bool Isolate::IsWasmStringRefEnabled(Handle<Context> context) {
-  // If Wasm GC is explicitly enabled via a callback, also enable stringref.
-#ifdef V8_ENABLE_WEBASSEMBLY
-  if (wasm_gc_enabled_callback()) {
-    v8::Local<v8::Context> api_context = v8::Utils::ToLocal(context);
-    return wasm_gc_enabled_callback()(api_context);
-  }
-  return v8_flags.experimental_wasm_stringref;
-#else
-  return false;
-#endif
 }
 
 Handle<Context> Isolate::GetIncumbentContext() {
@@ -3075,7 +3081,8 @@ void Isolate::RecordStackSwitchForScanning() {
                                  .get()
                                  .get();
   current = WasmContinuationObject::cast(current).parent();
-  heap()->SetStackStart(reinterpret_cast<void*>(stack->base()));
+  thread_local_top()->stack_.SetStackStart(
+      reinterpret_cast<void*>(stack->base()));
   // We don't need to add all inactive stacks. Only the ones in the active chain
   // may contain cpp heap pointers.
   while (!current.IsUndefined()) {
@@ -3371,12 +3378,9 @@ void Isolate::Delete(Isolate* isolate) {
   Isolate* saved_isolate = isolate->TryGetCurrent();
   SetIsolateThreadLocals(isolate, nullptr);
   isolate->set_thread_id(ThreadId::Current());
-  if (saved_isolate) {
-    isolate->thread_local_top()->stack_ =
-        std::move(saved_isolate->thread_local_top()->stack_);
-  } else {
-    isolate->heap()->SetStackStart(base::Stack::GetStackStart());
-  }
+  isolate->thread_local_top()->stack_ =
+      saved_isolate ? std::move(saved_isolate->thread_local_top()->stack_)
+                    : ::heap::base::Stack(base::Stack::GetStackStart());
 
   bool owns_shared_isolate = isolate->owns_shared_isolate_;
   Isolate* maybe_shared_isolate = isolate->shared_isolate_;
@@ -3909,7 +3913,7 @@ void CreateOffHeapTrampolines(Isolate* isolate) {
   for (Builtin builtin = Builtins::kFirst; builtin <= Builtins::kLast;
        ++builtin) {
     Address instruction_start = d.InstructionStartOfBuiltin(builtin);
-    Handle<Code> trampoline = isolate->factory()->NewOffHeapTrampolineFor(
+    Handle<CodeT> trampoline = isolate->factory()->NewOffHeapTrampolineFor(
         builtins->code_handle(builtin), instruction_start);
 
     // From this point onwards, the old builtin code object is unreachable and
@@ -4038,6 +4042,13 @@ bool Isolate::InitWithoutSnapshot() {
   return Init(nullptr, nullptr, nullptr, false);
 }
 
+bool Isolate::InitWithReadOnlySnapshot(SnapshotData* read_only_snapshot_data) {
+  DCHECK_NOT_NULL(read_only_snapshot_data);
+  // Without external code space builtin code objects are alocated in ro space
+  DCHECK(V8_EXTERNAL_CODE_SPACE_BOOL);
+  return Init(nullptr, read_only_snapshot_data, nullptr, false);
+}
+
 bool Isolate::InitWithSnapshot(SnapshotData* startup_snapshot_data,
                                SnapshotData* read_only_snapshot_data,
                                SnapshotData* shared_heap_snapshot_data,
@@ -4080,7 +4091,7 @@ void Isolate::AddCrashKeysForIsolateAndHeapPointers() {
                             ToHexString(code_range_base_address));
   }
 
-  if (heap()->code_space()->first_page()) {
+  if (!V8_EXTERNAL_CODE_SPACE_BOOL || heap()->code_space()->first_page()) {
     const uintptr_t code_space_firstpage_address =
         heap()->code_space()->FirstPageAddress();
     add_crash_key_callback_(v8::CrashKeyId::kCodeSpaceFirstPageAddress,
@@ -4088,13 +4099,13 @@ void Isolate::AddCrashKeysForIsolateAndHeapPointers() {
   }
   const v8::StartupData* data = Snapshot::DefaultSnapshotBlob();
   // TODO(cbruni): Implement strategy to infrequently collect this.
-  const uint32_t v8_snapshot_checksum_calculated = 0;
+  const uint32_t v8_snapshot_checkum_calculated = 0;
   add_crash_key_callback_(v8::CrashKeyId::kSnapshotChecksumCalculated,
-                          ToHexString(v8_snapshot_checksum_calculated));
-  const uint32_t v8_snapshot_checksum_expected =
+                          ToHexString(v8_snapshot_checkum_calculated));
+  const uint32_t v8_snapshot_checkum_expected =
       Snapshot::GetExpectedChecksum(data);
   add_crash_key_callback_(v8::CrashKeyId::kSnapshotChecksumExpected,
-                          ToHexString(v8_snapshot_checksum_expected));
+                          ToHexString(v8_snapshot_checkum_expected));
 }
 
 void Isolate::InitializeCodeRanges() {
@@ -4169,8 +4180,8 @@ void Isolate::VerifyStaticRoots() {
   }
 
   idx = RootIndex::kFirstReadOnlyRoot;
-#define CHECK_NAME(_1, _2, CamelName)                                     \
-  CHECK_WITH_MSG(StaticReadOnlyRoot::k##CamelName ==                      \
+#define CHECK_NAME(_1, name_, _2)                                         \
+  CHECK_WITH_MSG(kStaticReadOnlyRoot::name_ ==                            \
                      V8HeapCompressionScheme::CompressTagged(roots[idx]), \
                  STATIC_ROOTS_FAILED_MSG);                                \
   ++idx;
@@ -4191,9 +4202,12 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
 #endif  // V8_COMPRESS_POINTERS_IN_SHARED_CAGE
 
   const bool create_heap_objects = (shared_heap_snapshot_data == nullptr);
+  const bool setup_up_existing_read_only_roots =
+      create_heap_objects && (read_only_snapshot_data != nullptr);
   // We either have both or none.
   DCHECK_EQ(create_heap_objects, startup_snapshot_data == nullptr);
-  DCHECK_EQ(create_heap_objects, read_only_snapshot_data == nullptr);
+  DCHECK_IMPLIES(setup_up_existing_read_only_roots,
+                 startup_snapshot_data == nullptr);
 
   // Code space setup requires the permissions to be set to default state.
   RwxMemoryWriteScope::SetDefaultPermissionsForNewThread();
@@ -4346,6 +4360,28 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
     string_forwarding_table_ = shared_heap_isolate()->string_forwarding_table_;
   }
 
+  // If we create an isolate from scratch, but based on existing read only
+  // roots, then we need to populate the string cache with its strings.
+  if (setup_up_existing_read_only_roots) {
+    HandleScope scope(this);
+    ReadOnlyHeapObjectIterator iterator(read_only_heap());
+    for (HeapObject object = iterator.Next(); !object.is_null();
+         object = iterator.Next()) {
+      if (object.IsInternalizedString()) {
+        auto s = String::cast(object);
+        Handle<String> str(s, this);
+        StringTableInsertionKey key(
+            this, str, DeserializingUserCodeOption::kNotDeserializingUserCode);
+        auto result = string_table()->LookupKey(this, &key);
+        // Since this is startup, there should be no duplicate entries in the
+        // string table, and the lookup should unconditionally add the given
+        // string.
+        DCHECK_EQ(*result, *str);
+        USE(result);
+      }
+    }
+  }
+
   if (V8_SHORT_BUILTIN_CALLS_BOOL && v8_flags.short_builtin_calls) {
 #if defined(V8_OS_ANDROID)
     // On Android, the check is not operative to detect memory, and re-embedded
@@ -4490,7 +4526,9 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
     CodePageCollectionMemoryModificationScope modification_scope(heap());
 
     if (create_heap_objects) {
-      read_only_heap_->OnCreateHeapObjectsComplete(this);
+      if (!setup_up_existing_read_only_roots) {
+        read_only_heap_->OnCreateHeapObjectsComplete(this);
+      }
     } else {
       SharedHeapDeserializer shared_heap_deserializer(
           this, shared_heap_snapshot_data, can_rehash);
@@ -4606,7 +4644,7 @@ bool Isolate::Init(SnapshotData* startup_snapshot_data,
                                 nullptr);
 
   // Isolate initialization allocates long living objects that should be
-  // pretenured to old space.
+  // pretentured to old space.
   DCHECK_IMPLIES(heap()->new_space(), (heap()->new_space()->Size() == 0) &&
                                           (heap()->gc_count() == 0));
 
@@ -4779,7 +4817,7 @@ bool Isolate::use_optimizer() {
 
 void Isolate::IncreaseTotalRegexpCodeGenerated(Handle<HeapObject> code) {
   PtrComprCageBase cage_base(this);
-  DCHECK(code->IsInstructionStream(cage_base) || code->IsByteArray(cage_base));
+  DCHECK(code->IsCode(cage_base) || code->IsByteArray(cage_base));
   total_regexp_code_generated_ += code->Size(cage_base);
 }
 
@@ -5124,7 +5162,7 @@ MaybeHandle<JSPromise> Isolate::RunHostImportModuleDynamicallyCallback(
             ToApiHandle<v8::FixedArray>(import_assertions_array)),
         MaybeHandle<JSPromise>());
   } else {
-    // TODO(cbruni, v8:12302): Avoid creating temporary ScriptOrModule objects.
+    // TODO(cbruni, v8:12302): Avoid creating tempory ScriptOrModule objects.
     auto script_or_module = i::Handle<i::ScriptOrModule>::cast(
         this->factory()->NewStruct(i::SCRIPT_OR_MODULE_TYPE));
     script_or_module->set_resource_name(*resource_name);

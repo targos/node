@@ -231,11 +231,9 @@ void LinuxPerfJitLogger::LogRecordedBuffer(
   if (perf_output_handle_ == nullptr) return;
 
   // We only support non-interpreted functions.
-  if (!abstract_code->IsInstructionStream(isolate_)) return;
-  Handle<InstructionStream> code =
-      Handle<InstructionStream>::cast(abstract_code);
-  DCHECK(code->raw_instruction_start() ==
-         code->address() + InstructionStream::kHeaderSize);
+  if (!abstract_code->IsCode(isolate_)) return;
+  Handle<Code> code = Handle<Code>::cast(abstract_code);
+  DCHECK(code->raw_instruction_start() == code->address() + Code::kHeaderSize);
 
   // Debug info has to be emitted first.
   Handle<SharedFunctionInfo> shared;
@@ -322,7 +320,7 @@ base::Vector<const char> GetScriptName(Object maybeScript,
 
 }  // namespace
 
-SourcePositionInfo GetSourcePositionInfo(Handle<InstructionStream> code,
+SourcePositionInfo GetSourcePositionInfo(Handle<Code> code,
                                          Handle<SharedFunctionInfo> function,
                                          SourcePosition pos) {
   DisallowGarbageCollection disallow;
@@ -335,7 +333,7 @@ SourcePositionInfo GetSourcePositionInfo(Handle<InstructionStream> code,
 
 }  // namespace
 
-void LinuxPerfJitLogger::LogWriteDebugInfo(Handle<InstructionStream> code,
+void LinuxPerfJitLogger::LogWriteDebugInfo(Handle<Code> code,
                                            Handle<SharedFunctionInfo> shared) {
   // Line ends of all scripts have been initialized prior to this.
   DisallowGarbageCollection no_gc;
@@ -486,7 +484,7 @@ void LinuxPerfJitLogger::LogWriteDebugInfo(const wasm::WasmCode* code) {
 }
 #endif  // V8_ENABLE_WEBASSEMBLY
 
-void LinuxPerfJitLogger::LogWriteUnwindingInfo(InstructionStream code) {
+void LinuxPerfJitLogger::LogWriteUnwindingInfo(Code code) {
   PerfJitCodeUnwindingInfo unwinding_info_header;
   unwinding_info_header.event_ = PerfJitCodeLoad::kUnwindingInfo;
   unwinding_info_header.time_stamp_ = GetTimestamp();

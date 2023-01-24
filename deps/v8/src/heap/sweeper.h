@@ -137,7 +137,6 @@ class Sweeper {
                                            bool is_joining_thread);
   GCTracer::Scope::ScopeId GetTracingScopeForCompleteYoungSweep();
 
-  bool IsIteratingPromotedPages() const;
   void WaitForPromotedPagesIteration();
 
  private:
@@ -252,7 +251,6 @@ class Sweeper {
   MemoryAllocator::LargePagesSet snapshot_large_pages_set_;
   MemoryAllocator::NormalPagesSet snapshot_shared_normal_pages_set_;
   MemoryAllocator::LargePagesSet snapshot_shared_large_pages_set_;
-  std::atomic<bool> promoted_page_iteration_in_progress_{false};
 };
 
 }  // namespace internal

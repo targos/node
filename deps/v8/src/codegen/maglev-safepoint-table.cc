@@ -13,18 +13,20 @@ namespace v8 {
 namespace internal {
 
 MaglevSafepointTable::MaglevSafepointTable(Isolate* isolate, Address pc,
-                                           InstructionStream code)
-    : MaglevSafepointTable(code.InstructionStart(isolate, pc),
-                           code.SafepointTableAddress()) {
-  DCHECK(code.is_maglevved());
-}
-
-MaglevSafepointTable::MaglevSafepointTable(Isolate* isolate, Address pc,
                                            Code code)
     : MaglevSafepointTable(code.InstructionStart(isolate, pc),
                            code.SafepointTableAddress()) {
   DCHECK(code.is_maglevved());
 }
+
+#ifdef V8_EXTERNAL_CODE_SPACE
+MaglevSafepointTable::MaglevSafepointTable(Isolate* isolate, Address pc,
+                                           CodeDataContainer code)
+    : MaglevSafepointTable(code.InstructionStart(isolate, pc),
+                           code.SafepointTableAddress()) {
+  DCHECK(code.is_maglevved());
+}
+#endif  // V8_EXTERNAL_CODE_SPACE
 
 MaglevSafepointTable::MaglevSafepointTable(Address instruction_start,
                                            Address safepoint_table_address)
@@ -160,7 +162,7 @@ void MaglevSafepointTableBuilder::Emit(Assembler* assembler) {
 #endif
 
   // Make sure the safepoint table is properly aligned. Pad with nops.
-  assembler->Align(InstructionStream::kMetadataAlignment);
+  assembler->Align(Code::kMetadataAlignment);
   assembler->RecordComment(";;; Maglev safepoint table.");
   set_safepoint_table_offset(assembler->pc_offset());
 

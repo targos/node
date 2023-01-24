@@ -33,7 +33,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
 
   let instance = builder.instantiate();
   for (let i = 0; i < 20; i++) assertEquals(14, instance.exports.main(10));
-  %WasmTierUpFunction(instance.exports.main);
+  %WasmTierUpFunction(instance, main.index);
   // The tiered-up function should have {callee} speculatively inlined.
   assertEquals(14, instance.exports.main(10));
 })();
@@ -75,7 +75,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   let instance = builder.instantiate();
 
   for (let i = 0; i < 20; i++) assertEquals(14, instance.exports.main(10, 1));
-  %WasmTierUpFunction(instance.exports.main);
+  %WasmTierUpFunction(instance, main.index);
   // Tier-up is done, and {callee0} should be inlined in the trace.
   assertEquals(14, instance.exports.main(10, 1));
 
@@ -105,7 +105,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   let instance = builder.instantiate();
 
   for (let i = 0; i < 20; i++) assertEquals(14, instance.exports.main(10));
-  %WasmTierUpFunction(instance.exports.main);
+  %WasmTierUpFunction(instance, main.index);
   // After tier-up, the tail call should be speculatively inlined.
   assertEquals(14, instance.exports.main(10));
 })();
@@ -145,7 +145,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
   let instance = builder.instantiate();
 
   assertEquals(9, instance.exports.main(10, 1));
-  %WasmTierUpFunction(instance.exports.main);
+  %WasmTierUpFunction(instance, main.index);
   // After tier-up, {callee0} should be inlined in the trace.
   assertEquals(9, instance.exports.main(10, 1))
 
@@ -190,7 +190,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
 
   // Run 'main' until it is tiered-up.
   assertEquals(1, instance2.exports.main(0, instance1.exports.f1));
-  %WasmTierUpFunction(instance2.exports.main);
+  %WasmTierUpFunction(instance2, main.index);
   // The function f1 defined in another module should not be inlined.
   assertEquals(1, instance2.exports.main(0, instance1.exports.f1));
 })();
@@ -232,7 +232,7 @@ d8.file.execute("test/mjsunit/wasm/wasm-module-builder.js");
       assertEquals(16, instance2.exports.main(5, f1, f2));
     }
   }
-  %WasmTierUpFunction(instance2.exports.main);
+  %WasmTierUpFunction(instance2, main.index);
   // WebAssembly.Function objects should not be inlined.
   assertEquals(16, instance2.exports.main(5, f1, f2));
   assertEquals(12, instance2.exports.main(5, f1, f1));

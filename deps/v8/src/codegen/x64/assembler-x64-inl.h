@@ -215,7 +215,7 @@ void Assembler::deserialization_set_target_internal_reference_at(
 }
 
 void Assembler::deserialization_set_special_target_at(
-    Address instruction_payload, InstructionStream code, Address target) {
+    Address instruction_payload, Code code, Address target) {
   set_target_address_at(instruction_payload,
                         !code.is_null() ? code.constant_pool() : kNullAddress,
                         target);
@@ -226,7 +226,7 @@ int Assembler::deserialization_special_target_size(
   return kSpecialTargetSize;
 }
 
-Handle<Code> Assembler::code_target_object_handle_at(Address pc) {
+Handle<CodeT> Assembler::code_target_object_handle_at(Address pc) {
   return GetCodeTarget(ReadUnalignedValue<int32_t>(pc));
 }
 
@@ -285,9 +285,8 @@ HeapObject RelocInfo::target_object(PtrComprCageBase cage_base) {
     DCHECK(!HAS_SMI_TAG(compressed));
     Object obj(V8HeapCompressionScheme::DecompressTaggedPointer(cage_base,
                                                                 compressed));
-    // Embedding of compressed InstructionStream objects must not happen when
-    // external code space is enabled, because Codes must be used
-    // instead.
+    // Embedding of compressed Code objects must not happen when external code
+    // space is enabled, because CodeDataContainers must be used instead.
     DCHECK_IMPLIES(V8_EXTERNAL_CODE_SPACE_BOOL,
                    !IsCodeSpaceObject(HeapObject::cast(obj)));
     return HeapObject::cast(obj);

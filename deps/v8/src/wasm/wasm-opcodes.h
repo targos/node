@@ -25,7 +25,9 @@ class WasmFeatures;
 struct WasmModule;
 
 std::ostream& operator<<(std::ostream& os, const FunctionSig& function);
-bool V8_EXPORT_PRIVATE IsJSCompatibleSignature(const FunctionSig* sig);
+bool V8_EXPORT_PRIVATE IsJSCompatibleSignature(const FunctionSig* sig,
+                                               const WasmModule* module,
+                                               const WasmFeatures&);
 
 // Format of all opcode macros: kExprName, binary, signature, wat name
 
@@ -745,7 +747,6 @@ bool V8_EXPORT_PRIVATE IsJSCompatibleSignature(const FunctionSig* sig);
   V(StringNewWtf8, 0xfb8c, _, "string.new_wtf8")                               \
   V(StringEncodeLossyUtf8, 0xfb8d, _, "string.encode_lossy_utf8")              \
   V(StringEncodeWtf8, 0xfb8e, _, "string.encode_wtf8")                         \
-  V(StringNewUtf8Try, 0xfb8f, _, "string.new_utf8_try")                        \
   V(StringAsWtf8, 0xfb90, _, "string.as_wtf8")                                 \
   V(StringViewWtf8Advance, 0xfb91, _, "stringview_wtf8.advance")               \
   V(StringViewWtf8EncodeUtf8, 0xfb92, _, "stringview_wtf8.encode_utf8")        \

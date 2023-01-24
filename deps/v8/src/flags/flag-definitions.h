@@ -241,7 +241,8 @@ DEFINE_BOOL(harmony_shipping, true, "enable all shipped harmony features")
   V(harmony_rab_gsab,                                           \
     "harmony ResizableArrayBuffer / GrowableSharedArrayBuffer") \
   V(harmony_rab_gsab_transfer, "harmony ArrayBuffer.transfer")  \
-  V(harmony_array_grouping, "harmony array grouping")
+  V(harmony_array_grouping, "harmony array grouping")           \
+  V(harmony_string_is_well_formed, "harmony String#{is,to}WellFormed")
 
 DEFINE_IMPLICATION(harmony_rab_gsab_transfer, harmony_rab_gsab)
 
@@ -255,10 +256,10 @@ DEFINE_IMPLICATION(harmony_rab_gsab_transfer, harmony_rab_gsab)
 #define HARMONY_SHIPPING_BASE(V)                                      \
   V(harmony_sharedarraybuffer, "harmony sharedarraybuffer")           \
   V(harmony_atomics, "harmony atomics")                               \
+  V(harmony_class_static_blocks, "harmony static initializer blocks") \
   V(harmony_import_assertions, "harmony import assertions")           \
   V(harmony_symbol_as_weakmap_key, "harmony symbols as weakmap keys") \
-  V(harmony_change_array_by_copy, "harmony change-Array-by-copy")     \
-  V(harmony_string_is_well_formed, "harmony String#{is,to}WellFormed")
+  V(harmony_change_array_by_copy, "harmony change-Array-by-copy")
 
 #ifdef V8_INTL_SUPPORT
 #define HARMONY_SHIPPING(V) \
@@ -1183,10 +1184,8 @@ DEFINE_BOOL(wasm_math_intrinsics, true,
 DEFINE_BOOL(
     wasm_inlining, false,
     "enable inlining of wasm functions into wasm functions (experimental)")
-DEFINE_SIZE_T(wasm_inlining_budget, 5000,
+DEFINE_SIZE_T(wasm_inlining_budget, 9000,
               "maximum graph size (in TF nodes) that allows inlining more")
-DEFINE_SIZE_T(wasm_inlining_max_size, 500,
-              "maximum function size (in wire bytes) that may be inlined")
 DEFINE_BOOL(wasm_speculative_inlining, false,
             "enable speculative inlining of call_ref targets (experimental)")
 DEFINE_BOOL(trace_wasm_inlining, false, "trace wasm inlining")
@@ -1288,6 +1287,8 @@ DEFINE_BOOL(huge_max_old_generation_size, true,
 DEFINE_SIZE_T(initial_old_space_size, 0, "initial old space size (in Mbytes)")
 DEFINE_BOOL(separate_gc_phases, false,
             "young and full garbage collection phases are not overlapping")
+DEFINE_BOOL(global_gc_scheduling, true,
+            "enable GC scheduling based on global memory")
 DEFINE_BOOL(gc_global, false, "always perform global GCs")
 DEFINE_BOOL(shared_space, true,
             "Implement shared heap as shared space on a main isolate.")

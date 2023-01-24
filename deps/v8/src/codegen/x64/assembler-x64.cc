@@ -367,13 +367,13 @@ void Assembler::GetCode(Isolate* isolate, CodeDesc* desc,
                         SafepointTableBuilderBase* safepoint_table_builder,
                         int handler_table_offset) {
   // As a crutch to avoid having to add manual Align calls wherever we use a
-  // raw workflow to create InstructionStream objects (mostly in tests), add
-  // another Align call here. It does no harm - the end of the InstructionStream
-  // object is aligned to the (larger) kCodeAlignment anyways.
+  // raw workflow to create Code objects (mostly in tests), add another Align
+  // call here. It does no harm - the end of the Code object is aligned to the
+  // (larger) kCodeAlignment anyways.
   // TODO(jgruber): Consider moving responsibility for proper alignment to
   // metadata table builders (safepoint, handler, constant pool, code
   // comments).
-  DataAlign(InstructionStream::kMetadataAlignment);
+  DataAlign(Code::kMetadataAlignment);
 
   PatchConstPool();
   DCHECK(constpool_.IsEmpty());
@@ -1024,8 +1024,9 @@ void Assembler::call(Label* L) {
   }
 }
 
-void Assembler::call(Handle<Code> target, RelocInfo::Mode rmode) {
+void Assembler::call(Handle<CodeT> target, RelocInfo::Mode rmode) {
   DCHECK(RelocInfo::IsCodeTarget(rmode));
+  DCHECK(FromCodeT(*target).IsExecutable());
   EnsureSpace ensure_space(this);
   // 1110 1000 #32-bit disp.
   emit(0xE8);
@@ -1436,7 +1437,7 @@ void Assembler::j(Condition cc, Address entry, RelocInfo::Mode rmode) {
   emitl(static_cast<int32_t>(entry));
 }
 
-void Assembler::j(Condition cc, Handle<Code> target, RelocInfo::Mode rmode) {
+void Assembler::j(Condition cc, Handle<CodeT> target, RelocInfo::Mode rmode) {
   EnsureSpace ensure_space(this);
   DCHECK(is_uint4(cc));
   // 0000 1111 1000 tttn #32-bit disp.
@@ -1515,7 +1516,7 @@ void Assembler::jmp(Label* L, Label::Distance distance) {
   }
 }
 
-void Assembler::jmp(Handle<Code> target, RelocInfo::Mode rmode) {
+void Assembler::jmp(Handle<CodeT> target, RelocInfo::Mode rmode) {
   DCHECK(RelocInfo::IsCodeTarget(rmode));
   EnsureSpace ensure_space(this);
   // 1110 1001 #32-bit disp.
@@ -4490,8 +4491,7 @@ void Assembler::dq(Label* label) {
 
 void Assembler::RecordRelocInfo(RelocInfo::Mode rmode, intptr_t data) {
   if (!ShouldRecordRelocInfo(rmode)) return;
-  RelocInfo rinfo(reinterpret_cast<Address>(pc_), rmode, data,
-                  InstructionStream());
+  RelocInfo rinfo(reinterpret_cast<Address>(pc_), rmode, data, Code());
   reloc_info_writer.Write(&rinfo);
 }
 

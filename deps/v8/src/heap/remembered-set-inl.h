@@ -20,20 +20,18 @@ SlotCallbackResult UpdateTypedSlotHelper::UpdateTypedSlot(Heap* heap,
                                                           Callback callback) {
   switch (slot_type) {
     case SlotType::kCodeEntry: {
-      RelocInfo rinfo(addr, RelocInfo::CODE_TARGET, 0, InstructionStream());
+      RelocInfo rinfo(addr, RelocInfo::CODE_TARGET, 0, Code());
       return UpdateCodeTarget(&rinfo, callback);
     }
     case SlotType::kConstPoolCodeEntry: {
       return UpdateCodeEntry(addr, callback);
     }
     case SlotType::kEmbeddedObjectCompressed: {
-      RelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT, 0,
-                      InstructionStream());
+      RelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT, 0, Code());
       return UpdateEmbeddedPointer(heap, &rinfo, callback);
     }
     case SlotType::kEmbeddedObjectFull: {
-      RelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT, 0,
-                      InstructionStream());
+      RelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT, 0, Code());
       return UpdateEmbeddedPointer(heap, &rinfo, callback);
     }
     case SlotType::kConstPoolEmbeddedObjectCompressed: {
@@ -63,21 +61,18 @@ HeapObject UpdateTypedSlotHelper::GetTargetObject(Heap* heap,
                                                   Address addr) {
   switch (slot_type) {
     case SlotType::kCodeEntry: {
-      RelocInfo rinfo(addr, RelocInfo::CODE_TARGET, 0, InstructionStream());
-      return InstructionStream::GetCodeFromTargetAddress(
-          rinfo.target_address());
+      RelocInfo rinfo(addr, RelocInfo::CODE_TARGET, 0, Code());
+      return Code::GetCodeFromTargetAddress(rinfo.target_address());
     }
     case SlotType::kConstPoolCodeEntry: {
-      return InstructionStream::GetObjectFromEntryAddress(addr);
+      return Code::GetObjectFromEntryAddress(addr);
     }
     case SlotType::kEmbeddedObjectCompressed: {
-      RelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT, 0,
-                      InstructionStream());
+      RelocInfo rinfo(addr, RelocInfo::COMPRESSED_EMBEDDED_OBJECT, 0, Code());
       return rinfo.target_object(heap->isolate());
     }
     case SlotType::kEmbeddedObjectFull: {
-      RelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT, 0,
-                      InstructionStream());
+      RelocInfo rinfo(addr, RelocInfo::FULL_EMBEDDED_OBJECT, 0, Code());
       return rinfo.target_object(heap->isolate());
     }
     case SlotType::kConstPoolEmbeddedObjectCompressed: {

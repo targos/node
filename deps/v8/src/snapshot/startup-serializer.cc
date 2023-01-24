@@ -86,9 +86,9 @@ StartupSerializer::~StartupSerializer() {
 namespace {
 
 bool IsUnexpectedCodeObject(Isolate* isolate, HeapObject obj) {
-  if (!obj.IsInstructionStream()) return false;
+  if (!obj.IsCode()) return false;
 
-  InstructionStream code = InstructionStream::cast(obj);
+  Code code = Code::cast(obj);
   if (code.kind() == CodeKind::REGEXP) return false;
   if (!code.is_builtin()) return true;
   if (code.is_off_heap_trampoline()) return false;

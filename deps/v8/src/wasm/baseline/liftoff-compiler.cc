@@ -1120,20 +1120,16 @@ class LiftoffCompiler {
           max_steps_addr,
           WasmValue::ForUintPtr(reinterpret_cast<uintptr_t>(max_steps_)));
       __ Load(max_steps, max_steps_addr.gp(), no_reg, 0, LoadType::kI32Load);
-      // Subtract first (and store the result), so the caller sees that
-      // max_steps ran negative. Since we never subtract too much at once, we
-      // cannot underflow.
-      DCHECK_GE(kMaxInt / 16, steps_done);  // An arbitrary limit.
-      __ emit_i32_subi(max_steps.gp(), max_steps.gp(), steps_done);
-      __ Store(max_steps_addr.gp(), no_reg, 0, max_steps, StoreType::kI32Store,
-               pinned);
       Label cont;
-      __ emit_i32_cond_jumpi(kSignedGreaterEqual, &cont, max_steps.gp(), 0,
-                             frozen);
+      __ emit_i32_cond_jumpi(kSignedGreaterEqual, &cont, max_steps.gp(),
+                             steps_done, frozen);
       // Abort.
       Trap(decoder, kTrapUnreachable);
       __ bind(&cont);
     }
+    __ emit_i32_subi(max_steps.gp(), max_steps.gp(), steps_done);
+    __ Store(max_steps_addr.gp(), no_reg, 0, max_steps, StoreType::kI32Store,
+             pinned);
   }
 
   V8_NOINLINE void EmitDebuggingInfo(FullDecoder* decoder, WasmOpcode opcode) {
@@ -6492,7 +6488,7 @@ class LiftoffCompiler {
 
     CallRuntimeStub(
         WasmCode::kWasmStringNewWtf8,
-        MakeSig::Returns(kRefNull).Params(kI32, kI32, kSmiKind, kSmiKind),
+        MakeSig::Returns(kRef).Params(kI32, kI32, kSmiKind, kSmiKind),
         {
             __ cache_state()->stack_state.end()[-2],  // offset
             __ cache_state()->stack_state.end()[-1],  // size
@@ -6624,8 +6620,6 @@ class LiftoffCompiler {
       case unibrow::Utf8Variant::kWtf8:
         stub_id = WasmCode::kWasmStringMeasureWtf8;
         break;
-      case unibrow::Utf8Variant::kUtf8NoTrap:
-        UNREACHABLE();
     }
     CallRuntimeStub(stub_id, MakeSig::Returns(kI32).Params(kRef),
                     {
@@ -7650,7 +7644,12 @@ class LiftoffCompiler {
       __ LoadTaggedPointer(
           target.gp(), func_ref.gp(), no_reg,
           wasm::ObjectAccess::ToTagged(WasmInternalFunction::kCodeOffset));
-      __ LoadCodeEntry(target.gp(), target.gp());
+#ifdef V8_EXTERNAL_CODE_SPACE
+      __ LoadCodeDataContainerEntry(target.gp(), target.gp());
+#else
+      __ emit_ptrsize_addi(target.gp(), target.gp(),
+                           wasm::ObjectAccess::ToTagged(Code::kHeaderSize));
+#endif
       // Fall through to {perform_call}.
 
       __ bind(&perform_call);
@@ -7972,8 +7971,6 @@ WasmCompilationResult ExecuteLiftoffCompilation(
     CompilationEnv* env, const FunctionBody& func_body,
     const LiftoffOptions& compiler_options) {
   DCHECK(compiler_options.is_initialized());
-  // Liftoff does not validate the code, so that should have run before.
-  DCHECK(env->module->function_was_validated(compiler_options.func_index));
   base::TimeTicks start_time;
   if (V8_UNLIKELY(v8_flags.trace_wasm_compilation_times)) {
     start_time = base::TimeTicks::Now();
@@ -8047,6 +8044,7 @@ WasmCompilationResult ExecuteLiftoffCompilation(
   }
 
   DCHECK(result.succeeded());
+  env->module->set_function_validated(compiler_options.func_index);
 
   return result;
 }

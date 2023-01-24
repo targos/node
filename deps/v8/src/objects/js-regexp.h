@@ -66,10 +66,9 @@ class JSRegExp : public TorqueGeneratedJSRegExp<JSRegExp, JSObject> {
 
   inline Type type_tag() const;
   inline String atom_pattern() const;
-  // This could be a Smi kUninitializedValue or InstructionStream.
+  // This could be a Smi kUninitializedValue or Code.
   V8_EXPORT_PRIVATE Object code(bool is_latin1) const;
-  V8_EXPORT_PRIVATE void set_code(bool is_unicode,
-                                  Handle<InstructionStream> code);
+  V8_EXPORT_PRIVATE void set_code(bool is_unicode, Handle<Code> code);
   // This could be a Smi kUninitializedValue or ByteArray.
   V8_EXPORT_PRIVATE Object bytecode(bool is_latin1) const;
   // Sets the bytecode as well as initializing trampoline slots to the
@@ -177,8 +176,7 @@ class JSRegExp : public TorqueGeneratedJSRegExp<JSRegExp, JSObject> {
   static constexpr int kAtomPatternIndex = kFirstTypeSpecificIndex;
   static constexpr int kAtomDataSize = kAtomPatternIndex + 1;
 
-  // A InstructionStream object or a Smi marker value equal to
-  // kUninitializedValue.
+  // A Code object or a Smi marker value equal to kUninitializedValue.
   static constexpr int kIrregexpLatin1CodeIndex = kFirstTypeSpecificIndex;
   static constexpr int kIrregexpUC16CodeIndex = kIrregexpLatin1CodeIndex + 1;
   // A ByteArray object or a Smi marker value equal to kUninitializedValue.

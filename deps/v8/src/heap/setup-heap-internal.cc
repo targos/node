@@ -495,7 +495,7 @@ bool Heap::CreateInitialReadOnlyMaps() {
     TORQUE_DEFINED_VARSIZE_INSTANCE_TYPE_LIST(TORQUE_ALLOCATE_VARSIZE_MAP);
 #undef TORQUE_ALLOCATE_VARSIZE_MAP
 
-    ALLOCATE_VARSIZE_MAP(INSTRUCTION_STREAM_TYPE, instruction_stream)
+    ALLOCATE_VARSIZE_MAP(CODE_TYPE, code)
 
     ALLOCATE_MAP(CELL_TYPE, Cell::kSize, cell);
     {
@@ -568,7 +568,8 @@ bool Heap::CreateInitialReadOnlyMaps() {
                  source_text_module)
     ALLOCATE_MAP(SYNTHETIC_MODULE_TYPE, SyntheticModule::kSize,
                  synthetic_module)
-    ALLOCATE_MAP(CODE_TYPE, Code::kSize, code)
+    ALLOCATE_MAP(CODE_DATA_CONTAINER_TYPE, CodeDataContainer::kSize,
+                 code_data_container)
 
     IF_WASM(ALLOCATE_MAP, WASM_API_FUNCTION_REF_TYPE, WasmApiFunctionRef::kSize,
             wasm_api_function_ref)
@@ -982,6 +983,28 @@ void Heap::CreateInitialReadOnlyObjects() {
   Handle<ScopeInfo> shadow_realm_scope_info =
       ScopeInfo::CreateForShadowRealmNativeContext(isolate());
   set_shadow_realm_scope_info(*shadow_realm_scope_info);
+
+  // Canonical off-heap trampoline data
+  auto reloc_info = Builtins::GenerateOffHeapTrampolineRelocInfo(isolate_);
+  set_off_heap_trampoline_relocation_info(*reloc_info);
+  StaticRootsEnsureAllocatedSize(*reloc_info, 4 * kTaggedSize);
+
+  if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+    // These roots will not be used.
+    HeapObject no_container = *isolate()->factory()->undefined_value();
+    set_trampoline_trivial_code_data_container(no_container);
+    set_trampoline_promise_rejection_code_data_container(no_container);
+
+  } else {
+    set_trampoline_trivial_code_data_container(
+        *isolate()->factory()->NewCodeDataContainer(0,
+                                                    AllocationType::kReadOnly));
+
+    set_trampoline_promise_rejection_code_data_container(
+        *isolate()->factory()->NewCodeDataContainer(
+            Code::IsPromiseRejectionField::encode(true),
+            AllocationType::kReadOnly));
+  }
 }
 
 void Heap::CreateInitialMutableObjects() {

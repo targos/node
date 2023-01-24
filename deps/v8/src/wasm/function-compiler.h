@@ -115,22 +115,22 @@ class V8_EXPORT_PRIVATE JSToWasmWrapperCompilationUnit final {
   Isolate* isolate() const { return isolate_; }
 
   void Execute();
-  Handle<Code> Finalize();
+  Handle<CodeT> Finalize();
 
   bool is_import() const { return is_import_; }
   const FunctionSig* sig() const { return sig_; }
   uint32_t canonical_sig_index() const { return canonical_sig_index_; }
 
   // Run a compilation unit synchronously.
-  static Handle<Code> CompileJSToWasmWrapper(Isolate* isolate,
-                                             const FunctionSig* sig,
-                                             uint32_t canonical_sig_index,
-                                             const WasmModule* module,
-                                             bool is_import);
+  static Handle<CodeT> CompileJSToWasmWrapper(Isolate* isolate,
+                                              const FunctionSig* sig,
+                                              uint32_t canonical_sig_index,
+                                              const WasmModule* module,
+                                              bool is_import);
 
   // Run a compilation unit synchronously, but ask for the specific
   // wrapper.
-  static Handle<Code> CompileSpecificJSToWasmWrapper(
+  static Handle<CodeT> CompileSpecificJSToWasmWrapper(
       Isolate* isolate, const FunctionSig* sig, uint32_t canonical_sig_index,
       const WasmModule* module);
 

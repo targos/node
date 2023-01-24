@@ -156,8 +156,7 @@ static void InitializeVM() {
   RESET();                                                                     \
   START_AFTER_RESET();
 
-#define RUN() \
-  simulator.RunFrom(reinterpret_cast<Instruction*>(code->code_entry_point()))
+#define RUN() simulator.RunFrom(reinterpret_cast<Instruction*>(code->entry()))
 
 #define END()                                                                  \
   __ Debug("End test.", __LINE__, TRACE_DISABLE | LOG_ALL);                    \

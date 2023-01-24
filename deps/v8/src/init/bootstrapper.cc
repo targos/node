@@ -4516,6 +4516,7 @@ void Genesis::InitializeConsole(Handle<JSObject> extras_binding) {
   void Genesis::InitializeGlobal_##id() {}
 
 EMPTY_INITIALIZE_GLOBAL_FOR_FEATURE(harmony_import_assertions)
+EMPTY_INITIALIZE_GLOBAL_FOR_FEATURE(harmony_class_static_blocks)
 EMPTY_INITIALIZE_GLOBAL_FOR_FEATURE(harmony_symbol_as_weakmap_key)
 EMPTY_INITIALIZE_GLOBAL_FOR_FEATURE(harmony_rab_gsab_transfer)
 
@@ -6375,7 +6376,7 @@ void Genesis::TransferNamedProperties(Handle<JSObject> from,
           Handle<Name> key = Handle<Name>(descs->GetKey(i), isolate());
           // If the property is already there we skip it.
           if (PropertyAlreadyExists(isolate(), to, key)) continue;
-          FieldIndex index = FieldIndex::ForDetails(from->map(), details);
+          FieldIndex index = FieldIndex::ForDescriptor(from->map(), i);
           Handle<Object> value = JSObject::FastPropertyAt(
               isolate(), from, details.representation(), index);
           JSObject::AddProperty(isolate(), to, key, value,

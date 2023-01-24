@@ -834,28 +834,63 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
 
   void FastCheck(TNode<BoolT> condition);
 
-  // TODO(v8:11880): remove once InstructionStream::bytecode_or_interpreter_data
-  // field is cached in or moved to Code.
-  TNode<InstructionStream> FromCodeNonBuiltin(TNode<Code> code) {
-    // Compute the InstructionStream object pointer from the code entry point.
+  TNode<BoolT> IsCodeTMap(TNode<Map> map) {
+    return V8_EXTERNAL_CODE_SPACE_BOOL ? IsCodeDataContainerMap(map)
+                                       : IsCodeMap(map);
+  }
+  TNode<BoolT> IsCodeT(TNode<HeapObject> object) {
+    return IsCodeTMap(LoadMap(object));
+  }
+
+  // TODO(v8:11880): remove once Code::bytecode_or_interpreter_data field
+  // is cached in or moved to CodeT.
+  TNode<Code> FromCodeTNonBuiltin(TNode<CodeT> code) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    // Compute the Code object pointer from the code entry point.
     TNode<RawPtrT> code_entry = Load<RawPtrT>(
-        code, IntPtrConstant(Code::kCodeEntryPointOffset - kHeapObjectTag));
+        code, IntPtrConstant(CodeDataContainer::kCodeEntryPointOffset -
+                             kHeapObjectTag));
     TNode<Object> o = BitcastWordToTagged(IntPtrSub(
-        code_entry,
-        IntPtrConstant(InstructionStream::kHeaderSize - kHeapObjectTag)));
+        code_entry, IntPtrConstant(Code::kHeaderSize - kHeapObjectTag)));
     return CAST(o);
+#else
+    return code;
+#endif
   }
 
-  TNode<Code> ToCode(TNode<InstructionStream> code) {
-    return LoadObjectField<Code>(code, InstructionStream::kCodeOffset);
+  TNode<CodeDataContainer> CodeDataContainerFromCodeT(TNode<CodeT> code) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    return code;
+#else
+    return LoadObjectField<CodeDataContainer>(code,
+                                              Code::kCodeDataContainerOffset);
+#endif
   }
 
-  TNode<RawPtrT> GetCodeEntry(TNode<Code> code);
-  TNode<BoolT> IsMarkedForDeoptimization(TNode<Code> code);
+  TNode<CodeT> ToCodeT(TNode<Code> code) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    return LoadObjectField<CodeDataContainer>(code,
+                                              Code::kCodeDataContainerOffset);
+#else
+    return code;
+#endif
+  }
+
+  TNode<CodeT> ToCodeT(TNode<Code> code,
+                       TNode<CodeDataContainer> code_data_container) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+    return code_data_container;
+#else
+    return code;
+#endif
+  }
+
+  TNode<RawPtrT> GetCodeEntry(TNode<CodeT> code);
+  TNode<BoolT> IsMarkedForDeoptimization(TNode<CodeT> codet);
 
   // The following Call wrappers call an object according to the semantics that
   // one finds in the EcmaScript spec, operating on an Callable (e.g. a
-  // JSFunction or proxy) rather than a InstructionStream object.
+  // JSFunction or proxy) rather than a Code object.
   template <class... TArgs>
   TNode<Object> Call(TNode<Context> context, TNode<Object> callable,
                      TNode<JSReceiver> receiver, TArgs... args) {
@@ -3849,7 +3884,7 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
                                 ElementsKind kind = HOLEY_ELEMENTS);
 
   // Load a builtin's code from the builtin array in the isolate.
-  TNode<Code> LoadBuiltin(TNode<Smi> builtin_id);
+  TNode<CodeT> LoadBuiltin(TNode<Smi> builtin_id);
 
   // Figure out the SFI's code object using its data field.
   // If |data_type_out| is provided, the instance type of the function data will
@@ -3857,7 +3892,7 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
   // data_type_out will be set to 0.
   // If |if_compile_lazy| is provided then the execution will go to the given
   // label in case of an CompileLazy code object.
-  TNode<Code> GetSharedFunctionInfoCode(
+  TNode<CodeT> GetSharedFunctionInfoCode(
       TNode<SharedFunctionInfo> shared_info,
       TVariable<Uint16T>* data_type_out = nullptr,
       Label* if_compile_lazy = nullptr);

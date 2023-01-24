@@ -322,12 +322,12 @@ void Builtins::Generate_JSBuiltinsConstructStub(MacroAssembler* masm) {
   Generate_JSBuiltinsConstructStubHelper(masm);
 }
 
-static void AssertCodeDataContainerIsBaseline(MacroAssembler* masm,
-                                              Register code, Register scratch) {
+static void AssertCodeIsBaseline(MacroAssembler* masm, Register code,
+                                 Register scratch) {
   DCHECK(!AreAliased(code, scratch));
   // Verify that the code kind is baseline code via the CodeKind.
-  __ LoadWord(scratch, FieldMemOperand(code, CodeDataContainer::kFlagsOffset));
-  __ DecodeField<CodeDataContainer::KindField>(scratch);
+  __ LoadWord(scratch, FieldMemOperand(code, Code::kFlagsOffset));
+  __ DecodeField<Code::KindField>(scratch);
   __ Assert(eq, AbortReason::kExpectedBaselineData, scratch,
             Operand(static_cast<int64_t>(CodeKind::BASELINE)));
 }
@@ -341,15 +341,7 @@ static void GetSharedFunctionInfoBytecodeOrBaseline(MacroAssembler* masm,
   Label done;
 
   __ GetObjectType(sfi_data, scratch1, scratch1);
-  if (v8_flags.debug_code) {
-    Label not_baseline;
-    __ Branch(&not_baseline, ne, scratch1, Operand(CODE_DATA_CONTAINER_TYPE));
-    AssertCodeDataContainerIsBaseline(masm, sfi_data, scratch1);
-    __ Branch(is_baseline);
-    __ bind(&not_baseline);
-  } else {
-    __ Branch(is_baseline, eq, scratch1, Operand(CODE_DATA_CONTAINER_TYPE));
-  }
+  __ Branch(is_baseline, eq, scratch1, Operand(CODET_TYPE));
 
   __ Branch(&done, ne, scratch1, Operand(INTERPRETER_DATA_TYPE),
             Label::Distance::kNear);
@@ -469,7 +461,7 @@ void Builtins::Generate_ResumeGeneratorTrampoline(MacroAssembler* masm) {
     __ Move(a1, a4);
     static_assert(kJavaScriptCallCodeStartRegister == a2, "ABI mismatch");
     __ LoadTaggedPointerField(a2, FieldMemOperand(a1, JSFunction::kCodeOffset));
-    __ JumpCodeDataContainerObject(a2);
+    __ JumpCodeObject(a2);
   }
 
   __ bind(&prepare_step_in_if_stepping);
@@ -691,7 +683,7 @@ void Generate_JSEntryVariant(MacroAssembler* masm, StackFrame::Type type,
   // Invoke the function by calling through JS entry trampoline builtin and
   // pop the faked function when we return.
 
-  Handle<CodeDataContainer> trampoline_code =
+  Handle<Code> trampoline_code =
       masm->isolate()->builtins()->code_handle(entry_trampoline);
   __ Call(trampoline_code, RelocInfo::CODE_TARGET);
 
@@ -804,9 +796,9 @@ static void Generate_JSEntryTrampolineHelper(MacroAssembler* masm,
     // s7 is cp. Do not init.
 
     // Invoke the code.
-    Handle<CodeDataContainer> builtin =
-        is_construct ? BUILTIN_CODE(masm->isolate(), Construct)
-                     : masm->isolate()->builtins()->Call();
+    Handle<Code> builtin = is_construct
+                               ? BUILTIN_CODE(masm->isolate(), Construct)
+                               : masm->isolate()->builtins()->Call();
     __ Call(builtin, RelocInfo::CODE_TARGET);
 
     // Leave internal frame.
@@ -1128,6 +1120,10 @@ void Builtins::Generate_InterpreterEntryTrampoline(
     MacroAssembler* masm, InterpreterEntryTrampolineMode mode) {
   Register closure = a1;
   Register feedback_vector = a2;
+  UseScratchRegisterScope temps(masm);
+  temps.Include(t0, t1);
+  Register scratch = temps.Acquire();
+  Register scratch2 = temps.Acquire();
   // Get the bytecode array from the function object and load it into
   // kInterpreterBytecodeArrayRegister.
   __ LoadTaggedPointerField(
@@ -1297,7 +1293,7 @@ void Builtins::Generate_InterpreterEntryTrampoline(
 
   __ bind(&do_return);
   // The return value is in a0.
-  LeaveInterpreterFrame(masm, t0, t1);
+  LeaveInterpreterFrame(masm, scratch, scratch2);
   __ Jump(ra);
 
   __ bind(&stack_check_interrupt);
@@ -1341,9 +1337,10 @@ void Builtins::Generate_InterpreterEntryTrampoline(
     // Check if feedback vector is valid. If not, call prepare for baseline to
     // allocate it.
     __ LoadTaggedPointerField(
-        t0, FieldMemOperand(feedback_vector, HeapObject::kMapOffset));
-    __ Lhu(t0, FieldMemOperand(t0, Map::kInstanceTypeOffset));
-    __ Branch(&install_baseline_code, ne, t0, Operand(FEEDBACK_VECTOR_TYPE));
+        scratch, FieldMemOperand(feedback_vector, HeapObject::kMapOffset));
+    __ Lhu(scratch, FieldMemOperand(scratch, Map::kInstanceTypeOffset));
+    __ Branch(&install_baseline_code, ne, scratch,
+              Operand(FEEDBACK_VECTOR_TYPE));
 
     // Check for an tiering state.
     __ LoadFeedbackVectorFlagsAndJumpIfNeedsProcessing(
@@ -1353,7 +1350,7 @@ void Builtins::Generate_InterpreterEntryTrampoline(
     __ Move(a2, kInterpreterBytecodeArrayRegister);
     static_assert(kJavaScriptCallCodeStartRegister == a2, "ABI mismatch");
     __ ReplaceClosureCodeWithOptimizedCode(a2, closure);
-    __ JumpCodeDataContainerObject(a2);
+    __ JumpCodeObject(a2);
 
     __ bind(&install_baseline_code);
     __ GenerateTailCallToReturnedCode(Runtime::kInstallBaselineCode);
@@ -1522,7 +1519,7 @@ static void Generate_InterpreterEnterBytecode(MacroAssembler* masm) {
 
   __ LoadTaggedPointerField(
       t0, FieldMemOperand(t0, InterpreterData::kInterpreterTrampolineOffset));
-  __ LoadCodeDataContainerEntry(t0, t0);
+  __ AddWord(t0, t0, Operand(Code::kHeaderSize - kHeapObjectTag));
   __ BranchShort(&trampoline_loaded);
 
   __ bind(&builtin_trampoline);
@@ -1750,32 +1747,11 @@ void OnStackReplacement(MacroAssembler* masm, OsrSourceTier source,
   // If the code object is null, just return to the caller.
   __ Ret(eq, a0, Operand(Smi::zero()));
   __ bind(&jump_to_optimized_code);
-
-  // OSR entry tracing.
-  {
-    Label next;
-    __ li(a1, ExternalReference::address_of_log_or_trace_osr());
-    __ Lbu(a1, MemOperand(a1));
-    __ Branch(&next, eq, a1, Operand(zero_reg));
-
-    {
-      FrameScope scope(masm, StackFrame::INTERNAL);
-      __ Push(a0);  // Preserve the code object.
-      __ CallRuntime(Runtime::kLogOrTraceOptimizedOSREntry, 0);
-      __ Pop(a0);
-    }
-
-    __ bind(&next);
-  }
-
   if (source == OsrSourceTier::kInterpreter) {
     // Drop the handler frame that is be sitting on top of the actual
     // JavaScript frame. This is the case then OSR is triggered from bytecode.
     __ LeaveFrame(StackFrame::STUB);
   }
-
-  __ LoadCodeDataContainerCodeNonBuiltin(a0, a0);
-
   // Load deoptimization data from the code object.
   // <deopt_data> = <code>[#deoptimization_data_offset]
   __ LoadTaggedPointerField(
@@ -2095,7 +2071,7 @@ void Generate_AllocateSpaceAndShiftExistingArguments(
 
 // static
 void Builtins::Generate_CallOrConstructVarargs(MacroAssembler* masm,
-                                               Handle<CodeDataContainer> code) {
+                                               Handle<Code> code) {
   UseScratchRegisterScope temps(masm);
   temps.Include(t1, t0);
   // ----------- S t a t e -------------
@@ -2169,9 +2145,9 @@ void Builtins::Generate_CallOrConstructVarargs(MacroAssembler* masm,
 }
 
 // static
-void Builtins::Generate_CallOrConstructForwardVarargs(
-    MacroAssembler* masm, CallOrConstructMode mode,
-    Handle<CodeDataContainer> code) {
+void Builtins::Generate_CallOrConstructForwardVarargs(MacroAssembler* masm,
+                                                      CallOrConstructMode mode,
+                                                      Handle<Code> code) {
   // ----------- S t a t e -------------
   //  -- a0 : the number of arguments
   //  -- a3 : the new.target (for [[Construct]] calls)
@@ -3688,8 +3664,7 @@ void Generate_BaselineOrInterpreterEntry(MacroAssembler* masm,
     UseScratchRegisterScope temps(masm);
     Register scratch = temps.Acquire();
     __ GetObjectType(code_obj, scratch, scratch);
-    __ Branch(&start_with_baseline, eq, scratch,
-              Operand(CODE_DATA_CONTAINER_TYPE));
+    __ Branch(&start_with_baseline, eq, scratch, Operand(CODET_TYPE));
 
     // Start with bytecode as there is no baseline code.
     Builtin builtin_id = next_bytecode
@@ -3705,16 +3680,13 @@ void Generate_BaselineOrInterpreterEntry(MacroAssembler* masm,
     Register scratch = temps.Acquire();
     __ GetObjectType(code_obj, scratch, scratch);
     __ Assert(eq, AbortReason::kExpectedBaselineData, scratch,
-              Operand(CODE_DATA_CONTAINER_TYPE));
+              Operand(CODET_TYPE));
   }
   if (v8_flags.debug_code) {
     UseScratchRegisterScope temps(masm);
     Register scratch = temps.Acquire();
-    AssertCodeDataContainerIsBaseline(masm, code_obj, scratch);
+    AssertCodeIsBaseline(masm, code_obj, scratch);
   }
-
-  __ LoadCodeDataContainerCodeNonBuiltin(code_obj, code_obj);
-
   // Replace BytecodeOffset with the feedback vector.
   Register feedback_vector = a2;
   __ LoadTaggedPointerField(

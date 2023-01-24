@@ -453,7 +453,7 @@ void JSObject::WriteToField(InternalIndex descriptor, PropertyDetails details,
   DCHECK_EQ(PropertyLocation::kField, details.location());
   DCHECK_EQ(PropertyKind::kData, details.kind());
   DisallowGarbageCollection no_gc;
-  FieldIndex index = FieldIndex::ForDetails(map(), details);
+  FieldIndex index = FieldIndex::ForDescriptor(map(), descriptor);
   if (details.representation().IsDouble()) {
     // Manipulating the signaling NaN used for the hole and uninitialized
     // double field sentinel in C++, e.g. with base::bit_cast or
@@ -766,14 +766,11 @@ void JSReceiver::initialize_properties(Isolate* isolate) {
 }
 
 DEF_GETTER(JSReceiver, HasFastProperties, bool) {
-  Object raw_properties_or_hash_obj =
-      raw_properties_or_hash(cage_base, kRelaxedLoad);
-  DCHECK(raw_properties_or_hash_obj.IsSmi() ||
-         ((raw_properties_or_hash_obj.IsGlobalDictionary(cage_base) ||
-           raw_properties_or_hash_obj.IsNameDictionary(cage_base) ||
-           raw_properties_or_hash_obj.IsSwissNameDictionary(cage_base)) ==
-          map(cage_base).is_dictionary_map()));
-  USE(raw_properties_or_hash_obj);
+  DCHECK(raw_properties_or_hash(cage_base).IsSmi() ||
+         ((raw_properties_or_hash(cage_base).IsGlobalDictionary(cage_base) ||
+           raw_properties_or_hash(cage_base).IsNameDictionary(cage_base) ||
+           raw_properties_or_hash(cage_base).IsSwissNameDictionary(
+               cage_base)) == map(cage_base).is_dictionary_map()));
   return !map(cage_base).is_dictionary_map();
 }
 

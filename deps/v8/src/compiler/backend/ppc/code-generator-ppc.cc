@@ -781,7 +781,7 @@ void CodeGenerator::AssembleCodeStartRegisterCheck() {
 // jumps to the CompileLazyDeoptimizedCode builtin. In order to do this we need
 // to:
 //    1. read from memory the word that contains that bit, which can be found in
-//       the flags in the referenced {Code} object;
+//       the flags in the referenced {CodeDataContainer} object;
 //    2. test kMarkedForDeoptimizationBit in those flags; and
 //    3. if it is not zero then it jumps to the builtin.
 void CodeGenerator::BailoutIfDeoptimized() {
@@ -792,11 +792,13 @@ void CodeGenerator::BailoutIfDeoptimized() {
     __ Assert(eq, AbortReason::kWrongFunctionCodeStart);
   }
 
-  int offset = InstructionStream::kCodeOffset - InstructionStream::kHeaderSize;
+  int offset = Code::kCodeDataContainerOffset - Code::kHeaderSize;
   __ LoadTaggedPointerField(
       r11, MemOperand(kJavaScriptCallCodeStartRegister, offset), r0);
-  __ LoadS32(r11, FieldMemOperand(r11, Code::kKindSpecificFlagsOffset), r0);
-  __ TestBit(r11, InstructionStream::kMarkedForDeoptimizationBit);
+  __ LoadS32(r11,
+             FieldMemOperand(r11, CodeDataContainer::kKindSpecificFlagsOffset),
+             r0);
+  __ TestBit(r11, Code::kMarkedForDeoptimizationBit);
   __ Jump(BUILTIN_CODE(isolate(), CompileLazyDeoptimizedCode),
           RelocInfo::CODE_TARGET, ne, cr0);
 }
@@ -3447,9 +3449,9 @@ void CodeGenerator::PopTempStackSlots() {
   }
 }
 
-void CodeGenerator::MoveToTempLocation(InstructionOperand* source,
-                                       MachineRepresentation rep) {
+void CodeGenerator::MoveToTempLocation(InstructionOperand* source) {
   // Must be kept in sync with {MoveTempLocationTo}.
+  auto rep = LocationOperand::cast(source)->representation();
   if (!IsFloatingPoint(rep) ||
       ((IsFloatingPoint(rep) &&
         !move_cycle_.pending_double_scratch_register_use))) {

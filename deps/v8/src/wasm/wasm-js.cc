@@ -1411,11 +1411,9 @@ bool GetValueType(Isolate* isolate, MaybeLocal<Value> maybe,
   } else if (enabled_features.has_gc() &&
              string->StringEquals(v8_str(isolate, "arrayref"))) {
     *type = i::wasm::kWasmArrayRef;
-  } else if (enabled_features.has_gc() &&
-             string->StringEquals(v8_str(isolate, "i31ref"))) {
-    *type = i::wasm::kWasmI31Ref;
   } else {
     // Unrecognized type.
+    // TODO(7748): Add "i31ref".
     *type = i::wasm::kWasmVoid;
   }
   return true;
@@ -2102,7 +2100,7 @@ void WebAssemblyFunction(const v8::FunctionCallbackInfo<v8::Value>& args) {
     i::Handle<i::WasmInstanceObject> instance(
         i::WasmInstanceObject::cast(data.internal().ref()), i_isolate);
     int func_index = data.function_index();
-    i::Handle<i::Code> wrapper =
+    i::Handle<i::CodeT> wrapper =
         BUILTIN_CODE(i_isolate, WasmReturnPromiseOnSuspend);
     i::Handle<i::JSFunction> result = i::WasmExportedFunction::New(
         i_isolate, instance, func_index,
@@ -2268,6 +2266,7 @@ void WasmObjectToJSReturnValue(v8::ReturnValue<v8::Value>& return_value,
   switch (repr) {
     case i::wasm::HeapType::kExtern:
     case i::wasm::HeapType::kString:
+    // TODO(7748): Make sure i31ref is compatible with Smi, or transform here.
     case i::wasm::HeapType::kI31:
       return_value.Set(Utils::ToLocal(value));
       return;

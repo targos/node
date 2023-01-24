@@ -12,8 +12,7 @@
 namespace v8 {
 namespace internal {
 
-Symbolizer::Symbolizer(InstructionStreamMap* instruction_stream_map)
-    : code_map_(instruction_stream_map) {}
+Symbolizer::Symbolizer(CodeMap* code_map) : code_map_(code_map) {}
 
 CodeEntry* Symbolizer::FindEntry(Address address,
                                  Address* out_instruction_start) {

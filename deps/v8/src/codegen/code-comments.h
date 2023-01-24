@@ -17,7 +17,7 @@ namespace internal {
 
 class Assembler;
 
-// InstructionStream comments section layout:
+// Code comments section layout:
 // byte count              content
 // ------------------------------------------------------------------------
 // 4                       size as uint32_t (only for a check)

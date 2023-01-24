@@ -40,8 +40,7 @@ class GapResolver final {
     virtual AllocatedOperand Push(InstructionOperand* src) = 0;
     virtual void Pop(InstructionOperand* dest, MachineRepresentation rep) = 0;
     virtual void PopTempStackSlots() = 0;
-    virtual void MoveToTempLocation(InstructionOperand* src,
-                                    MachineRepresentation rep) = 0;
+    virtual void MoveToTempLocation(InstructionOperand* src) = 0;
     virtual void MoveTempLocationTo(InstructionOperand* dst,
                                     MachineRepresentation rep) = 0;
     virtual void SetPendingMove(MoveOperands* move) = 0;

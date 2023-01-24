@@ -1424,9 +1424,7 @@ bool TopTierRegisterAllocationData::ExistsUseWithoutDefinition() {
     PrintF("Register allocator error: live v%d reached first block.\n",
            operand_index);
     LiveRange* range = GetOrCreateLiveRangeFor(operand_index);
-    PrintF("  (first use is at position %d in instruction %d)\n",
-           range->first_pos()->pos().value(),
-           range->first_pos()->pos().ToInstructionIndex());
+    PrintF("  (first use is at %d)\n", range->first_pos()->pos().value());
     if (debug_name() == nullptr) {
       PrintF("\n");
     } else {

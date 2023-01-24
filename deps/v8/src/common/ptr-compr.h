@@ -13,7 +13,7 @@ namespace v8::internal {
 // This is just a collection of compression scheme related functions. Having
 // such a class allows plugging different decompression scheme in certain
 // places by introducing another CompressionScheme class with a customized
-// implementation. This is useful, for example, for Code::code
+// implementation. This is useful, for example, for CodeDataContainer::code
 // field (see CodeObjectSlot).
 class V8HeapCompressionScheme {
  public:
@@ -25,6 +25,8 @@ class V8HeapCompressionScheme {
   // Compresses full-pointer representation of a tagged value to on-heap
   // representation.
   V8_INLINE static Tagged_t CompressTagged(Address tagged);
+  // Compress a potentially invalid pointer.
+  V8_INLINE static Tagged_t CompressAny(Address tagged);
 
   // Decompresses smi value.
   V8_INLINE static Address DecompressTaggedSigned(Tagged_t raw_value);
@@ -60,9 +62,9 @@ class V8HeapCompressionScheme {
 
 #ifdef V8_EXTERNAL_CODE_SPACE
 
-// Compression scheme used for fields containing InstructionStream objects
-// (namely for the Code::code field). Same as
-// V8HeapCompressionScheme but with a different base value.
+// Compression scheme used for fields containing Code objects (namely for the
+// CodeDataContainer::code field).
+// Same as V8HeapCompressionScheme but with a different base value.
 class ExternalCodeCompressionScheme {
  public:
   V8_INLINE static Address PrepareCageBaseAddress(Address on_heap_addr);
@@ -78,6 +80,8 @@ class ExternalCodeCompressionScheme {
   // Compresses full-pointer representation of a tagged value to on-heap
   // representation.
   V8_INLINE static Tagged_t CompressTagged(Address tagged);
+  // Compress a potentially invalid pointer.
+  V8_INLINE static Tagged_t CompressAny(Address tagged);
 
   // Decompresses smi value.
   V8_INLINE static Address DecompressTaggedSigned(Tagged_t raw_value);

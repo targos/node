@@ -508,7 +508,6 @@
   'wasm/huge-memory': [SKIP],
   'wasm/huge-typedarray': [SKIP],
   'wasm/bigint-opt': [SKIP],
-  'regress/regress-1320641': [SKIP],
 }],  # 'arch in (ia32, arm, riscv32)'
 
 ##############################################################################
@@ -989,7 +988,6 @@
   # multiple isolates, as dynamic tiering relies on a array shared
   # in the module, that can be modified by all instances.
   'wasm/wasm-dynamic-tiering': [SKIP],
-  'wasm/code-flushing': [SKIP],
 
   # The test relies on precise switching of code kinds of wasm functions. With
   # multiple isolates that share the wasm functions, the precise switching is
@@ -1126,7 +1124,6 @@
   # BUG(chromium:1394659) Skipped until issue is fixed to reduce noise on alerts.
   'wasm/log-code-after-post-message': [SKIP],
   'asm/regress-1395401': [SKIP],
-  'regress/regress-1394663': [SKIP],
 }], # gc_fuzzer or deopt_fuzzer or interrupt_fuzzer
 
 ##############################################################################
@@ -1158,9 +1155,6 @@
   'harmony/futex': [SKIP],
   'typedarray-growablesharedarraybuffer-atomics': [SKIP],
 
-  # Tests using a shared heap are inherently non-deterministic.
-  'shared-memory/*': [SKIP],
-
   # BUG(v8:7166).
   'd8/enable-tracing': [SKIP],
 
@@ -1172,7 +1166,6 @@
   'regress/regress-1212404': [SKIP],
   'regress/regress-1221035': [SKIP],
   'regress/regress-1232620': [SKIP],
-  'regress/regress-1353555': [SKIP],
   'regress/regress-crbug-1237153': [SKIP],
   'regress/wasm/regress-1067621': [SKIP],
 
@@ -1561,7 +1554,6 @@
   'regress/wasm/regress-1289678': [SKIP],
   'regress/wasm/regress-1290079': [SKIP],
   'regress/wasm/regress-1299183': [SKIP],
-  'regress/wasm/regress-1408337': [SKIP],
   'regress/wasm/regress-crbug-1338980': [SKIP],
   'regress/wasm/regress-crbug-1355070': [SKIP],
   'regress/wasm/regress-crbug-1356718': [SKIP],

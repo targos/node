@@ -689,12 +689,12 @@ void Map::NotifyLeafMapLayoutChange(Isolate* isolate) {
 
 bool Map::CanTransition() const {
   // Only JSObject and subtypes have map transitions and back pointers.
-  return InstanceTypeChecker::IsJSObject(*this);
+  return InstanceTypeChecker::IsJSObject(instance_type());
 }
 
-#define DEF_TESTER(Type, ...)                    \
-  bool Map::Is##Type##Map() const {              \
-    return InstanceTypeChecker::Is##Type(*this); \
+#define DEF_TESTER(Type, ...)                              \
+  bool Map::Is##Type##Map() const {                        \
+    return InstanceTypeChecker::Is##Type(instance_type()); \
   }
 INSTANCE_TYPE_CHECKERS(DEF_TESTER)
 #undef DEF_TESTER

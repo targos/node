@@ -137,18 +137,14 @@ class V8_EXPORT_PRIVATE CppHeap final
   void FinishSweepingIfRunning();
   void FinishSweepingIfOutOfWork();
 
-  void InitializeTracing(
-      CollectionType,
-      GarbageCollectionFlags = GarbageCollectionFlagValues::kNoFlags);
+  void InitializeTracing(CollectionType, GarbageCollectionFlags);
   void StartTracing();
   bool AdvanceTracing(double max_duration);
-  bool IsTracingDone() const;
+  bool IsTracingDone();
   void TraceEpilogue();
   void EnterFinalPause(cppgc::EmbedderStackState stack_state);
   bool FinishConcurrentMarkingIfNeeded();
   void WriteBarrier(JSObject);
-
-  bool ShouldFinalizeIncrementalMarking() const;
 
   // StatsCollector::AllocationObserver interface.
   void AllocatedObjectSizeIncreased(size_t) final;
@@ -210,10 +206,7 @@ class V8_EXPORT_PRIVATE CppHeap final
 
   bool TracingInitialized() const { return collection_type_.has_value(); }
 
-  Heap* heap() const { return heap_; }
-
   Isolate* isolate_ = nullptr;
-  Heap* heap_ = nullptr;
   bool marking_done_ = true;
   // |collection_type_| is initialized when marking is in progress.
   base::Optional<CollectionType> collection_type_;

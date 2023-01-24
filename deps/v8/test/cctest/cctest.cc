@@ -336,9 +336,10 @@ i::Handle<i::JSFunction> Optimize(
   CHECK(info.shared_info()->HasBytecodeArray());
   i::JSFunction::EnsureFeedbackVector(isolate, function, &is_compiled_scope);
 
-  i::Handle<i::Code> code =
+  i::Handle<i::CodeT> code = i::ToCodeT(
       i::compiler::Pipeline::GenerateCodeForTesting(&info, isolate, out_broker)
-          .ToHandleChecked();
+          .ToHandleChecked(),
+      isolate);
   function->set_code(*code, v8::kReleaseStore);
   return function;
 }

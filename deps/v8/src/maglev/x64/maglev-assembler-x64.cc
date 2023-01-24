@@ -4,8 +4,8 @@
 
 #include "src/codegen/interface-descriptors-inl.h"
 #include "src/common/globals.h"
-#include "src/maglev/maglev-assembler-inl.h"
 #include "src/maglev/maglev-graph.h"
+#include "src/maglev/x64/maglev-assembler-x64-inl.h"
 #include "src/objects/heap-number.h"
 
 namespace v8 {
@@ -87,10 +87,8 @@ void MaglevAssembler::AllocateHeapNumber(RegisterSnapshot register_snapshot,
 
 void MaglevAssembler::AllocateTwoByteString(RegisterSnapshot register_snapshot,
                                             Register result, int length) {
-  int size = SeqTwoByteString::SizeFor(length);
-  Allocate(register_snapshot, result, size);
+  Allocate(register_snapshot, result, SeqTwoByteString::SizeFor(length));
   LoadRoot(kScratchRegister, RootIndex::kStringMap);
-  StoreTaggedField(FieldOperand(result, size - kObjectAlignment), Immediate(0));
   StoreTaggedField(FieldOperand(result, HeapObject::kMapOffset),
                    kScratchRegister);
   StoreTaggedField(FieldOperand(result, Name::kRawHashFieldOffset),
@@ -391,6 +389,14 @@ void MaglevAssembler::Prologue(Graph* graph) {
     Register flags = rcx;
     Register feedback_vector = r9;
 
+    // Load the feedback vector.
+    LoadTaggedPointerField(
+        feedback_vector,
+        FieldOperand(kJSFunctionRegister, JSFunction::kFeedbackCellOffset));
+    LoadTaggedPointerField(feedback_vector,
+                           FieldOperand(feedback_vector, Cell::kValueOffset));
+    AssertFeedbackVector(feedback_vector);
+
     DeferredCodeInfo* deferred_flags_need_processing = PushDeferredCode(
         [](MaglevAssembler* masm, Register flags, Register feedback_vector) {
           ASM_CODE_COMMENT_STRING(masm, "Optimized marker check");
@@ -402,8 +408,6 @@ void MaglevAssembler::Prologue(Graph* graph) {
         },
         flags, feedback_vector);
 
-    Move(feedback_vector,
-         compilation_info()->toplevel_compilation_unit()->feedback().object());
     LoadFeedbackVectorFlagsAndJumpIfNeedsProcessing(
         flags, feedback_vector, CodeKind::MAGLEV,
         &deferred_flags_need_processing->deferred_code_label);
@@ -438,21 +442,18 @@ void MaglevAssembler::Prologue(Graph* graph) {
     ZoneLabelRef deferred_call_stack_guard_return(this);
     JumpToDeferredIf(
         below_equal,
-        [](MaglevAssembler* masm, ZoneLabelRef done, RegList register_inputs,
-           int max_stack_size) {
+        [](MaglevAssembler* masm, ZoneLabelRef done, int max_stack_size) {
           ASM_CODE_COMMENT_STRING(masm, "Stack/interrupt call");
-          __ PushAll(register_inputs);
+          // Save any registers that can be referenced by RegisterInput.
+          // TODO(leszeks): Only push those that are used by the graph.
+          __ PushAll(RegisterInput::kAllowedRegisters);
           // Push the frame size
           __ Push(Immediate(Smi::FromInt(max_stack_size)));
           __ CallRuntime(Runtime::kStackGuardWithGap, 1);
-          auto safepoint =
-              masm->safepoint_table_builder()->DefineSafepoint(masm);
-          safepoint.DefineStackGuardSafepoint(register_inputs.Count());
-          __ PopAll(register_inputs);
+          __ PopAll(RegisterInput::kAllowedRegisters);
           __ jmp(*done);
         },
-        deferred_call_stack_guard_return, graph->register_inputs(),
-        max_stack_size);
+        deferred_call_stack_guard_return, max_stack_size);
     bind(*deferred_call_stack_guard_return);
   }
 

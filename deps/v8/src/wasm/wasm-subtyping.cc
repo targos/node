@@ -343,17 +343,12 @@ HeapType::Representation CommonAncestor(uint32_t type_index1,
   }
   switch (kind1) {
     case TypeDefinition::kFunction:
-      switch (kind2) {
-        case TypeDefinition::kFunction:
-          return HeapType::kFunc;
-        case TypeDefinition::kStruct:
-        case TypeDefinition::kArray:
-          return HeapType::kBottom;
-      }
+      DCHECK_EQ(kind2, kind1);
+      return HeapType::kFunc;
     case TypeDefinition::kStruct:
       switch (kind2) {
         case TypeDefinition::kFunction:
-          return HeapType::kBottom;
+          UNREACHABLE();
         case TypeDefinition::kStruct:
           return HeapType::kStruct;
         case TypeDefinition::kArray:
@@ -362,7 +357,7 @@ HeapType::Representation CommonAncestor(uint32_t type_index1,
     case TypeDefinition::kArray:
       switch (kind2) {
         case TypeDefinition::kFunction:
-          return HeapType::kBottom;
+          UNREACHABLE();
         case TypeDefinition::kStruct:
           return HeapType::kEq;
         case TypeDefinition::kArray:
@@ -373,67 +368,21 @@ HeapType::Representation CommonAncestor(uint32_t type_index1,
 
 // Returns the least common ancestor of a generic HeapType {heap1}, and
 // another HeapType {heap2}.
+// TODO(7748): This function sometimes assumes that incompatible types cannot be
+// compared, in some cases explicitly and in others implicitly. Make it
+// consistent.
 HeapType::Representation CommonAncestorWithGeneric(HeapType heap1,
                                                    HeapType heap2,
                                                    const WasmModule* module2) {
   DCHECK(heap1.is_generic());
   switch (heap1.representation()) {
-    case HeapType::kFunc: {
-      if (heap2 == HeapType::kFunc || heap2 == HeapType::kNoFunc ||
-          (heap2.is_index() && module2->has_signature(heap2.ref_index()))) {
-        return HeapType::kFunc;
-      } else {
-        return HeapType::kBottom;
-      }
-    }
-    case HeapType::kAny: {
-      switch (heap2.representation()) {
-        case HeapType::kI31:
-        case HeapType::kNone:
-        case HeapType::kEq:
-        case HeapType::kStruct:
-        case HeapType::kArray:
-        case HeapType::kAny:
-        case HeapType::kString:
-          return HeapType::kAny;
-        case HeapType::kFunc:
-        case HeapType::kExtern:
-        case HeapType::kNoExtern:
-        case HeapType::kNoFunc:
-        case HeapType::kStringViewIter:
-        case HeapType::kStringViewWtf8:
-        case HeapType::kStringViewWtf16:
-        case HeapType::kBottom:
-          return HeapType::kBottom;
-        default:
-          return module2->has_signature(heap2.ref_index()) ? HeapType::kBottom
-                                                           : HeapType::kAny;
-      }
-    }
+    case HeapType::kFunc:
+      DCHECK(IsHeapSubtypeOf(heap2, heap1, module2, module2));
+      return HeapType::kFunc;
     case HeapType::kEq: {
-      switch (heap2.representation()) {
-        case HeapType::kI31:
-        case HeapType::kNone:
-        case HeapType::kEq:
-        case HeapType::kStruct:
-        case HeapType::kArray:
-          return HeapType::kEq;
-        case HeapType::kAny:
-        case HeapType::kString:
-          return HeapType::kAny;
-        case HeapType::kFunc:
-        case HeapType::kExtern:
-        case HeapType::kNoExtern:
-        case HeapType::kNoFunc:
-        case HeapType::kStringViewIter:
-        case HeapType::kStringViewWtf8:
-        case HeapType::kStringViewWtf16:
-        case HeapType::kBottom:
-          return HeapType::kBottom;
-        default:
-          return module2->has_signature(heap2.ref_index()) ? HeapType::kBottom
-                                                           : HeapType::kEq;
-      }
+      return IsHeapSubtypeOf(heap2, heap1, module2, module2)
+                 ? heap1.representation()
+                 : HeapType::kAny;
     }
     case HeapType::kI31:
       switch (heap2.representation()) {
@@ -445,17 +394,12 @@ HeapType::Representation CommonAncestorWithGeneric(HeapType heap1,
         case HeapType::kArray:
           return HeapType::kEq;
         case HeapType::kAny:
-        case HeapType::kString:
           return HeapType::kAny;
         case HeapType::kFunc:
         case HeapType::kExtern:
         case HeapType::kNoExtern:
         case HeapType::kNoFunc:
-        case HeapType::kStringViewIter:
-        case HeapType::kStringViewWtf8:
-        case HeapType::kStringViewWtf16:
-        case HeapType::kBottom:
-          return HeapType::kBottom;
+          UNREACHABLE();
         default:
           return module2->has_signature(heap2.ref_index()) ? HeapType::kBottom
                                                            : HeapType::kEq;
@@ -466,25 +410,21 @@ HeapType::Representation CommonAncestorWithGeneric(HeapType heap1,
         case HeapType::kNone:
           return HeapType::kStruct;
         case HeapType::kArray:
+          return HeapType::kEq;
         case HeapType::kI31:
         case HeapType::kEq:
           return HeapType::kEq;
         case HeapType::kAny:
-        case HeapType::kString:
           return HeapType::kAny;
         case HeapType::kFunc:
         case HeapType::kExtern:
         case HeapType::kNoExtern:
         case HeapType::kNoFunc:
-        case HeapType::kStringViewIter:
-        case HeapType::kStringViewWtf8:
-        case HeapType::kStringViewWtf16:
-        case HeapType::kBottom:
-          return HeapType::kBottom;
+          UNREACHABLE();
         default:
-          return module2->has_struct(heap2.ref_index())  ? HeapType::kStruct
-                 : module2->has_array(heap2.ref_index()) ? HeapType::kEq
-                                                         : HeapType::kBottom;
+          return module2->has_signature(heap2.ref_index()) ? HeapType::kBottom
+                 : module2->has_struct(heap2.ref_index())  ? HeapType::kStruct
+                                                           : HeapType::kEq;
       }
     case HeapType::kArray:
       switch (heap2.representation()) {
@@ -492,29 +432,29 @@ HeapType::Representation CommonAncestorWithGeneric(HeapType heap1,
         case HeapType::kNone:
           return HeapType::kArray;
         case HeapType::kStruct:
+          return HeapType::kEq;
         case HeapType::kI31:
         case HeapType::kEq:
           return HeapType::kEq;
         case HeapType::kAny:
-        case HeapType::kString:
           return HeapType::kAny;
         case HeapType::kFunc:
         case HeapType::kExtern:
         case HeapType::kNoExtern:
         case HeapType::kNoFunc:
-        case HeapType::kStringViewIter:
-        case HeapType::kStringViewWtf8:
-        case HeapType::kStringViewWtf16:
-        case HeapType::kBottom:
-          return HeapType::kBottom;
+          UNREACHABLE();
         default:
           return module2->has_array(heap2.ref_index())    ? HeapType::kArray
                  : module2->has_struct(heap2.ref_index()) ? HeapType::kEq
                                                           : HeapType::kBottom;
       }
+    case HeapType::kAny:
+      return HeapType::kAny;
     case HeapType::kBottom:
       return HeapType::kBottom;
     case HeapType::kNone:
+      return heap2.representation();
+    case HeapType::kNoFunc:
       switch (heap2.representation()) {
         case HeapType::kArray:
         case HeapType::kNone:
@@ -522,63 +462,25 @@ HeapType::Representation CommonAncestorWithGeneric(HeapType heap1,
         case HeapType::kI31:
         case HeapType::kEq:
         case HeapType::kAny:
-        case HeapType::kString:
-          return heap2.representation();
         case HeapType::kExtern:
         case HeapType::kNoExtern:
+          UNREACHABLE();
         case HeapType::kNoFunc:
+          return HeapType::kNoFunc;
         case HeapType::kFunc:
-        case HeapType::kStringViewIter:
-        case HeapType::kStringViewWtf8:
-        case HeapType::kStringViewWtf16:
-        case HeapType::kBottom:
-          return HeapType::kBottom;
+          return HeapType::kFunc;
         default:
           return module2->has_signature(heap2.ref_index())
-                     ? HeapType::kBottom
-                     : heap2.representation();
+                     ? heap2.representation()
+                     : HeapType::kBottom;
       }
-    case HeapType::kNoFunc:
-      return (heap2 == HeapType::kNoFunc || heap2 == HeapType::kFunc ||
-              (heap2.is_index() && module2->has_signature(heap2.ref_index())))
-                 ? heap2.representation()
-                 : HeapType::kBottom;
     case HeapType::kNoExtern:
-      return heap2 == HeapType::kExtern || heap2 == HeapType::kNoExtern
-                 ? heap2.representation()
-                 : HeapType::kBottom;
+      return heap2.representation() == HeapType::kExtern ? HeapType::kExtern
+                                                         : HeapType::kNoExtern;
     case HeapType::kExtern:
-      return heap2 == HeapType::kExtern || heap2 == HeapType::kNoExtern
-                 ? HeapType::kExtern
-                 : HeapType::kBottom;
-    case HeapType::kString: {
-      switch (heap2.representation()) {
-        case HeapType::kI31:
-        case HeapType::kEq:
-        case HeapType::kStruct:
-        case HeapType::kArray:
-        case HeapType::kAny:
-          return HeapType::kAny;
-        case HeapType::kNone:
-        case HeapType::kString:
-          return HeapType::kString;
-        case HeapType::kFunc:
-        case HeapType::kExtern:
-        case HeapType::kNoExtern:
-        case HeapType::kNoFunc:
-        case HeapType::kStringViewIter:
-        case HeapType::kStringViewWtf8:
-        case HeapType::kStringViewWtf16:
-        case HeapType::kBottom:
-          return HeapType::kBottom;
-        default:
-          return module2->has_signature(heap2.ref_index()) ? HeapType::kBottom
-                                                           : HeapType::kAny;
-      }
-    }
+      return HeapType::kExtern;
+    case HeapType::kString:
     case HeapType::kStringViewIter:
-    case HeapType::kStringViewWtf16:
-    case HeapType::kStringViewWtf8:
       return heap1 == heap2 ? heap1.representation() : HeapType::kBottom;
     default:
       UNREACHABLE();
@@ -601,23 +503,21 @@ V8_EXPORT_PRIVATE TypeInModule Union(ValueType type1, ValueType type2,
   if (heap1 == heap2 && module1 == module2) {
     return {ValueType::RefMaybeNull(heap1, nullability), module1};
   }
-  HeapType::Representation result_repr;
-  const WasmModule* result_module;
   if (heap1.is_generic()) {
-    result_repr = CommonAncestorWithGeneric(heap1, heap2, module2);
-    result_module = module2;
+    return {ValueType::RefMaybeNull(
+                CommonAncestorWithGeneric(heap1, heap2, module2), nullability),
+            module1};
   } else if (heap2.is_generic()) {
-    result_repr = CommonAncestorWithGeneric(heap2, heap1, module1);
-    result_module = module1;
+    return {ValueType::RefMaybeNull(
+                CommonAncestorWithGeneric(heap2, heap1, module1), nullability),
+            module1};
   } else {
-    result_repr =
-        CommonAncestor(heap1.ref_index(), heap2.ref_index(), module1, module2);
-    result_module = module1;
+    return {ValueType::RefMaybeNull(
+                CommonAncestor(heap1.ref_index(), heap2.ref_index(), module1,
+                               module2),
+                nullability),
+            module1};
   }
-  return {result_repr == HeapType::kBottom
-              ? kWasmBottom
-              : ValueType::RefMaybeNull(result_repr, nullability),
-          result_module};
 }
 
 TypeInModule Intersection(ValueType type1, ValueType type2,

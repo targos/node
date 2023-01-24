@@ -32,9 +32,6 @@
 
   # Slow tests.
   'ParsingTest.ObjectRestNegativeTestSlow': [PASS, ['mode == debug', SKIP]],
-
-  # BUG(13660): Flaky test.
-  'OS.RemapPages': [SKIP],
 }],  # ALWAYS
 
 ##############################################################################

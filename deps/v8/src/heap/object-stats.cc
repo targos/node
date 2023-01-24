@@ -98,15 +98,16 @@ class FieldStatsCollector : public ObjectVisitorWithCageBases {
 
   V8_INLINE void VisitCodePointer(HeapObject host,
                                   CodeObjectSlot slot) override {
+    CHECK(V8_EXTERNAL_CODE_SPACE_BOOL);
     *tagged_fields_count_ += 1;
   }
 
-  void VisitCodeTarget(InstructionStream host, RelocInfo* rinfo) override {
-    // InstructionStream target is most likely encoded as a relative 32-bit
-    // offset and not as a full tagged value, so there's nothing to count.
+  void VisitCodeTarget(Code host, RelocInfo* rinfo) override {
+    // Code target is most likely encoded as a relative 32-bit offset and not
+    // as a full tagged value, so there's nothing to count.
   }
 
-  void VisitEmbeddedPointer(InstructionStream host, RelocInfo* rinfo) override {
+  void VisitEmbeddedPointer(Code host, RelocInfo* rinfo) override {
     *tagged_fields_count_ += 1;
   }
 
@@ -148,7 +149,7 @@ FieldStatsCollector::GetInobjectFieldStats(Map map) {
     for (InternalIndex descriptor : map.IterateOwnDescriptors()) {
       PropertyDetails details = descriptors.GetDetails(descriptor);
       if (details.location() == PropertyLocation::kField) {
-        FieldIndex index = FieldIndex::ForDetails(map, details);
+        FieldIndex index = FieldIndex::ForDescriptor(map, descriptor);
         // Stop on first out-of-object field.
         if (!index.is_inobject()) break;
         if (details.representation().IsSmi()) {
@@ -429,7 +430,7 @@ class ObjectStatsCollectorImpl {
   // Details.
   void RecordVirtualAllocationSiteDetails(AllocationSite site);
   void RecordVirtualBytecodeArrayDetails(BytecodeArray bytecode);
-  void RecordVirtualCodeDetails(InstructionStream code);
+  void RecordVirtualCodeDetails(Code code);
   void RecordVirtualContext(Context context);
   void RecordVirtualFeedbackVectorDetails(FeedbackVector vector);
   void RecordVirtualFixedArrayDetails(FixedArray array);
@@ -753,8 +754,8 @@ void ObjectStatsCollectorImpl::CollectStatistics(
         RecordVirtualMapDetails(Map::cast(obj));
       } else if (InstanceTypeChecker::IsBytecodeArray(instance_type)) {
         RecordVirtualBytecodeArrayDetails(BytecodeArray::cast(obj));
-      } else if (InstanceTypeChecker::IsInstructionStream(instance_type)) {
-        RecordVirtualCodeDetails(InstructionStream::cast(obj));
+      } else if (InstanceTypeChecker::IsCode(instance_type)) {
+        RecordVirtualCodeDetails(Code::cast(obj));
       } else if (InstanceTypeChecker::IsFunctionTemplateInfo(instance_type)) {
         RecordVirtualFunctionTemplateInfoDetails(
             FunctionTemplateInfo::cast(obj));
@@ -1031,8 +1032,7 @@ ObjectStats::VirtualInstanceType CodeKindToVirtualInstanceType(CodeKind kind) {
 
 }  // namespace
 
-void ObjectStatsCollectorImpl::RecordVirtualCodeDetails(
-    InstructionStream code) {
+void ObjectStatsCollectorImpl::RecordVirtualCodeDetails(Code code) {
   RecordSimpleVirtualObjectStats(HeapObject(), code,
                                  CodeKindToVirtualInstanceType(code.kind()));
   RecordSimpleVirtualObjectStats(code, code.relocation_info(),

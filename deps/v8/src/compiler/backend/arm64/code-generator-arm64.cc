@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "src/codegen/arm64/assembler-arm64-inl.h"
-#include "src/codegen/arm64/constants-arm64.h"
 #include "src/codegen/arm64/macro-assembler-arm64-inl.h"
 #include "src/codegen/machine-type.h"
 #include "src/codegen/optimized-compilation-info.h"
@@ -760,7 +759,7 @@ CodeGenerator::CodeGenResult CodeGenerator::AssembleArchInstruction(
       static_assert(kJavaScriptCallCodeStartRegister == x2, "ABI mismatch");
       __ LoadTaggedPointerField(x2,
                                 FieldMemOperand(func, JSFunction::kCodeOffset));
-      __ CallCodeObject(x2);
+      __ CallCodeTObject(x2);
       RecordCallPosition(instr);
       frame_access_state()->ClearSPDelta();
       break;
@@ -3048,18 +3047,12 @@ void CodeGenerator::AssembleArchTableSwitch(Instruction* instr) {
   int entry_size_log2 = 2;
 #ifdef V8_ENABLE_CONTROL_FLOW_INTEGRITY
   ++entry_size_log2;  // Account for BTI.
-  constexpr int instructions_per_jump_target = 1;
-#else
-  constexpr int instructions_per_jump_target = 0;
 #endif
-  constexpr int instructions_per_case = 1 + instructions_per_jump_target;
   __ Add(temp, temp, Operand(input, UXTW, entry_size_log2));
   __ Br(temp);
   {
-    const size_t instruction_count =
-        case_count * instructions_per_case + instructions_per_jump_target;
     TurboAssembler::BlockPoolsScope block_pools(tasm(),
-                                                instruction_count * kInstrSize);
+                                                case_count * kInstrSize);
     __ Bind(&table);
     for (size_t index = 0; index < case_count; ++index) {
       __ JumpTarget();
@@ -3376,8 +3369,8 @@ void CodeGenerator::PrepareForDeoptimizationExits(
       false, false,
       static_cast<int>(exits->size()) * Deoptimizer::kLazyDeoptExitSize);
 
-  // Check which deopt kinds exist in this InstructionStream object, to avoid
-  // emitting jumps to unused entries.
+  // Check which deopt kinds exist in this Code object, to avoid emitting jumps
+  // to unused entries.
   bool saw_deopt_kind[kDeoptimizeKindCount] = {false};
   for (auto exit : *exits) {
     saw_deopt_kind[static_cast<int>(exit->kind())] = true;
@@ -3456,10 +3449,10 @@ void CodeGenerator::PopTempStackSlots() {
   }
 }
 
-void CodeGenerator::MoveToTempLocation(InstructionOperand* source,
-                                       MachineRepresentation rep) {
+void CodeGenerator::MoveToTempLocation(InstructionOperand* source) {
   // Must be kept in sync with {MoveTempLocationTo}.
   DCHECK(!source->IsImmediate());
+  auto rep = LocationOperand::cast(source)->representation();
   move_cycle_.temps.emplace(tasm());
   auto& temps = *move_cycle_.temps;
   // Temporarily exclude the reserved scratch registers while we pick one to

@@ -16,7 +16,6 @@
 #include "src/base/logging.h"
 #include "src/base/macros.h"
 #include "src/base/optional.h"
-#include "src/base/platform/platform.h"
 #include "src/base/platform/time.h"
 #include "src/execution/isolate-inl.h"
 #include "src/flags/flags.h"
@@ -44,6 +43,7 @@
 #include "src/heap/cppgc/sweeper.h"
 #include "src/heap/cppgc/unmarker.h"
 #include "src/heap/cppgc/visitor.h"
+#include "src/heap/embedder-tracing.h"
 #include "src/heap/gc-tracer.h"
 #include "src/heap/heap.h"
 #include "src/heap/marking-worklist.h"
@@ -527,7 +527,6 @@ void CppHeap::AttachIsolate(Isolate* isolate) {
   CHECK(!in_detached_testing_mode_);
   CHECK_NULL(isolate_);
   isolate_ = isolate;
-  heap_ = isolate->heap();
   static_cast<CppgcPlatformAdapter*>(platform())
       ->SetIsolate(reinterpret_cast<v8::Isolate*>(isolate_));
   if (isolate_->heap_profiler()) {
@@ -564,7 +563,6 @@ void CppHeap::DetachIsolate() {
   }
   SetMetricRecorder(nullptr);
   isolate_ = nullptr;
-  heap_ = nullptr;
   // Any future garbage collections will ignore the V8->C++ references.
   oom_handler().SetCustomHandler(nullptr);
   // Enter no GC scope.
@@ -660,14 +658,6 @@ void CppHeap::InitializeTracing(CollectionType collection_type,
   }
 #endif  // defined(CPPGC_YOUNG_GENERATION)
 
-  if (gc_flags == GarbageCollectionFlagValues::kNoFlags) {
-    if (heap()->is_current_gc_forced()) {
-      gc_flags |= CppHeap::GarbageCollectionFlagValues::kForced;
-    }
-    if (heap()->ShouldReduceMemory()) {
-      gc_flags |= CppHeap::GarbageCollectionFlagValues::kReduceMemory;
-    }
-  }
   current_gc_flags_ = gc_flags;
 
   const cppgc::internal::MarkingConfig marking_config{
@@ -742,12 +732,9 @@ bool CppHeap::AdvanceTracing(double max_duration) {
   return marking_done_;
 }
 
-bool CppHeap::IsTracingDone() const {
-  return !TracingInitialized() || marking_done_;
-}
-
-bool CppHeap::ShouldFinalizeIncrementalMarking() const {
-  return !incremental_marking_supported() || IsTracingDone();
+bool CppHeap::IsTracingDone() {
+  if (!TracingInitialized()) return true;
+  return marking_done_;
 }
 
 void CppHeap::EnterFinalPause(cppgc::EmbedderStackState stack_state) {
@@ -840,7 +827,7 @@ void CppHeap::TraceEpilogue() {
   const size_t bytes_allocated_in_prefinalizers = ExecutePreFinalizers();
 #if CPPGC_VERIFY_HEAP
   UnifiedHeapMarkingVerifier verifier(*this, *collection_type_);
-  verifier.Run(stack_state_of_prev_gc(), stack_end_of_current_gc(),
+  verifier.Run(stack_state_of_prev_gc(),
                stats_collector()->marked_bytes_on_current_cycle() +
                    bytes_allocated_in_prefinalizers);
 #endif  // CPPGC_VERIFY_HEAP
@@ -919,7 +906,7 @@ void CppHeap::ReportBufferedAllocationSizeIfPossible() {
                          std::memory_order_relaxed);
     allocated_size_ += bytes_to_report;
 
-    if (v8_flags.incremental_marking) {
+    if (v8_flags.global_gc_scheduling && v8_flags.incremental_marking) {
       if (allocated_size_ > allocated_size_limit_for_check_) {
         Heap* heap = isolate_->heap();
         heap->StartIncrementalMarkingIfAllocationLimitIsReached(
@@ -943,7 +930,7 @@ void CppHeap::CollectGarbageForTesting(CollectionType collection_type,
   // Finish sweeping in case it is still running.
   sweeper().FinishIfRunning();
 
-  SetStackEndOfCurrentGC(v8::base::Stack::GetCurrentStackPosition());
+  SaveStackContextScope stack_context_scope(stack());
 
   if (isolate_) {
     reinterpret_cast<v8::Isolate*>(isolate_)

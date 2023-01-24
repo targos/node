@@ -357,10 +357,10 @@ class JSFunction::BodyDescriptor final : public BodyDescriptorBase {
     int header_size = JSFunction::GetHeaderSize(map.has_prototype_slot());
     DCHECK_GE(object_size, header_size);
     IteratePointers(obj, kStartOffset, kCodeOffset, v);
-    // Code field is treated as a custom weak pointer. This field
-    // is visited as a weak pointer if the Code is baseline code
-    // and the bytecode array corresponding to this function is old. In the rest
-    // of the cases this field is treated as strong pointer.
+    // Code field is treated as a custom weak pointer. This field is visited as
+    // a weak pointer if the Code is baseline code and the bytecode array
+    // corresponding to this function is old. In the rest of the cases this
+    // field is treated as strong pointer.
     IterateCustomWeakPointer(obj, kCodeOffset, v);
     // Iterate rest of the header fields
     DCHECK_GE(header_size, kCodeOffset);
@@ -937,14 +937,14 @@ class CoverageInfo::BodyDescriptor final : public BodyDescriptorBase {
   }
 };
 
-class InstructionStream::BodyDescriptor final : public BodyDescriptorBase {
+class Code::BodyDescriptor final : public BodyDescriptorBase {
  public:
   static_assert(kRelocationInfoOffset + kTaggedSize ==
                 kDeoptimizationDataOrInterpreterDataOffset);
   static_assert(kDeoptimizationDataOrInterpreterDataOffset + kTaggedSize ==
                 kPositionTableOffset);
-  static_assert(kPositionTableOffset + kTaggedSize == kCodeOffset);
-  static_assert(kCodeOffset + kTaggedSize == kDataStart);
+  static_assert(kPositionTableOffset + kTaggedSize == kCodeDataContainerOffset);
+  static_assert(kCodeDataContainerOffset + kTaggedSize == kDataStart);
 
   static bool IsValidSlot(Map map, HeapObject obj, int offset) {
     // Slots in code can't be invalid because we never trim code objects.
@@ -966,7 +966,7 @@ class InstructionStream::BodyDescriptor final : public BodyDescriptorBase {
     // GC does not visit data/code in the header and in the body directly.
     IteratePointers(obj, kRelocationInfoOffset, kDataStart, v);
 
-    RelocIterator it(InstructionStream::cast(obj), kRelocModeMask);
+    RelocIterator it(Code::cast(obj), kRelocModeMask);
     v->VisitRelocInfo(&it);
   }
 
@@ -977,7 +977,7 @@ class InstructionStream::BodyDescriptor final : public BodyDescriptorBase {
   }
 
   static inline int SizeOf(Map map, HeapObject object) {
-    return InstructionStream::unchecked_cast(object).CodeSize();
+    return Code::unchecked_cast(object).CodeSize();
   }
 };
 
@@ -1048,24 +1048,29 @@ class NativeContext::BodyDescriptor final : public BodyDescriptorBase {
   }
 };
 
-class Code::BodyDescriptor final : public BodyDescriptorBase {
+class CodeDataContainer::BodyDescriptor final : public BodyDescriptorBase {
  public:
   static bool IsValidSlot(Map map, HeapObject obj, int offset) {
     return offset >= HeapObject::kHeaderSize &&
-           offset <= Code::kPointerFieldsStrongEndOffset;
+           offset <= CodeDataContainer::kPointerFieldsStrongEndOffset;
   }
 
   template <typename ObjectVisitor>
   static inline void IterateBody(Map map, HeapObject obj, int object_size,
                                  ObjectVisitor* v) {
     // No strong pointers to iterate.
-    static_assert(static_cast<int>(HeapObject::kHeaderSize) ==
-                  static_cast<int>(Code::kPointerFieldsStrongEndOffset));
+    static_assert(
+        static_cast<int>(HeapObject::kHeaderSize) ==
+        static_cast<int>(CodeDataContainer::kPointerFieldsStrongEndOffset));
 
-    v->VisitCodePointer(obj, obj.RawCodeField(kInstructionStreamOffset));
+    if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+      v->VisitCodePointer(obj, obj.RawCodeField(kCodeOffset));
+    }
   }
 
-  static inline int SizeOf(Map map, HeapObject object) { return Code::kSize; }
+  static inline int SizeOf(Map map, HeapObject object) {
+    return CodeDataContainer::kSize;
+  }
 };
 
 class EmbedderDataArray::BodyDescriptor final : public BodyDescriptorBase {
@@ -1331,8 +1336,8 @@ auto BodyDescriptorApply(InstanceType type, Args&&... args) {
       return CALL_APPLY(Foreign);
     case MAP_TYPE:
       return CALL_APPLY(Map);
-    case INSTRUCTION_STREAM_TYPE:
-      return CALL_APPLY(InstructionStream);
+    case CODE_TYPE:
+      return CALL_APPLY(Code);
     case CELL_TYPE:
       return CALL_APPLY(Cell);
     case PROPERTY_CELL_TYPE:
@@ -1349,8 +1354,8 @@ auto BodyDescriptorApply(InstanceType type, Args&&... args) {
       return CALL_APPLY(SmallOrderedHashTable<SmallOrderedNameDictionary>);
     case SWISS_NAME_DICTIONARY_TYPE:
       return CALL_APPLY(SwissNameDictionary);
-    case CODE_TYPE:
-      return CALL_APPLY(Code);
+    case CODE_DATA_CONTAINER_TYPE:
+      return CALL_APPLY(CodeDataContainer);
     case PREPARSE_DATA_TYPE:
       return CALL_APPLY(PreparseData);
     case HEAP_NUMBER_TYPE:

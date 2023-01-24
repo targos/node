@@ -113,9 +113,6 @@ Reduction WasmInliner::ReduceCall(Node* call) {
 }
 
 bool SmallEnoughToInline(size_t current_graph_size, uint32_t candidate_size) {
-  if (candidate_size > v8_flags.wasm_inlining_max_size) {
-    return false;
-  }
   if (WasmInliner::graph_size_allows_inlining(current_graph_size +
                                               candidate_size)) {
     return true;
@@ -329,8 +326,6 @@ void WasmInliner::InlineCall(Node* call, Node* callee_start, Node* callee_end,
         return_inputs.push_back(graph()->NewNode(common()->Int32Constant(0)));
         if (return_arity == 1) {
           // Tail calls are untyped; we have to type the node here.
-          // TODO(manoskouk): Try to compute a more precise type from the callee
-          // node.
           NodeProperties::SetType(
               input, Type::Wasm({inlinee_sig->GetReturn(0), module()},
                                 graph()->zone()));

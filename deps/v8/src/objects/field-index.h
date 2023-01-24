@@ -34,7 +34,6 @@ class FieldIndex final {
                                          InternalIndex descriptor_index);
   static inline FieldIndex ForDescriptor(PtrComprCageBase cage_base, Map map,
                                          InternalIndex descriptor_index);
-  static inline FieldIndex ForDetails(Map map, PropertyDetails details);
 
   inline int GetLoadByFieldIndex() const;
 

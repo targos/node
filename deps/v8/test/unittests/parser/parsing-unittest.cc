@@ -2980,13 +2980,13 @@ TEST_F(ParsingTest, NoErrorsObjectLiteralChecking) {
 TEST_F(ParsingTest, TooManyArguments) {
   const char* context_data[][2] = {{"foo(", "0)"}, {nullptr, nullptr}};
 
-  using v8::internal::InstructionStream;
-  char statement[InstructionStream::kMaxArguments * 2 + 1];
-  for (int i = 0; i < InstructionStream::kMaxArguments; ++i) {
+  using v8::internal::Code;
+  char statement[Code::kMaxArguments * 2 + 1];
+  for (int i = 0; i < Code::kMaxArguments; ++i) {
     statement[2 * i] = '0';
     statement[2 * i + 1] = ',';
   }
-  statement[InstructionStream::kMaxArguments * 2] = 0;
+  statement[Code::kMaxArguments * 2] = 0;
 
   const char* statement_data[] = {statement, nullptr};
 
@@ -9059,9 +9059,9 @@ TEST_F(ParsingTest, ObjectRestNegativeTestSlow) {
     { nullptr, nullptr }
   };
 
-  using v8::internal::InstructionStream;
+  using v8::internal::Code;
   std::string statement;
-  for (int i = 0; i < InstructionStream::kMaxArguments; ++i) {
+  for (int i = 0; i < Code::kMaxArguments; ++i) {
     statement += std::to_string(i) + " : " + "x, ";
   }
   statement += "...y";

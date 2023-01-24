@@ -465,7 +465,6 @@ CounterCollection* Shell::counters_ = &local_counters_;
 base::LazyMutex Shell::context_mutex_;
 const base::TimeTicks Shell::kInitialTicks = base::TimeTicks::Now();
 Global<Function> Shell::stringify_function_;
-base::Mutex Shell::profiler_end_callback_lock_;
 std::map<Isolate*, std::pair<Global<Function>, Global<Context>>>
     Shell::profiler_end_callback_;
 base::LazyMutex Shell::workers_mutex_;
@@ -2524,14 +2523,12 @@ void Shell::ProfilerSetOnProfileEndListener(
     isolate->ThrowError("The OnProfileEnd listener has to be a function");
     return;
   }
-  base::MutexGuard lock_guard(&profiler_end_callback_lock_);
   profiler_end_callback_[isolate] =
       std::make_pair(Global<Function>(isolate, args[0].As<Function>()),
                      Global<Context>(isolate, isolate->GetCurrentContext()));
 }
 
 bool Shell::HasOnProfileEndListener(Isolate* isolate) {
-  base::MutexGuard lock_guard(&profiler_end_callback_lock_);
   return profiler_end_callback_.find(isolate) != profiler_end_callback_.end();
 }
 
@@ -2539,10 +2536,7 @@ void Shell::ResetOnProfileEndListener(Isolate* isolate) {
   // If the inspector is enabled, then the installed console is not the
   // D8Console.
   if (options.enable_inspector) return;
-  {
-    base::MutexGuard lock_guard(&profiler_end_callback_lock_);
-    profiler_end_callback_.erase(isolate);
-  }
+  profiler_end_callback_.erase(isolate);
 
   i::Isolate* i_isolate = reinterpret_cast<i::Isolate*>(isolate);
   D8Console* console =
@@ -2565,26 +2559,20 @@ void Shell::ProfilerTriggerSample(
 
 void Shell::TriggerOnProfileEndListener(Isolate* isolate, std::string profile) {
   CHECK(HasOnProfileEndListener(isolate));
-  Local<Function> callback;
-  Local<Context> context;
   Local<Value> argv[1] = {
       String::NewFromUtf8(isolate, profile.c_str()).ToLocalChecked()};
-  {
-    base::MutexGuard lock_guard(&profiler_end_callback_lock_);
-    auto& callback_pair = profiler_end_callback_[isolate];
-    callback = callback_pair.first.Get(isolate);
-    context = callback_pair.second.Get(isolate);
-  }
+  auto& callback_pair = profiler_end_callback_[isolate];
+  Local<Function> callback = callback_pair.first.Get(isolate);
+  Local<Context> context = callback_pair.second.Get(isolate);
   TryCatch try_catch(isolate);
   try_catch.SetVerbose(true);
   USE(callback->Call(context, Undefined(isolate), 1, argv));
 }
 
-void WriteToFile(FILE* file, const v8::FunctionCallbackInfo<v8::Value>& args,
-                 int first_arg_index = 0) {
-  for (int i = first_arg_index; i < args.Length(); i++) {
+void WriteToFile(FILE* file, const v8::FunctionCallbackInfo<v8::Value>& args) {
+  for (int i = 0; i < args.Length(); i++) {
     HandleScope handle_scope(args.GetIsolate());
-    if (i != first_arg_index) {
+    if (i != 0) {
       fprintf(file, " ");
     }
 
@@ -2628,55 +2616,6 @@ void Shell::PrintErr(const v8::FunctionCallbackInfo<v8::Value>& args) {
 
 void Shell::WriteStdout(const v8::FunctionCallbackInfo<v8::Value>& args) {
   WriteToFile(stdout, args);
-}
-
-// There are two overloads of writeFile().
-//
-// The first parameter is always the filename.
-//
-// If there are exactly 2 arguments, and the second argument is an ArrayBuffer
-// or an ArrayBufferView, write the binary contents into the file.
-//
-// Otherwise, convert arguments to UTF-8 strings, and write them to the file,
-// separated by space.
-void Shell::WriteFile(const v8::FunctionCallbackInfo<v8::Value>& args) {
-  String::Utf8Value file_name(args.GetIsolate(), args[0]);
-  if (*file_name == nullptr) {
-    args.GetIsolate()->ThrowError("Error converting filename to string");
-    return;
-  }
-  FILE* file;
-  if (args.Length() == 2 &&
-      (args[1]->IsArrayBuffer() || args[1]->IsArrayBufferView())) {
-    file = base::Fopen(*file_name, "wb");
-    if (file == nullptr) {
-      args.GetIsolate()->ThrowError("Error opening file");
-      return;
-    }
-
-    void* data;
-    size_t length;
-    if (args[1]->IsArrayBuffer()) {
-      Local<v8::ArrayBuffer> buffer = Local<v8::ArrayBuffer>::Cast(args[1]);
-      length = buffer->ByteLength();
-      data = buffer->Data();
-    } else {
-      Local<v8::ArrayBufferView> buffer_view =
-          Local<v8::ArrayBufferView>::Cast(args[1]);
-      length = buffer_view->ByteLength();
-      data = static_cast<uint8_t*>(buffer_view->Buffer()->Data()) +
-             buffer_view->ByteOffset();
-    }
-    fwrite(data, 1, length, file);
-  } else {
-    file = base::Fopen(*file_name, "w");
-    if (file == nullptr) {
-      args.GetIsolate()->ThrowError("Error opening file");
-      return;
-    }
-    WriteToFile(file, args, 1);
-  }
-  base::Fclose(file);
 }
 
 void Shell::ReadFile(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -3045,13 +2984,6 @@ void Shell::QuitOnce(v8::FunctionCallbackInfo<v8::Value>* args) {
     i_isolate->thread_manager()->Unlock();
   }
 
-  // When disposing the shared space isolate, the workers (client isolates) need
-  // to be terminated first.
-  if (i_isolate->is_shared_space_isolate()) {
-    i::ParkedScope parked(i_isolate->main_thread_local_isolate());
-    WaitForRunningWorkers(parked);
-  }
-
   OnExit(isolate, false);
   base::OS::ExitProcess(exit_code);
 }
@@ -3402,10 +3334,6 @@ Local<ObjectTemplate> Shell::CreateGlobalTemplate(Isolate* isolate) {
                        FunctionTemplate::New(isolate, PrintErr));
   global_template->Set(isolate, "write",
                        FunctionTemplate::New(isolate, WriteStdout));
-  if (!i::v8_flags.fuzzing) {
-    global_template->Set(isolate, "writeFile",
-                         FunctionTemplate::New(isolate, WriteFile));
-  }
   global_template->Set(isolate, "read",
                        FunctionTemplate::New(isolate, ReadFile));
   global_template->Set(isolate, "readbuffer",

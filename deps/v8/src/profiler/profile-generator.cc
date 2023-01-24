@@ -941,12 +941,11 @@ void CodeEntryStorage::DecRef(CodeEntry* entry) {
   }
 }
 
-InstructionStreamMap::InstructionStreamMap(CodeEntryStorage& storage)
-    : code_entries_(storage) {}
+CodeMap::CodeMap(CodeEntryStorage& storage) : code_entries_(storage) {}
 
-InstructionStreamMap::~InstructionStreamMap() { Clear(); }
+CodeMap::~CodeMap() { Clear(); }
 
-void InstructionStreamMap::Clear() {
+void CodeMap::Clear() {
   for (auto& slot : code_map_) {
     if (CodeEntry* entry = slot.second.entry) {
       code_entries_.DecRef(entry);
@@ -959,13 +958,12 @@ void InstructionStreamMap::Clear() {
   code_map_.clear();
 }
 
-void InstructionStreamMap::AddCode(Address addr, CodeEntry* entry,
-                                   unsigned size) {
+void CodeMap::AddCode(Address addr, CodeEntry* entry, unsigned size) {
   code_map_.emplace(addr, CodeEntryMapInfo{entry, size});
   entry->set_instruction_start(addr);
 }
 
-bool InstructionStreamMap::RemoveCode(CodeEntry* entry) {
+bool CodeMap::RemoveCode(CodeEntry* entry) {
   auto range = code_map_.equal_range(entry->instruction_start());
   for (auto i = range.first; i != range.second; ++i) {
     if (i->second.entry == entry) {
@@ -977,7 +975,7 @@ bool InstructionStreamMap::RemoveCode(CodeEntry* entry) {
   return false;
 }
 
-void InstructionStreamMap::ClearCodesInRange(Address start, Address end) {
+void CodeMap::ClearCodesInRange(Address start, Address end) {
   auto left = code_map_.upper_bound(start);
   if (left != code_map_.begin()) {
     --left;
@@ -990,8 +988,7 @@ void InstructionStreamMap::ClearCodesInRange(Address start, Address end) {
   code_map_.erase(left, right);
 }
 
-CodeEntry* InstructionStreamMap::FindEntry(Address addr,
-                                           Address* out_instruction_start) {
+CodeEntry* CodeMap::FindEntry(Address addr, Address* out_instruction_start) {
   // Note that an address may correspond to multiple CodeEntry objects. An
   // arbitrary selection is made (as per multimap spec) in the event of a
   // collision.
@@ -1006,7 +1003,7 @@ CodeEntry* InstructionStreamMap::FindEntry(Address addr,
   return ret;
 }
 
-void InstructionStreamMap::MoveCode(Address from, Address to) {
+void CodeMap::MoveCode(Address from, Address to) {
   if (from == to) return;
 
   auto range = code_map_.equal_range(from);
@@ -1029,14 +1026,14 @@ void InstructionStreamMap::MoveCode(Address from, Address to) {
   code_map_.erase(range.first, it);
 }
 
-void InstructionStreamMap::Print() {
+void CodeMap::Print() {
   for (const auto& pair : code_map_) {
     base::OS::Print("%p %5d %s\n", reinterpret_cast<void*>(pair.first),
                     pair.second.size, pair.second.entry->name());
   }
 }
 
-size_t InstructionStreamMap::GetEstimatedMemoryUsage() const {
+size_t CodeMap::GetEstimatedMemoryUsage() const {
   size_t map_size = 0;
   for (const auto& pair : code_map_) {
     map_size += sizeof(pair.first) + sizeof(pair.second) +

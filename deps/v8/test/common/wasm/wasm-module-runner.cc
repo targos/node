@@ -145,7 +145,8 @@ WasmInterpretationResult InterpretWasmModule(
 
   CHECK(func->exported);
   // This would normally be handled by export wrappers.
-  if (!IsJSCompatibleSignature(func->sig)) {
+  if (!IsJSCompatibleSignature(func->sig, instance->module(),
+                               WasmFeatures::FromIsolate(isolate))) {
     return WasmInterpretationResult::Trapped(false);
   }
 

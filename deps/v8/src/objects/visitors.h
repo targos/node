@@ -14,7 +14,7 @@
 namespace v8 {
 namespace internal {
 
-class Code;
+class CodeDataContainer;
 
 #define ROOT_ID_LIST(V)                                 \
   V(kStringTable, "(Internalized strings)")             \
@@ -91,11 +91,10 @@ class RootVisitor {
     UNREACHABLE();
   }
 
-  // Visits a single pointer which is InstructionStream from the execution
-  // stack.
+  // Visits a single pointer which is Code from the execution stack.
   virtual void VisitRunningCode(FullObjectSlot p) {
-    // For most visitors, currently running InstructionStream is no different
-    // than any other on-stack pointer.
+    // For most visitors, currently running Code is no different than any other
+    // on-stack pointer.
     VisitRootPointer(Root::kStackRoots, nullptr, p);
   }
 
@@ -121,10 +120,11 @@ class ObjectVisitor {
                              ObjectSlot end) = 0;
   virtual void VisitPointers(HeapObject host, MaybeObjectSlot start,
                              MaybeObjectSlot end) = 0;
-  // When V8_EXTERNAL_CODE_SPACE is enabled, visits a InstructionStream pointer
-  // slot. The values may be modified on return. Not used when
-  // V8_EXTERNAL_CODE_SPACE is not enabled (the InstructionStream pointer slots
-  // are visited as a part of on-heap slot visitation - via VisitPointers()).
+  // When V8_EXTERNAL_CODE_SPACE is enabled, visits a Code pointer slot.
+  // The values may be modified on return.
+  // Not used when V8_EXTERNAL_CODE_SPACE is not enabled (the Code pointer
+  // slots are visited as a part of on-heap slot visitation - via
+  // VisitPointers()).
   virtual void VisitCodePointer(HeapObject host, CodeObjectSlot slot) = 0;
 
   // Custom weak pointers must be ignored by the GC but not other
@@ -154,30 +154,27 @@ class ObjectVisitor {
   }
 
   // To allow lazy clearing of inline caches the visitor has
-  // a rich interface for iterating over InstructionStream objects ...
+  // a rich interface for iterating over Code objects ...
 
   // Visits a code target in the instruction stream.
-  virtual void VisitCodeTarget(InstructionStream host, RelocInfo* rinfo) = 0;
+  virtual void VisitCodeTarget(Code host, RelocInfo* rinfo) = 0;
 
   // Visit pointer embedded into a code object.
-  virtual void VisitEmbeddedPointer(InstructionStream host,
-                                    RelocInfo* rinfo) = 0;
+  virtual void VisitEmbeddedPointer(Code host, RelocInfo* rinfo) = 0;
 
   // Visits an external reference embedded into a code object.
-  virtual void VisitExternalReference(InstructionStream host,
-                                      RelocInfo* rinfo) {}
+  virtual void VisitExternalReference(Code host, RelocInfo* rinfo) {}
 
   // Visits an external pointer.
   virtual void VisitExternalPointer(HeapObject host, ExternalPointerSlot slot,
                                     ExternalPointerTag tag) {}
 
   // Visits an (encoded) internal reference.
-  virtual void VisitInternalReference(InstructionStream host,
-                                      RelocInfo* rinfo) {}
+  virtual void VisitInternalReference(Code host, RelocInfo* rinfo) {}
 
   // Visits an off-heap target or near builtin entry in the instruction stream.
   // TODO(ishell): rename to VisitBuiltinEntry.
-  virtual void VisitOffHeapTarget(InstructionStream host, RelocInfo* rinfo) {}
+  virtual void VisitOffHeapTarget(Code host, RelocInfo* rinfo) {}
 
   // Visits the relocation info using the given iterator.
   void VisitRelocInfo(RelocIterator* it);
@@ -196,7 +193,7 @@ class ObjectVisitorWithCageBases : public ObjectVisitor {
   inline explicit ObjectVisitorWithCageBases(Heap* heap);
 
   // The pointer compression cage base value used for decompression of all
-  // tagged values except references to InstructionStream objects.
+  // tagged values except references to Code objects.
   PtrComprCageBase cage_base() const {
 #if V8_COMPRESS_POINTERS
     return cage_base_;
@@ -206,7 +203,7 @@ class ObjectVisitorWithCageBases : public ObjectVisitor {
   }
 
   // The pointer compression cage base value used for decompression of
-  // references to InstructionStream objects.
+  // references to Code objects.
   PtrComprCageBase code_cage_base() const {
 #ifdef V8_EXTERNAL_CODE_SPACE
     return code_cage_base_;

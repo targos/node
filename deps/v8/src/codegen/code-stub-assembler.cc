@@ -3145,20 +3145,20 @@ TNode<BytecodeArray> CodeStubAssembler::LoadSharedFunctionInfoBytecodeArray(
   Label check_for_interpreter_data(this, &var_result);
   Label done(this, &var_result);
 
-  GotoIfNot(HasInstanceType(var_result.value(), CODE_TYPE),
+  GotoIfNot(HasInstanceType(var_result.value(), CODET_TYPE),
             &check_for_interpreter_data);
   {
-    TNode<Code> code = CAST(var_result.value());
+    TNode<CodeT> code = CAST(var_result.value());
 #ifdef DEBUG
     TNode<Int32T> code_flags =
-        LoadObjectField<Int16T>(code, Code::kFlagsOffset);
+        LoadObjectField<Int32T>(code, CodeT::kFlagsOffset);
     CSA_DCHECK(
-        this, Word32Equal(DecodeWord32<Code::KindField>(code_flags),
+        this, Word32Equal(DecodeWord32<CodeT::KindField>(code_flags),
                           Int32Constant(static_cast<int>(CodeKind::BASELINE))));
 #endif  // DEBUG
     TNode<HeapObject> baseline_data = LoadObjectField<HeapObject>(
-        FromCodeNonBuiltin(code),
-        InstructionStream::kDeoptimizationDataOrInterpreterDataOffset);
+        FromCodeTNonBuiltin(code),
+        Code::kDeoptimizationDataOrInterpreterDataOffset);
     var_result = baseline_data;
   }
   Goto(&check_for_interpreter_data);
@@ -3725,10 +3725,6 @@ TNode<String> CodeStubAssembler::AllocateSeqOneByteString(
     return EmptyStringConstant();
   }
   TNode<HeapObject> result = Allocate(SeqOneByteString::SizeFor(length), flags);
-  StoreNoWriteBarrier(MachineRepresentation::kTaggedSigned, result,
-                      IntPtrConstant(SeqOneByteString::SizeFor(length) -
-                                     kObjectAlignment - kHeapObjectTag),
-                      SmiConstant(0));
   DCHECK(RootsTable::IsImmortalImmovable(RootIndex::kOneByteStringMap));
   StoreMapNoWriteBarrier(result, RootIndex::kOneByteStringMap);
   StoreObjectFieldNoWriteBarrier(result, SeqOneByteString::kLengthOffset,
@@ -3751,10 +3747,6 @@ TNode<String> CodeStubAssembler::AllocateSeqTwoByteString(
     return EmptyStringConstant();
   }
   TNode<HeapObject> result = Allocate(SeqTwoByteString::SizeFor(length), flags);
-  StoreNoWriteBarrier(MachineRepresentation::kTaggedSigned, result,
-                      IntPtrConstant(SeqTwoByteString::SizeFor(length) -
-                                     kObjectAlignment - kHeapObjectTag),
-                      SmiConstant(0));
   DCHECK(RootsTable::IsImmortalImmovable(RootIndex::kStringMap));
   StoreMapNoWriteBarrier(result, RootIndex::kStringMap);
   StoreObjectFieldNoWriteBarrier(result, SeqTwoByteString::kLengthOffset,
@@ -15463,7 +15455,7 @@ TNode<BoolT> CodeStubAssembler::NeedsAnyPromiseHooks(TNode<Uint32T> flags) {
   return Word32NotEqual(flags, Int32Constant(0));
 }
 
-TNode<Code> CodeStubAssembler::LoadBuiltin(TNode<Smi> builtin_id) {
+TNode<CodeT> CodeStubAssembler::LoadBuiltin(TNode<Smi> builtin_id) {
   CSA_DCHECK(this, SmiBelow(builtin_id, SmiConstant(Builtins::kBuiltinCount)));
 
   TNode<IntPtrT> offset =
@@ -15475,13 +15467,13 @@ TNode<Code> CodeStubAssembler::LoadBuiltin(TNode<Smi> builtin_id) {
   return CAST(BitcastWordToTagged(Load<RawPtrT>(table, offset)));
 }
 
-TNode<Code> CodeStubAssembler::GetSharedFunctionInfoCode(
+TNode<CodeT> CodeStubAssembler::GetSharedFunctionInfoCode(
     TNode<SharedFunctionInfo> shared_info, TVariable<Uint16T>* data_type_out,
     Label* if_compile_lazy) {
   TNode<Object> sfi_data =
       LoadObjectField(shared_info, SharedFunctionInfo::kFunctionDataOffset);
 
-  TVARIABLE(Code, sfi_code);
+  TVARIABLE(CodeT, sfi_code);
 
   Label done(this);
   Label check_instance_type(this);
@@ -15507,7 +15499,7 @@ TNode<Code> CodeStubAssembler::GetSharedFunctionInfoCode(
 
   int32_t case_values[] = {
     BYTECODE_ARRAY_TYPE,
-    CODE_TYPE,
+    CODET_TYPE,
     UNCOMPILED_DATA_WITHOUT_PREPARSE_DATA_TYPE,
     UNCOMPILED_DATA_WITH_PREPARSE_DATA_TYPE,
     UNCOMPILED_DATA_WITHOUT_PREPARSE_DATA_WITH_JOB_TYPE,
@@ -15557,7 +15549,7 @@ TNode<Code> CodeStubAssembler::GetSharedFunctionInfoCode(
   // IsBaselineData: Execute baseline code
   BIND(&check_is_baseline_data);
   {
-    TNode<Code> baseline_code = CAST(sfi_data);
+    TNode<CodeT> baseline_code = CAST(sfi_data);
     sfi_code = baseline_code;
     Goto(&done);
   }
@@ -15579,7 +15571,7 @@ TNode<Code> CodeStubAssembler::GetSharedFunctionInfoCode(
   CSA_DCHECK(this,
              Word32Equal(data_type, Int32Constant(INTERPRETER_DATA_TYPE)));
   {
-    TNode<Code> trampoline =
+    TNode<CodeT> trampoline =
         LoadInterpreterDataInterpreterTrampoline(CAST(sfi_data));
     sfi_code = trampoline;
   }
@@ -15607,20 +15599,28 @@ TNode<Code> CodeStubAssembler::GetSharedFunctionInfoCode(
   return sfi_code.value();
 }
 
-TNode<RawPtrT> CodeStubAssembler::GetCodeEntry(TNode<Code> code) {
-  return LoadObjectField<RawPtrT>(code,
-                                  IntPtrConstant(Code::kCodeEntryPointOffset));
+TNode<RawPtrT> CodeStubAssembler::GetCodeEntry(TNode<CodeT> code) {
+#ifdef V8_EXTERNAL_CODE_SPACE
+  TNode<CodeDataContainer> cdc = CodeDataContainerFromCodeT(code);
+  return LoadObjectField<RawPtrT>(
+      cdc, IntPtrConstant(CodeDataContainer::kCodeEntryPointOffset));
+#else
+  TNode<IntPtrT> object = BitcastTaggedToWord(code);
+  return ReinterpretCast<RawPtrT>(
+      IntPtrAdd(object, IntPtrConstant(Code::kHeaderSize - kHeapObjectTag)));
+#endif
 }
 
-TNode<BoolT> CodeStubAssembler::IsMarkedForDeoptimization(TNode<Code> code) {
-  return IsSetWord32<InstructionStream::MarkedForDeoptimizationField>(
-      LoadObjectField<Int32T>(code, Code::kKindSpecificFlagsOffset));
+TNode<BoolT> CodeStubAssembler::IsMarkedForDeoptimization(TNode<CodeT> codet) {
+  return IsSetWord32<Code::MarkedForDeoptimizationField>(
+      LoadObjectField<Int32T>(CodeDataContainerFromCodeT(codet),
+                              CodeDataContainer::kKindSpecificFlagsOffset));
 }
 
 TNode<JSFunction> CodeStubAssembler::AllocateFunctionWithMapAndContext(
     TNode<Map> map, TNode<SharedFunctionInfo> shared_info,
     TNode<Context> context) {
-  const TNode<Code> code = GetSharedFunctionInfoCode(shared_info);
+  const TNode<CodeT> code = GetSharedFunctionInfoCode(shared_info);
 
   // TODO(ishell): All the callers of this function pass map loaded from
   // Context::STRICT_FUNCTION_WITHOUT_PROTOTYPE_MAP_INDEX. So we can remove

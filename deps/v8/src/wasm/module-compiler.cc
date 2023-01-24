@@ -939,11 +939,11 @@ ExecutionTierPair GetDefaultTiersPerModule(NativeModule* native_module,
   if (is_asmjs_module(module)) {
     return {ExecutionTier::kTurbofan, ExecutionTier::kTurbofan};
   }
-  if (lazy_module) {
-    return {ExecutionTier::kNone, ExecutionTier::kNone};
-  }
   if (is_in_debug_state) {
     return {ExecutionTier::kLiftoff, ExecutionTier::kLiftoff};
+  }
+  if (lazy_module) {
+    return {ExecutionTier::kNone, ExecutionTier::kNone};
   }
   ExecutionTier baseline_tier =
       v8_flags.liftoff ? ExecutionTier::kLiftoff : ExecutionTier::kTurbofan;
@@ -1017,6 +1017,11 @@ class CompilationUnitBuilder {
     tiering_units_.emplace_back(func_index, tier, kNotForDebugging);
   }
 
+  void AddDebugUnit(int func_index) {
+    baseline_units_.emplace_back(func_index, ExecutionTier::kLiftoff,
+                                 kForDebugging);
+  }
+
   bool Commit() {
     if (baseline_units_.empty() && tiering_units_.empty() &&
         js_to_wasm_wrapper_units_.empty()) {
@@ -1052,10 +1057,7 @@ class CompilationUnitBuilder {
 DecodeResult ValidateSingleFunction(const WasmModule* module, int func_index,
                                     base::Vector<const uint8_t> code,
                                     WasmFeatures enabled_features) {
-  // Sometimes functions get validated unpredictably in the background, for
-  // debugging or when inlining one function into another. We check here if that
-  // is the case, and exit early if so.
-  if (module->function_was_validated(func_index)) return {};
+  DCHECK(!module->function_was_validated(func_index));
   const WasmFunction* func = &module->functions[func_index];
   FunctionBody body{func->sig, func->code.offset(), code.begin(), code.end()};
   WasmFeatures detected_features;
@@ -1424,13 +1426,11 @@ void TierUpNowForTesting(Isolate* isolate, WasmInstanceObject instance,
 
 namespace {
 
-void RecordStats(Code code, Counters* counters) {
-  if (code.is_off_heap_trampoline()) return;
-  InstructionStream instruction_stream = FromCode(code);
-  counters->wasm_generated_code_size()->Increment(
-      instruction_stream.raw_body_size());
-  counters->wasm_reloc_size()->Increment(
-      instruction_stream.relocation_info().length());
+void RecordStats(CodeT codet, Counters* counters) {
+  if (codet.is_off_heap_trampoline()) return;
+  Code code = FromCodeT(codet);
+  counters->wasm_generated_code_size()->Increment(code.raw_body_size());
+  counters->wasm_reloc_size()->Increment(code.relocation_info().length());
 }
 
 enum CompilationExecutionResult : int8_t { kNoMoreUnits, kYield };
@@ -1651,7 +1651,10 @@ int AddImportWrapperUnits(NativeModule* native_module,
   for (int func_index = 0; func_index < num_imported_functions; func_index++) {
     const WasmFunction& function =
         native_module->module()->functions[func_index];
-    if (!IsJSCompatibleSignature(function.sig)) continue;
+    if (!IsJSCompatibleSignature(function.sig, native_module->module(),
+                                 native_module->enabled_features())) {
+      continue;
+    }
     uint32_t canonical_type_index =
         native_module->module()
             ->isorecursive_canonical_type_ids[function.sig_index];
@@ -3152,7 +3155,12 @@ void CompilationStateImpl::AddCompilationUnitInternal(
 void CompilationStateImpl::InitializeCompilationUnits(
     std::unique_ptr<CompilationUnitBuilder> builder) {
   int offset = native_module_->module()->num_imported_functions;
-  {
+  if (native_module_->IsInDebugState()) {
+    for (size_t i = 0; i < compilation_progress_.size(); ++i) {
+      int func_index = offset + static_cast<int>(i);
+      builder->AddDebugUnit(func_index);
+    }
+  } else {
     base::MutexGuard guard(&callbacks_mutex_);
 
     for (size_t i = 0, e = compilation_progress_.size(); i < e; ++i) {
@@ -3343,7 +3351,7 @@ void CompilationStateImpl::FinalizeJSToWasmWrappers(Isolate* isolate,
   CodePageCollectionMemoryModificationScope modification_scope(isolate->heap());
   for (auto& unit : js_to_wasm_wrapper_units_) {
     DCHECK_EQ(isolate, unit->isolate());
-    Handle<Code> code = unit->Finalize();
+    Handle<CodeT> code = unit->Finalize();
     uint32_t index =
         GetExportWrapperIndex(unit->canonical_sig_index(), unit->is_import());
     isolate->heap()->js_to_wasm_wrappers().Set(index,
@@ -3805,7 +3813,7 @@ void CompileJsToWasmWrappers(Isolate* isolate, const WasmModule* module) {
     JSToWasmWrapperKey key = pair.first;
     JSToWasmWrapperCompilationUnit* unit = pair.second.get();
     DCHECK_EQ(isolate, unit->isolate());
-    Handle<Code> code = unit->Finalize();
+    Handle<CodeT> code = unit->Finalize();
     int wrapper_index = GetExportWrapperIndex(key.second, key.first);
     isolate->heap()->js_to_wasm_wrappers().Set(
         wrapper_index, HeapObjectReference::Strong(*code));

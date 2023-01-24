@@ -5,12 +5,10 @@
 #include "src/json/json-parser.h"
 
 #include "src/base/strings.h"
-#include "src/common/assert-scope.h"
 #include "src/common/globals.h"
 #include "src/common/message-template.h"
 #include "src/debug/debug.h"
 #include "src/execution/frames-inl.h"
-#include "src/heap/factory.h"
 #include "src/numbers/conversions.h"
 #include "src/numbers/hash-seed-inl.h"
 #include "src/objects/field-type.h"
@@ -18,7 +16,6 @@
 #include "src/objects/map-updater.h"
 #include "src/objects/objects-inl.h"
 #include "src/objects/property-descriptor.h"
-#include "src/roots/roots.h"
 #include "src/strings/char-predicates-inl.h"
 #include "src/strings/string-hasher.h"
 
@@ -621,8 +618,7 @@ Handle<Object> JsonParser<Char>::BuildJsonObject(
       Handle<FixedArray> elms =
           factory()->NewFixedArrayWithHoles(cont.max_index + 1);
       DisallowGarbageCollection no_gc;
-      FixedArray raw_elements = *elms;
-      WriteBarrierMode mode = raw_elements.GetWriteBarrierMode(no_gc);
+      WriteBarrierMode mode = elms->GetWriteBarrierMode(no_gc);
       DCHECK_EQ(HOLEY_ELEMENTS, map->elements_kind());
 
       for (int i = 0; i < length; i++) {
@@ -630,23 +626,18 @@ Handle<Object> JsonParser<Char>::BuildJsonObject(
         if (!property.string.is_index()) continue;
         uint32_t index = property.string.index();
         Handle<Object> value = property.value;
-        raw_elements.set(static_cast<int>(index), *value, mode);
+        elms->set(static_cast<int>(index), *value, mode);
       }
       elements = elms;
     }
   }
 
-  int feedback_descriptors = 0;
-  if (!feedback.is_null()) {
-    DisallowGarbageCollection no_gc;
-    auto raw_feedback = *feedback;
-    auto raw_map = *map;
-    feedback_descriptors =
-        (raw_feedback.elements_kind() != raw_map.elements_kind() ||
-         raw_feedback.instance_size() != raw_map.instance_size())
-            ? 0
-            : raw_feedback.NumberOfOwnDescriptors();
-  }
+  int feedback_descriptors =
+      (feedback.is_null() ||
+       feedback->elements_kind() != map->elements_kind() ||
+       feedback->instance_size() != map->instance_size())
+          ? 0
+          : feedback->NumberOfOwnDescriptors();
 
   int i;
   int descriptor = 0;
@@ -750,9 +741,7 @@ Handle<Object> JsonParser<Char>::BuildJsonObject(
   {
     descriptor = 0;
     DisallowGarbageCollection no_gc;
-    auto raw_object = *object;
-    auto raw_map = *map;
-    WriteBarrierMode mode = raw_object.GetWriteBarrierMode(no_gc);
+    WriteBarrierMode mode = object->GetWriteBarrierMode(no_gc);
     Address mutable_double_address =
         mutable_double_buffer.is_null()
             ? 0
@@ -771,9 +760,9 @@ Handle<Object> JsonParser<Char>::BuildJsonObject(
       if (property.string.is_index()) continue;
       InternalIndex descriptor_index(descriptor);
       PropertyDetails details =
-          raw_map.instance_descriptors(isolate()).GetDetails(descriptor_index);
-      FieldIndex index = FieldIndex::ForDetails(raw_map, details);
+          map->instance_descriptors(isolate()).GetDetails(descriptor_index);
       Object value = *property.value;
+      FieldIndex index = FieldIndex::ForDescriptor(*map, descriptor_index);
       descriptor++;
 
       if (details.representation().IsDouble()) {
@@ -781,7 +770,8 @@ Handle<Object> JsonParser<Char>::BuildJsonObject(
           if (!V8_COMPRESS_POINTERS_8GB_BOOL && kTaggedSize != kDoubleSize) {
             // Write alignment filler.
             HeapObject filler = HeapObject::FromAddress(filler_address);
-            filler.set_map_after_allocation(roots().one_pointer_filler_map());
+            filler.set_map_after_allocation(
+                *factory()->one_pointer_filler_map());
             filler_address += kMutableDoubleSize;
           }
 
@@ -791,18 +781,18 @@ Handle<Object> JsonParser<Char>::BuildJsonObject(
           // payload, so we can skip notifying object layout change.
 
           HeapObject hn = HeapObject::FromAddress(mutable_double_address);
-          hn.set_map_after_allocation(roots().heap_number_map());
+          hn.set_map_after_allocation(*factory()->heap_number_map());
           HeapNumber::cast(hn).set_value_as_bits(bits, kRelaxedStore);
           value = hn;
           mutable_double_address +=
               ALIGN_TO_ALLOCATION_ALIGNMENT(kMutableDoubleSize);
         } else {
           DCHECK(value.IsHeapNumber());
-          HeapObject::cast(value).set_map(roots().heap_number_map(),
+          HeapObject::cast(value).set_map(*factory()->heap_number_map(),
                                           kReleaseStore);
         }
       }
-      raw_object.RawFastInobjectPropertyAtPut(index, value, mode);
+      object->RawFastInobjectPropertyAtPut(index, value, mode);
     }
     // Make all mutable HeapNumbers alive.
     if (!mutable_double_buffer.is_null()) {
@@ -1108,12 +1098,8 @@ MaybeHandle<Object> JsonParser<Char>::ParseJsonValue(Handle<Object> reviver) {
           if (should_track_json_source) {
             DCHECK(!val_node.is_null());
             Handle<FixedArray> result = factory()->NewFixedArray(2);
-            {
-              DisallowGarbageCollection no_gc;
-              auto raw_result = *result;
-              raw_result.set(0, *value);
-              raw_result.set(1, *val_node);
-            }
+            result->set(0, *value);
+            result->set(1, *val_node);
             return cont.scope.CloseAndEscape(result);
           } else {
             return cont.scope.CloseAndEscape(value);
@@ -1152,7 +1138,7 @@ MaybeHandle<Object> JsonParser<Char>::ParseJsonValue(Handle<Object> reviver) {
             // from the transition tree.
             if (!maybe_feedback.IsDetached(isolate_)) {
               feedback = handle(maybe_feedback, isolate_);
-              if (maybe_feedback.is_deprecated()) {
+              if (feedback->is_deprecated()) {
                 feedback = Map::Update(isolate_, feedback);
               }
             }
@@ -1211,10 +1197,8 @@ MaybeHandle<Object> JsonParser<Char>::ParseJsonValue(Handle<Object> reviver) {
             size_t start = cont.index;
             int length = static_cast<int>(element_stack.size() - start);
             Handle<FixedArray> array = factory()->NewFixedArray(length);
-            DisallowGarbageCollection no_gc;
-            auto raw_array = *array;
             for (int i = 0; i < length; i++) {
-              raw_array.set(i, *element_val_node_stack[start + i]);
+              array->set(i, *element_val_node_stack[start + i]);
             }
             element_val_node_stack.resize_no_init(cont.index);
             Object value_obj = *value;

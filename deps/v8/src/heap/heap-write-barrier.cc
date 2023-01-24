@@ -4,6 +4,7 @@
 
 #include "src/heap/heap-write-barrier.h"
 
+#include "src/heap/embedder-tracing.h"
 #include "src/heap/heap-write-barrier-inl.h"
 #include "src/heap/marking-barrier.h"
 #include "src/heap/remembered-set.h"
@@ -62,13 +63,13 @@ void WriteBarrier::MarkingSlowFromInternalFields(Heap* heap, JSObject host) {
   }
 }
 
-void WriteBarrier::MarkingSlow(InstructionStream host, RelocInfo* reloc_info,
+void WriteBarrier::MarkingSlow(Code host, RelocInfo* reloc_info,
                                HeapObject value) {
   MarkingBarrier* marking_barrier = CurrentMarkingBarrier(host);
   marking_barrier->Write(host, reloc_info, value);
 }
 
-void WriteBarrier::SharedSlow(InstructionStream host, RelocInfo* reloc_info,
+void WriteBarrier::SharedSlow(Code host, RelocInfo* reloc_info,
                               HeapObject value) {
   MarkCompactCollector::RecordRelocSlotInfo info =
       MarkCompactCollector::ProcessRelocInfo(host, reloc_info, value);
@@ -175,8 +176,7 @@ bool WriteBarrier::IsImmortalImmovableHeapObject(HeapObject object) {
   if (!chunk->IsFlagSet(MemoryChunk::NEVER_EVACUATE)) return false;
   // Now we know the object is immovable, check whether it is also immortal.
   // Builtins are roots and therefore always kept alive by the GC.
-  return object.IsInstructionStream() &&
-         InstructionStream::cast(object).is_builtin();
+  return object.IsCode() && Code::cast(object).is_builtin();
 }
 #endif
 

@@ -296,7 +296,9 @@ class RememberedSet : public AllStatic {
     MemoryChunk* chunk;
     while ((chunk = it.next()) != nullptr) {
       chunk->ReleaseSlotSet<OLD_TO_OLD>();
-      chunk->ReleaseSlotSet<OLD_TO_CODE>();
+      if (V8_EXTERNAL_CODE_SPACE_BOOL) {
+        chunk->ReleaseSlotSet<OLD_TO_CODE>();
+      }
       chunk->ReleaseTypedSlotSet<OLD_TO_OLD>();
       chunk->ReleaseInvalidatedSlots<OLD_TO_OLD>();
     }
@@ -323,9 +325,8 @@ class UpdateTypedSlotHelper {
   template <typename Callback>
   static SlotCallbackResult UpdateCodeEntry(Address entry_address,
                                             Callback callback) {
-    InstructionStream code =
-        InstructionStream::GetObjectFromEntryAddress(entry_address);
-    InstructionStream old_code = code;
+    Code code = Code::GetObjectFromEntryAddress(entry_address);
+    Code old_code = code;
     SlotCallbackResult result = callback(FullMaybeObjectSlot(&code));
     DCHECK(!HasWeakHeapObjectTag(code));
     if (code != old_code) {
@@ -340,14 +341,12 @@ class UpdateTypedSlotHelper {
   static SlotCallbackResult UpdateCodeTarget(RelocInfo* rinfo,
                                              Callback callback) {
     DCHECK(RelocInfo::IsCodeTargetMode(rinfo->rmode()));
-    InstructionStream old_target =
-        InstructionStream::GetCodeFromTargetAddress(rinfo->target_address());
-    InstructionStream new_target = old_target;
+    Code old_target = Code::GetCodeFromTargetAddress(rinfo->target_address());
+    Code new_target = old_target;
     SlotCallbackResult result = callback(FullMaybeObjectSlot(&new_target));
     DCHECK(!HasWeakHeapObjectTag(new_target));
     if (new_target != old_target) {
-      rinfo->set_target_address(
-          InstructionStream::cast(new_target).raw_instruction_start());
+      rinfo->set_target_address(Code::cast(new_target).raw_instruction_start());
     }
     return result;
   }

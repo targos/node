@@ -64,8 +64,7 @@ void MarkingBarrier::WriteWithoutHost(HeapObject value) {
   MarkValueLocal(value);
 }
 
-void MarkingBarrier::Write(InstructionStream host, RelocInfo* reloc_info,
-                           HeapObject value) {
+void MarkingBarrier::Write(Code host, RelocInfo* reloc_info, HeapObject value) {
   DCHECK(IsCurrentMarkingBarrier(host));
   DCHECK(!host.InSharedWritableHeap());
   DCHECK(is_activated_ || shared_heap_worklist_.has_value());
@@ -155,7 +154,7 @@ void MarkingBarrier::Write(DescriptorArray descriptor_array,
   }
 }
 
-void MarkingBarrier::RecordRelocSlot(InstructionStream host, RelocInfo* rinfo,
+void MarkingBarrier::RecordRelocSlot(Code host, RelocInfo* rinfo,
                                      HeapObject target) {
   DCHECK(IsCurrentMarkingBarrier(host));
   if (!MarkCompactCollector::ShouldRecordRelocSlot(host, rinfo, target)) return;
@@ -187,8 +186,7 @@ void ActivateSpaces(Heap* heap) {
   ActivateSpace(heap->old_space());
   {
     CodePageHeaderModificationScope rwx_write_scope(
-        "Modification of InstructionStream page header flags requires write "
-        "access");
+        "Modification of Code page header flags requires write access");
     ActivateSpace(heap->code_space());
   }
   ActivateSpace(heap->new_space());
@@ -207,8 +205,7 @@ void ActivateSpaces(Heap* heap) {
 
   {
     CodePageHeaderModificationScope rwx_write_scope(
-        "Modification of InstructionStream page header flags requires write "
-        "access");
+        "Modification of Code page header flags requires write access");
     for (LargePage* p : *heap->code_lo_space()) {
       p->SetOldGenerationPageFlags(true);
     }
