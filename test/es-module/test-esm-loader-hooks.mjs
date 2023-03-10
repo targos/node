@@ -67,6 +67,21 @@ describe('Loader hooks', { concurrency: true }, () => {
       assert.strictEqual(code, 0);
       assert.strictEqual(signal, null);
     });
+
+    it('import.meta.resolve of a never-settling resolve', async () => {
+      const { code, signal, stdout, stderr } = await spawnPromisified(execPath, [
+        '--no-warnings',
+        '--experimental-import-meta-resolve',
+        '--experimental-loader',
+        fixtures.fileURL('es-module-loaders/never-settling-resolve-step/loader.mjs'),
+        fixtures.path('es-module-loaders/never-settling-resolve-step/import.meta.never-resolve.mjs'),
+      ]);
+
+      assert.strictEqual(stderr, '');
+      assert.match(stdout, /^should be output\r?\n$/);
+      assert.strictEqual(code, 13);
+      assert.strictEqual(signal, null);
+    });
   });
 
   describe('should handle never-settling hooks in CJS files', { concurrency: true }, () => {
