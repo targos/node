@@ -1,6 +1,3 @@
-// This is expected to be used by test-esm-loader-hooks.mjs via:
-// node --loader ./test/fixtures/es-module-loaders/hooks-input.mjs ./test/fixtures/es-modules/json-modules.mjs
-
 import assert from 'assert';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
@@ -10,18 +7,22 @@ let resolveCalls = 0;
 let loadCalls = 0;
 
 export async function resolve(specifier, context, next) {
+  if (specifier.endsWith('loader-store-data.mjs')) {
+    return next(specifier, context);
+  }
+
   resolveCalls++;
   let url;
 
   if (resolveCalls === 1) {
     url = new URL(specifier).href;
-    assert.match(specifier, /json-modules\.mjs$/);
+    assert.match(specifier, /hooks-input\.mjs$/);
     assert.strictEqual(context.parentURL, undefined);
     assert.deepStrictEqual(context.importAssertions, {});
   } else if (resolveCalls === 2) {
     url = new URL(specifier, context.parentURL).href;
     assert.match(specifier, /experimental\.json$/);
-    assert.match(context.parentURL, /json-modules\.mjs$/);
+    assert.match(context.parentURL, /hooks-input\.mjs$/);
     assert.deepStrictEqual(context.importAssertions, {
       type: 'json',
     });
@@ -42,18 +43,24 @@ export async function resolve(specifier, context, next) {
     shortCircuit: true,
   }
 
-  console.log(JSON.stringify(returnValue)); // For the test to validate when it parses stdout
+  globalThis.PUSH_SYNC(JSON.stringify(returnValue));
 
   return returnValue;
 }
 
 export async function load(url, context, next) {
+  if (url.endsWith('loader-store-data.mjs')) {
+    return next(url, context);
+  }
+
+  const push = globalThis.PUSH_ASYNC();
+
   loadCalls++;
   const source = await readFile(fileURLToPath(url));
   let format;
 
   if (loadCalls === 1) {
-    assert.match(url, /json-modules\.mjs$/);
+    assert.match(url, /hooks-input\.mjs$/);
     assert.deepStrictEqual(context.importAssertions, {});
     format = 'module';
   } else if (loadCalls === 2) {
@@ -79,7 +86,7 @@ export async function load(url, context, next) {
     shortCircuit: true,
   };
 
-  console.log(JSON.stringify(returnValue)); // For the test to validate when it parses stdout
+  push(JSON.stringify(returnValue));
 
   return returnValue;
 }
