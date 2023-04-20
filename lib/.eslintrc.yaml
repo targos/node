@@ -103,10 +103,6 @@ rules:
       # disabled with --no-harmony-shadow-realm CLI flag.
     - name: ShadowRealm
       message: Use `const { ShadowRealm } = globalThis;` instead of the global.
-      # SharedArrayBuffer is not available in primordials because it can be
-      # disabled with --no-harmony-sharedarraybuffer CLI flag.
-    - name: SharedArrayBuffer
-      message: Use `const { SharedArrayBuffer } = globalThis;` instead of the global.
     - name: TextDecoder
       message: Use `const { TextDecoder } = require('internal/encoding');` instead of the global.
     - name: TextDecoderStream
@@ -229,6 +225,7 @@ rules:
     - name: RegExp
     - name: Set
       into: Safe
+    - name: SharedArrayBuffer
     - name: String
     - name: Symbol
     - name: SyntaxError
