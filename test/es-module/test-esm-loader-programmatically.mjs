@@ -15,7 +15,7 @@ const commonArgs = [
 
 const commonEvals = {
   import: (module) => `await import(${JSON.stringify(module)});`,
-  register: (loader, parentURL = 'file:///') => `register(${JSON.stringify(loader)}, ${JSON.stringify(parentURL)});`,
+  register: (loader, parentURL = 'file:///') => `register(${JSON.stringify(loader)}, { parentURL: ${JSON.stringify(parentURL)} });`,
   dynamicImport: (module) => `await import(${JSON.stringify(`data:text/javascript,${encodeURIComponent(module)}`)});`,
   staticImport: (module) => `import ${JSON.stringify(`data:text/javascript,${encodeURIComponent(module)}`)};`,
 };
