@@ -547,6 +547,11 @@
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_snapshot_compression.*?sources \\+= ")',
             ],
           }],
+          ['v8_enable_sparkplug==1', {
+            'sources': [
+              '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+            ],
+          }],
           ['v8_enable_maglev==1', {
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_maglev.*?sources \\+= ")',
@@ -593,6 +598,13 @@
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"x86\\".*?sources \\+= ")',
             ],
+            'conditions': [
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"x86\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+                ],
+              }],
+            ],
           }],
           ['v8_target_arch=="x64"', {
             'sources': [
@@ -602,6 +614,11 @@
               ['OS=="win"', {
                 'sources': [
                   '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"x64\\".*?is_win.*?sources \\+= ")',
+                ],
+              }],
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"x64\\".*?v8_enable_sparkplug.*?sources \\+= ")',
                 ],
               }],
               ['v8_enable_webassembly==1', {
@@ -624,6 +641,13 @@
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"arm\\".*?sources \\+= ")',
             ],
+            'conditions': [
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"arm\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+                ],
+              }],
+            ],
           }],
           ['v8_target_arch=="arm64"', {
             'sources': [
@@ -633,6 +657,11 @@
               ['v8_control_flow_integrity==1', {
                 'sources': [
                   '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"arm64\\".*?v8_control_flow_integrity.*?sources \\+= ")',
+                ],
+              }],
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"arm64\\".*?v8_enable_sparkplug.*?sources \\+= ")',
                 ],
               }],
               ['v8_enable_webassembly==1', {
@@ -660,6 +689,13 @@
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"mips64\\".*?sources \\+= ")',
             ],
+            'conditions': [
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"mips64\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+                ],
+              }],
+            ],
           }],
           ['v8_target_arch=="ppc"', {
             'sources': [
@@ -670,20 +706,48 @@
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"ppc64\\".*?sources \\+= ")',
             ],
+            'conditions': [
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"ppc64\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+                ],
+              }],
+            ],
           }],
           ['v8_target_arch=="s390x"', {
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"s390\\".*?sources \\+= ")',
+            ],
+            'conditions': [
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"s390\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+                ],
+              }],
             ],
           }],
           ['v8_target_arch=="riscv64"', {
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"riscv64\\".*?sources \\+= ")',
             ],
+            'conditions': [
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"riscv64\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+                ],
+              }],
+            ],
           }],
           ['v8_target_arch=="loong64"', {
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"loong64\\".*?sources \\+= ")',
+            ],
+            'conditions': [
+              ['v8_enable_sparkplug==1', {
+                'sources': [
+                  '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_i18n_support.*?v8_current_cpu == \\"loong64\\".*?v8_enable_sparkplug.*?sources \\+= ")',
+                ],
+              }],
             ],
           }],
         ],
@@ -883,6 +947,11 @@
         ['v8_enable_snapshot_compression==1', {
           'sources': [
             '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?v8_enable_snapshot_compression.*?sources \\+= ")',
+          ],
+        }],
+        ['v8_enable_sparkplug==1', {
+          'sources': [
+            '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?v8_enable_sparkplug.*?sources \\+= ")',
           ],
         }],
         ['v8_enable_maglev==1', {
