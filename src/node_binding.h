@@ -38,6 +38,7 @@ static_assert(static_cast<int>(NM_F_LINKED) ==
   V(encoding_binding)                                                          \
   V(fs)                                                                        \
   V(mksnapshot)                                                                \
+  V(module_wrap)                                                               \
   V(timers)                                                                    \
   V(process_methods)                                                           \
   V(performance)                                                               \
