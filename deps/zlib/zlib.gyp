@@ -18,6 +18,8 @@
           'conditions': [
             ['target_arch in "ia32 x64" and OS!="ios"', {
               'defines': [ 'ADLER32_SIMD_SSSE3' ],
+              'cflags': [ '-mssse3' ],
+              'cflags_cpp': [],
               'conditions': [
                 ['OS=="win"', {
                   'defines': [ 'X86_WINDOWS' ],
@@ -25,7 +27,6 @@
                   'defines': [ 'X86_NOT_WINDOWS' ],
                 }],
                 ['OS!="win" or llvm_version!="0.0"', {
-                  'cflags': [ '-mssse3' ],
                   'xcode_settings': {
                     'OTHER_CFLAGS': [ '-mssse3' ],
                   },
@@ -62,6 +63,7 @@
         {
           'target_name': 'zlib_arm_crc32',
           'type': 'static_library',
+          'cflags_cpp': [],
           'conditions': [
             ['OS!="ios"', {
               'conditions': [
@@ -174,6 +176,7 @@
         {
           'target_name': 'zlib',
           'type': 'static_library',
+          'cflags_cpp': [],
           'sources': [
             '<!@pymod_do_main(GN-scraper "<(ZLIB_ROOT)/BUILD.gn" "\\"zlib\\".*?sources = ")',
           ],
@@ -250,6 +253,7 @@
         {
           'target_name': 'zlib',
           'type': 'static_library',
+          'cflags_cpp': [],
           'direct_dependent_settings': {
             'defines': [
               'USE_SYSTEM_ZLIB',

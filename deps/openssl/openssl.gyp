@@ -92,6 +92,7 @@
       'includes': ['./openssl_common.gypi'],
       'include_dirs+': ['openssl/apps/include'],
       'cflags': [ '-fPIC' ],
+      'cflags_cpp': [],
       #'ldflags': [ '-o', 'fips.so' ],
       #'ldflags': [ '-Wl,--version-script=providers/fips.ld',],
       'conditions': [

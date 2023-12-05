@@ -163,12 +163,14 @@
             '-Wextra',
             '-Wno-unused-parameter'
           ],
+          'cflags_cpp': [],
           'defines': [ 'HAVE_CONFIG_H' ],
         }],
         [ 'OS not in "win android"', {
           'cflags': [
             '--std=gnu89'
           ],
+          'cflags_cpp': [],
         }],
         [ 'OS=="linux"', {
           'include_dirs': [ 'config/linux' ],

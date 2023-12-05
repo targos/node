@@ -78,6 +78,7 @@
       'include_dirs': [ 'base64/include', 'base64/lib' ],
       'sources': [ 'base64/lib/arch/ssse3/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_SSSE3=1' ],
+      'cflags_cpp': [],
       'conditions': [
         [ 'OS!="win"', {
           'cflags': [ '-mssse3' ],
@@ -102,6 +103,7 @@
       'include_dirs': [ 'base64/include', 'base64/lib' ],
       'sources': [ 'base64/lib/arch/sse41/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_SSE41=1' ],
+      'cflags_cpp': [],
       'conditions': [
         [ 'OS!="win"', {
           'cflags': [ '-msse4.1' ],
@@ -126,6 +128,7 @@
       'include_dirs': [ 'base64/include', 'base64/lib' ],
       'sources': [ 'base64/lib/arch/sse42/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_SSE42=1' ],
+      'cflags_cpp': [],
       'conditions': [
         [ 'OS!="win"', {
           'cflags': [ '-msse4.2' ],
@@ -150,9 +153,10 @@
       'include_dirs': [ 'base64/include', 'base64/lib' ],
       'sources': [ 'base64/lib/arch/avx/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_AVX=1' ],
+      'cflags_cpp': [],
+      'cflags': [ '-mavx' ],
       'conditions': [
         [ 'OS!="win"', {
-          'cflags': [ '-mavx' ],
           'xcode_settings': {
             'OTHER_CFLAGS': [ '-mavx' ]
           },
@@ -174,9 +178,10 @@
       'include_dirs': [ 'base64/include', 'base64/lib' ],
       'sources': [ 'base64/lib/arch/avx2/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_AVX2=1' ],
+      'cflags_cpp': [],
+      'cflags': [ '-mavx2' ],
       'conditions': [
         [ 'OS!="win"', {
-          'cflags': [ '-mavx2' ],
           'xcode_settings': {
             'OTHER_CFLAGS': [ '-mavx2' ]
           },
@@ -198,9 +203,10 @@
       'include_dirs': [ 'base64/include', 'base64/lib' ],
       'sources': [ 'base64/lib/arch/avx512/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_AVX512=1' ],
+      'cflags_cpp': [],
+      'cflags': [ '-mavx512f', '-mavx512vl', '-mavx512vbmi' ],
       'conditions': [
         [ 'OS!="win"', {
-          'cflags': [ '-mavx512vl', '-mavx512vbmi' ],
           'xcode_settings': {
             'OTHER_CFLAGS': [ '-mavx512vl', '-mavx512vbmi' ]
           },
@@ -222,6 +228,7 @@
       'include_dirs': [ 'base64/include', 'base64/lib' ],
       'sources': [ 'base64/lib/arch/neon32/codec.c' ],
       'defines': [ 'BASE64_STATIC_DEFINE', 'HAVE_NEON32=1' ],
+      'cflags_cpp': [],
       'conditions': [
         [ 'OS!="win"', {
           'cflags': [ '-mfpu=neon' ],

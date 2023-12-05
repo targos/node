@@ -34,6 +34,7 @@
       'cflags': [
         '-W3', '-wd4090', '-Gs0', '-GF', '-Gy', '-nologo','/O2',
       ],
+      'cflags_cpp': [],
       'msvs_disabled_warnings': [4090],
       'link_settings': {
         'libraries': [
