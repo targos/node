@@ -42,7 +42,8 @@
         }],
 
         # Runtime detection will happen for x86 CPUs
-        [ 'target_arch in "ia32 x64 x32"', {
+        # Except for ClangCL.
+        [ 'target_arch in "ia32 x64 x32" and OS!="win"', {
           'defines': [
             'HAVE_SSSE3=1',
             'HAVE_SSE41=1',
@@ -159,9 +160,7 @@
         }, {
           'msvs_settings': {
             'VCCLCompilerTool': {
-              'AdditionalOptions': [
-                '/arch:AVX'
-              ],
+              'EnableEnhancedInstructionSet': '3' # gyp uses a digit instead of a string such as 'AVX'
             },
           },
         }],
@@ -183,9 +182,7 @@
         }, {
           'msvs_settings': {
             'VCCLCompilerTool': {
-              'AdditionalOptions': [
-                '/arch:AVX2'
-              ],
+              'EnableEnhancedInstructionSet': '5' # gyp uses a digit instead of a string such as 'AVX2'
             },
           },
         }],
@@ -207,9 +204,7 @@
         }, {
           'msvs_settings': {
             'VCCLCompilerTool': {
-              'AdditionalOptions': [
-                '/arch:AVX512'
-              ],
+              'EnableEnhancedInstructionSet': '6' # gyp uses a digit instead of a string such as 'AVX512'
             },
           },
         }],
