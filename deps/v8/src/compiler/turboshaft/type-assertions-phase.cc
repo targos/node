@@ -23,7 +23,8 @@ void TypeAssertionsPhase::Run(Zone* temp_zone) {
 
   turboshaft::CopyingPhase<turboshaft::AssertTypesReducer,
                            turboshaft::ValueNumberingReducer,
-                           turboshaft::TypeInferenceReducer>::Run(temp_zone);
+                           turboshaft::VariableReducerHotfix,
+                           turboshaft::TypeInferenceReducer>::Run<false>(temp_zone);
 }
 
 }  // namespace v8::internal::compiler::turboshaft
