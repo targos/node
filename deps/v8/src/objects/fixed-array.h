@@ -277,7 +277,7 @@ class TrustedFixedArray
   class BodyDescriptor;
 
   static constexpr int kLengthOffset =
-      TrustedFixedArray::Shape::kCapacityOffset;
+      TrustedFixedArray::ShapeT::kCapacityOffset;
   static constexpr int kMaxLength = TrustedFixedArray::kMaxCapacity;
   static constexpr int kMaxRegularLength =
       TrustedFixedArray::kMaxRegularCapacity;

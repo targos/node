@@ -39,6 +39,8 @@ V8_EXPORT_PRIVATE std::ostream& operator<<(std::ostream& os,
 template <class Next>
 class VariableReducerHotfix : public Next {
 public:
+  TURBOSHAFT_REDUCER_BOILERPLATE()
+  
   void SetVariable(Variable var, OpIndex new_index) {}
   Variable NewLoopInvariantVariable(MaybeRegisterRepresentation rep) { return Variable(); }
 
@@ -1404,9 +1406,8 @@ class TSAssembler;
 template <template <class> class... Reducers>
 class CopyingPhaseImpl {
  public:
-  template <bool contains_variable_reducer>
   static void Run(Graph& input_graph, Zone* phase_zone,
-                  bool trace_reductions = false) {
+                  bool contains_variable_reducer, bool trace_reductions = false) {
     TSAssembler<GraphVisitor, Reducers...> phase(
         input_graph, input_graph.GetOrCreateCompanion(), phase_zone);
 #ifdef DEBUG
@@ -1428,8 +1429,8 @@ class CopyingPhase {
   static void Run(Zone* phase_zone) {
     PipelineData& data = PipelineData::Get();
     Graph& input_graph = data.graph();
-    CopyingPhaseImpl<Reducers...>::Run<contains_variable_reducer>(
-        input_graph, phase_zone, data.info()->turboshaft_trace_reduction());
+    CopyingPhaseImpl<Reducers...>::Run(
+        input_graph, phase_zone, contains_variable_reducer, data.info()->turboshaft_trace_reduction());
   }
 };
 
