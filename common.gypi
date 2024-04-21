@@ -286,6 +286,8 @@
       'VCCLCompilerTool': {
         'AdditionalOptions': [
           '/Zc:__cplusplus',
+           # The following option fixes/reduces the "error C1060: compiler is out of heap space"
+           '/Zm2000',
            # The following option enables c++20 on Windows. This is needed for V8 v12.4+
            '-std:c++20'
         ],
