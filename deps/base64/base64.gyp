@@ -133,8 +133,8 @@
             'OTHER_CFLAGS': [ '-mavx' ]
           },
         }, {
-          'msvs_settings': {
-            'VCCLCompilerTool': {
+          'msbuild_settings': {
+            'ClCompile': {
               'AdditionalOptions': [
                 '/arch:AVX'
               ],
@@ -157,8 +157,8 @@
             'OTHER_CFLAGS': [ '-mavx2' ]
           },
         }, {
-          'msvs_settings': {
-            'VCCLCompilerTool': {
+          'msbuild_settings': {
+            'ClCompile': {
               'AdditionalOptions': [
                 '/arch:AVX2'
               ],
@@ -181,8 +181,8 @@
             'OTHER_CFLAGS': [ '-mavx512vl', '-mavx512vbmi' ]
           },
         }, {
-          'msvs_settings': {
-            'VCCLCompilerTool': {
+          'msbuild_settings': {
+            'ClCompile': {
               'AdditionalOptions': [
                 '/arch:AVX512'
               ],

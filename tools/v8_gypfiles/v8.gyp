@@ -36,10 +36,10 @@
   },
   'includes': ['toolchain.gypi', 'features.gypi'],
   'target_defaults': {
-    'msvs_settings': {
-      'VCCLCompilerTool': {
-        'AdditionalOptions': ['/utf-8']
-      }
+    'msbuild_settings': {
+      'ClCompile': {
+        'AdditionalOptions': ['/utf-8'],
+      },
     },
   },
   'targets': [
@@ -932,10 +932,10 @@
           ],
         }],
       ],
-      'msvs_settings': {
-        'VCCLCompilerTool': {
+      'msbuild_settings': {
+        'ClCompile': {
           'AdditionalOptions': [
-            '/bigobj'
+            '/bigobj',
           ],
         },
       },
@@ -1171,9 +1171,9 @@
         ['OS=="win"', {
           # This will prevent V8's .cc files conflicting with the inspector's
           # .cpp files in the same shard.
-          'msvs_settings': {
-            'VCCLCompilerTool': {
-              'ObjectFile': '$(IntDir)%(Extension)\\',
+          'msbuild_settings': {
+            'ClCompile': {
+              'ObjectFileName': '$(IntDir)%(Extension)\\',
             },
           },
           'conditions': [
@@ -1270,10 +1270,10 @@
       'xcode_settings': {
         'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',  # -fexceptions
       },
-      'msvs_settings': {
-        'VCCLCompilerTool': {
+      'msbuild_settings': {
+        'ClCompile': {
           'RuntimeTypeInfo': 'true',
-          'ExceptionHandling': 1,
+          'ExceptionHandling': 'Sync',
         },
       },
     },  # torque_base
@@ -1296,10 +1296,10 @@
       'xcode_settings': {
         'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',  # -fexceptions
       },
-      'msvs_settings': {
-        'VCCLCompilerTool': {
+      'msbuild_settings': {
+        'ClCompile': {
           'RuntimeTypeInfo': 'true',
-          'ExceptionHandling': 1,
+          'ExceptionHandling': 'Sync',
         },
       },
     },  # torque_ls_base
@@ -1422,8 +1422,8 @@
           ],
           'defines': ['_CRT_RAND_S'], # for rand_s()
           'direct_dependent_settings': {
-            'msvs_settings': {
-              'VCLinkerTool': {
+            'msbuild_settings': {
+              'Link': {
                 'AdditionalDependencies': [
                   'dbghelp.lib',
                   'winmm.lib',
@@ -1433,8 +1433,8 @@
             },
             'conditions': [
               ['v8_enable_etw_stack_walking==1', {
-                'msvs_settings': {
-                  'VCLinkerTool': {
+                'msbuild_settings': {
+                  'Link': {
                     'AdditionalDependencies': [
                       'advapi32.lib',
                     ],
@@ -1727,18 +1727,18 @@
       'xcode_settings': {
         'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',  # -fexceptions
       },
-      'msvs_settings': {
-        'VCCLCompilerTool': {
+      'msbuild_settings': {
+        'ClCompile': {
           'RuntimeTypeInfo': 'true',
-          'ExceptionHandling': 1,
+          'ExceptionHandling': 'Sync',
         },
-        'VCLinkerTool': {
+        'Link': {
           'AdditionalDependencies': [
             'dbghelp.lib',
             'winmm.lib',
-            'ws2_32.lib'
-          ]
-        }
+            'ws2_32.lib',
+          ],
+        },
       },
       'sources': [
         "<(V8_ROOT)/src/torque/torque.cc",
@@ -1765,10 +1765,10 @@
         '_HAS_EXCEPTIONS=0',
         'BUILDING_V8_SHARED=1',
       ],
-      'msvs_settings': {
-        'VCCLCompilerTool': {
+      'msbuild_settings': {
+        'ClCompile': {
           'RuntimeTypeInfo': 'true',
-          'ExceptionHandling': 1,
+          'ExceptionHandling': 'Sync',
         },
       },
       'sources': [

@@ -1484,9 +1484,9 @@ def configure_library(lib, output, pkgname=None):
     # libpath needs to be provided ahead libraries
     if options.__dict__[shared_lib + '_libpath']:
       if flavor == 'win':
-        if 'msvs_settings' not in output:
-          output['msvs_settings'] = { 'VCLinkerTool': { 'AdditionalOptions': [] } }
-        output['msvs_settings']['VCLinkerTool']['AdditionalOptions'] += [
+        if 'msbuild_settings' not in output:
+          output['msbuild_settings'] = { 'Link': { 'AdditionalOptions': [] } }
+        output['msbuild_settings']['Link']['AdditionalOptions'] += [
           f"/LIBPATH:{options.__dict__[shared_lib + '_libpath']}"]
       else:
         output['libraries'] += [

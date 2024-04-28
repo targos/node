@@ -114,9 +114,9 @@
             '_WINDOWS',
             'HAVE_CONFIG_H',
           ],
-          'msvs_settings': {
-            'VCCLCompilerTool': {
-              'CompileAs': '1'
+          'msbuild_settings': {
+            'ClCompile': {
+              'CompileAs': 'CompileAsC',
             },
           },
         }],
@@ -164,9 +164,9 @@
             '_WINDOWS',
             'HAVE_CONFIG_H',
           ],
-          'msvs_settings': {
-            'VCCLCompilerTool': {
-              'CompileAs': '1'
+          'msbuild_settings': {
+            'ClCompile': {
+              'CompileAs': 'CompileAsC',
             },
           },
         }],

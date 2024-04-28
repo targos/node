@@ -12,22 +12,22 @@
       'Debug': {
         'defines': [ 'DEBUG', '_DEBUG' ],
         'cflags': [ '-g' ],
-        'msvs_settings': {
-          'VCCLCompilerTool': {
+        'msbuild_settings': {
+          'ClCompile': {
             'target_conditions': [
               ['uv_library=="static_library"', {
-                'RuntimeLibrary': 1, # /MTd static debug
+                'RuntimeLibrary': 'MultiThreadedDebug', # /MTd static debug
               }, {
-                'RuntimeLibrary': 3, # /MDd DLL debug
+                'RuntimeLibrary': 'MultiThreadedDebugDLL', # /MDd DLL debug
               }],
             ],
-            'Optimization': 0, # /Od, no optimization
+            'Optimization': 'Disabled', # /Od, no optimization
             'MinimalRebuild': 'false',
             'OmitFramePointers': 'false',
-            'BasicRuntimeChecks': 3, # /RTC1
+            'BasicRuntimeChecks': 'EnableFastChecks', # /RTC1
           },
-          'VCLinkerTool': {
-            'LinkIncremental': 2, # enable incremental linking
+          '': {
+            'LinkIncremental': 'true', # enable incremental linking
           },
         },
         'xcode_settings': {
@@ -48,33 +48,35 @@
         'cflags': [
           '-O3',
         ],
-        'msvs_settings': {
-          'VCCLCompilerTool': {
+        'msbuild_settings': {
+          'ClCompile': {
             'target_conditions': [
               ['uv_library=="static_library"', {
-                'RuntimeLibrary': 0, # /MT static release
+                'RuntimeLibrary': 'MultiThreaded', # /MT static release
               }, {
-                'RuntimeLibrary': 2, # /MD DLL release
+                'RuntimeLibrary': 'MultiThreadedDLL', # /MD DLL release
               }],
             ],
-            'Optimization': 3, # /Ox, full optimization
-            'FavorSizeOrSpeed': 1, # /Ot, favour speed over size
-            'InlineFunctionExpansion': 2, # /Ob2, inline anything eligible
+            'Optimization': 'Full', # /Ox, full optimization
+            'FavorSizeOrSpeed': 'Speed', # /Ot, favour speed over size
+            'InlineFunctionExpansion': 'AnySuitable', # /Ob2, inline anything eligible
             'WholeProgramOptimization': 'true', # /GL, whole program optimization, needed for LTCG
             'OmitFramePointers': 'true',
-            'EnableFunctionLevelLinking': 'true',
-            'EnableIntrinsicFunctions': 'true',
+            'FunctionLevelLinking': 'true',
+            'IntrinsicFunctions': 'true',
           },
-          'VCLibrarianTool': {
+          'Lib': {
             'AdditionalOptions': [
               '/LTCG', # link time code generation
             ],
           },
-          'VCLinkerTool': {
-            'LinkTimeCodeGeneration': 1, # link-time code generation
-            'OptimizeReferences': 2, # /OPT:REF
-            'EnableCOMDATFolding': 2, # /OPT:ICF
-            'LinkIncremental': 1, # disable incremental linking
+          'Link': {
+            'LinkTimeCodeGeneration': 'true', # link-time code generation
+            'OptimizeReferences': 'true', # /OPT:REF
+            'EnableCOMDATFolding': 'true', # /OPT:ICF
+          },
+          '': {
+            'LinkIncremental': 'false', # disable incremental linking
           },
         },
         'conditions': [
@@ -89,30 +91,30 @@
         ]
       }
     },
-    'msvs_settings': {
-      'VCCLCompilerTool': {
+    'msbuild_settings': {
+      'ClCompile': {
         'StringPooling': 'true', # pool string literals
-        'DebugInformationFormat': 3, # Generate a PDB
-        'WarningLevel': 3,
+        'DebugInformationFormat': 'ProgramDatabase', # Generate a PDB
+        'WarningLevel': 'Level3',
         'BufferSecurityCheck': 'true',
-        'ExceptionHandling': 1, # /EHsc
+        'ExceptionHandling': 'Sync', # /EHsc
         'SuppressStartupBanner': 'true',
-        'WarnAsError': 'false',
+        'TreatWarningAsError': 'false',
         'AdditionalOptions': [
            '/MP', # compile across multiple CPUs
          ],
       },
-      'VCLibrarianTool': {
+      'Lib': {
       },
-      'VCLinkerTool': {
+      'Link': {
         'GenerateDebugInformation': 'true',
-        'RandomizedBaseAddress': 2, # enable ASLR
-        'DataExecutionPrevention': 2, # enable DEP
+        'RandomizedBaseAddress': 'true', # enable ASLR
+        'DataExecutionPrevention': 'true', # enable DEP
         'AllowIsolation': 'true',
         'SuppressStartupBanner': 'true',
         'target_conditions': [
           ['_type=="executable"', {
-            'SubSystem': 1, # console executable
+            'SubSystem': 'Console', # console executable
           }],
         ],
       },

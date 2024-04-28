@@ -475,8 +475,8 @@
     # Relevant only for x86.
     # Refs: https://github.com/nodejs/node/pull/25852
     # Refs: https://docs.microsoft.com/en-us/cpp/build/reference/safeseh-image-has-safe-exception-handlers
-    'msvs_settings': {
-      'VCLinkerTool': {
+    'msbuild_settings': {
+      'Link': {
         'ImageHasSafeExceptionHandlers': 'false',
       },
     },
@@ -551,12 +551,12 @@
         'deps/uvwasi/uvwasi.gyp:uvwasi',
       ],
 
-      'msvs_settings': {
-        'VCLinkerTool': {
+      'msbuild_settings': {
+        'Link': {
           'GenerateMapFile': 'true', # /MAP
           'MapExports': 'true', # /MAPINFO:EXPORTS
-          'RandomizedBaseAddress': 2, # enable ASLR
-          'DataExecutionPrevention': 2, # enable DEP
+          'RandomizedBaseAddress': 'true', # enable ASLR
+          'DataExecutionPrevention': 'true', # enable DEP
           'AllowIsolation': 'true',
           # By default, the MSVC linker only reserves 1 MiB of stack memory for
           # each thread, whereas other platforms typically allow much larger
@@ -590,8 +590,8 @@
           'conditions': [
             ['OS=="win" and node_shared=="true"', {
               'dependencies': ['generate_node_def'],
-              'msvs_settings': {
-                'VCLinkerTool': {
+              'msbuild_settings': {
+                'Link': {
                   'ModuleDefinitionFile': '<(PRODUCT_DIR)/<(node_core_target_name).def',
                 },
               },
@@ -605,8 +605,8 @@
               '-Wl,-force_load,<(PRODUCT_DIR)/<(STATIC_LIB_PREFIX)v8_base_without_compiler<(STATIC_LIB_SUFFIX)',
             ],
           },
-          'msvs_settings': {
-            'VCLinkerTool': {
+          'msbuild_settings': {
+            'Link': {
               'AdditionalOptions': [
                 '/WHOLEARCHIVE:<(node_lib_target_name)<(STATIC_LIB_SUFFIX)',
                 '/WHOLEARCHIVE:<(STATIC_LIB_PREFIX)v8_base_without_compiler<(STATIC_LIB_SUFFIX)',
@@ -660,31 +660,33 @@
           ],
         }],
         ['node_with_ltcg=="true"', {
-          'msvs_settings': {
-            'VCCLCompilerTool': {
+          'msbuild_settings': {
+            'ClCompile': {
               'WholeProgramOptimization': 'true'   # /GL, whole program optimization, needed for LTCG
             },
-            'VCLibrarianTool': {
+            'Lib': {
               'AdditionalOptions': [
                 '/LTCG:INCREMENTAL',               # link time code generation
               ],
             },
-            'VCLinkerTool': {
-              'OptimizeReferences': 2,             # /OPT:REF
-              'EnableCOMDATFolding': 2,            # /OPT:ICF
-              'LinkIncremental': 1,                # disable incremental linking
+            'Link': {
+              'OptimizeReferences': 'true',        # /OPT:REF
+              'EnableCOMDATFolding': 'true',       # /OPT:ICF
               'AdditionalOptions': [
                 '/LTCG:INCREMENTAL',               # incremental link-time code generation
               ],
-            }
+            },
+            '': {
+              'LinkIncremental': 'false',          # disable incremental linking
+            },
           }
         }, {
-          'msvs_settings': {
-            'VCCLCompilerTool': {
+          'msbuild_settings': {
+            'ClCompile': {
               'WholeProgramOptimization': 'false'
             },
-            'VCLinkerTool': {
-              'LinkIncremental': 2                 # enable incremental linking
+            '': {
+              'LinkIncremental': 'true'            # enable incremental linking
             },
           },
          }],

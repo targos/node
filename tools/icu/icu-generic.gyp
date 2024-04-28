@@ -59,15 +59,17 @@
             'xcode_settings': {'GCC_ENABLE_CPP_RTTI': 'YES' },
           }],
           [ 'OS == "win"', {
-            'msvs_settings': {
-              'VCCLCompilerTool': {'RuntimeTypeInfo': 'true'},
-            }
+            'msbuild_settings': {
+              'ClCompile': {
+                'RuntimeTypeInfo': 'true',
+              },
+            },
           }],
         ],
-        'msvs_settings': {
-          'VCCLCompilerTool': {
+        'msbuild_settings': {
+          'ClCompile': {
             'RuntimeTypeInfo': 'true',
-            'ExceptionHandling': '1',
+            'ExceptionHandling': 'Sync',
             'AdditionalOptions': [ '/source-charset:utf-8' ],
           },
         },
@@ -75,18 +77,18 @@
           # TODO: why does this need to be redefined for Release and Debug?
           # Maybe this should be pushed into common.gypi with an "if v8 i18n"?
           'Release': {
-            'msvs_settings': {
-              'VCCLCompilerTool': {
+            'msbuild_settings': {
+              'ClCompile': {
                 'RuntimeTypeInfo': 'true',
-                'ExceptionHandling': '1',
+                'ExceptionHandling': 'Sync',
               },
             },
           },
           'Debug': {
-            'msvs_settings': {
-              'VCCLCompilerTool': {
+            'msbuild_settings': {
+              'ClCompile': {
                 'RuntimeTypeInfo': 'true',
-                'ExceptionHandling': '1',
+                'ExceptionHandling': 'Sync',
               },
             },
           },

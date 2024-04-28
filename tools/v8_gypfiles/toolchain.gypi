@@ -516,8 +516,8 @@
         'xcode_settings': {
           'ARCHS': [ 'x86_64' ],
         },
-        'msvs_settings': {
-          'VCLinkerTool': {
+        'msbuild_settings': {
+          'Link': {
             'StackReserveSize': '2097152',
           },
         },
@@ -537,16 +537,16 @@
         },
       }],
       ['OS=="win" and v8_target_arch=="ia32"', {
-        'msvs_settings': {
-          'VCCLCompilerTool': {
+        'msbuild_settings': {
+          'ClCompile': {
             # Ensure no surprising artifacts from 80bit double math with x86.
             'AdditionalOptions': ['/arch:SSE2'],
           },
         },
       }],
       ['OS=="win" and v8_enable_prof==1', {
-        'msvs_settings': {
-          'VCLinkerTool': {
+        'msbuild_settings': {
+          'Link': {
             'GenerateMapFile': 'true',
           },
         },
@@ -734,19 +734,19 @@
             ],
           }],
           ['v8_optimized_debug==0', {
-            'msvs_settings': {
-              'VCCLCompilerTool': {
-                'Optimization': '0',
+            'msbuild_settings': {
+              'ClCompile': {
+                'Optimization': 'Disabled',
                 'conditions': [
                   ['component=="shared_library" or force_dynamic_crt==1', {
-                    'RuntimeLibrary': '3',  # /MDd
+                    'RuntimeLibrary': 'MultiThreadedDebugDLL',  # /MDd
                   }, {
-                     'RuntimeLibrary': '1',  # /MTd
+                     'RuntimeLibrary': 'MultiThreadedDebug',  # /MTd
                    }],
                 ],
               },
-              'VCLinkerTool': {
-                'LinkIncremental': '2',
+              '': {
+                'LinkIncremental': 'true',
               },
             },
             'variables': {
@@ -778,27 +778,29 @@
               }],
             ],
           }, {
-            'msvs_settings': {
-              'VCCLCompilerTool': {
-                'Optimization': '2',
-                'InlineFunctionExpansion': '2',
-                'EnableIntrinsicFunctions': 'true',
-                'FavorSizeOrSpeed': '0',
+            'msbuild_settings': {
+              'ClCompile': {
+                'Optimization': 'MaxSpeed',
+                'InlineFunctionExpansion': 'AnySuitable',
+                'IntrinsicFunctions': 'true',
+                'FavorSizeOrSpeed': 'Neither',
                 'StringPooling': 'true',
-                'BasicRuntimeChecks': '0',
+                'BasicRuntimeChecks': 'Default',
                 'conditions': [
                   ['component=="shared_library" or force_dynamic_crt==1', {
-                    'RuntimeLibrary': '3',  #/MDd
+                    'RuntimeLibrary': 'MultiThreadedDebugDLL',  #/MDd
                   }, {
-                     'RuntimeLibrary': '1',  #/MTd
+                     'RuntimeLibrary': 'MultiThreadedDebug',  #/MTd
                    }],
                 ],
               },
-              'VCLinkerTool': {
-                'LinkIncremental': '1',
-                'OptimizeReferences': '2',
-                'EnableCOMDATFolding': '2',
+              'Link': {
+                'OptimizeReferences': 'true',
+                'EnableCOMDATFolding': 'true',
               },
+              '': {
+                'LinkIncremental': 'false',
+              }
             },
             'variables': {
               'v8_enable_slow_dchecks%': 0,
@@ -898,25 +900,27 @@
             },
           }],  # OS=="mac"
           ['OS=="win"', {
-            'msvs_settings': {
-              'VCCLCompilerTool': {
-                'Optimization': '2',
-                'InlineFunctionExpansion': '2',
-                'EnableIntrinsicFunctions': 'true',
-                'FavorSizeOrSpeed': '0',
+            'msbuild_settings': {
+              'ClCompile': {
+                'Optimization': 'MaxSpeed',
+                'InlineFunctionExpansion': 'AnySuitable',
+                'IntrinsicFunctions': 'true',
+                'FavorSizeOrSpeed': 'Neither',
                 'StringPooling': 'true',
                 'conditions': [
                   ['component=="shared_library" or force_dynamic_crt==1', {
-                    'RuntimeLibrary': '2',  #/MD
+                    'RuntimeLibrary': 'MultiThreadedDLL',  #/MD
                   }, {
-                    'RuntimeLibrary': '0',  #/MT
+                    'RuntimeLibrary': 'MultiThreaded',  #/MT
                   }],
                 ],
               },
-              'VCLinkerTool': {
-                'LinkIncremental': '1',
-                'OptimizeReferences': '2',
-                'EnableCOMDATFolding': '2',
+              'Link': {
+                'OptimizeReferences': 'true',
+                'EnableCOMDATFolding': 'true',
+              },
+              '': {
+                'LinkIncremental': 'false',
               },
             },
           }],  # OS=="win"
@@ -951,8 +955,8 @@
     # Relevant only for x86.
     # Refs: https://github.com/nodejs/node/pull/25852
     # Refs: https://docs.microsoft.com/en-us/cpp/build/reference/safeseh-image-has-safe-exception-handlers
-    'msvs_settings': {
-      'VCLinkerTool': {
+    'msbuild_settings': {
+      'Link': {
         'ImageHasSafeExceptionHandlers': 'false',
       },
     },

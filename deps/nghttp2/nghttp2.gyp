@@ -50,9 +50,9 @@
             'WIN32',
             '_WINDOWS',
           ],
-          'msvs_settings': {
-            'VCCLCompilerTool': {
-              'CompileAs': '1'
+          'msbuild_settings': {
+            'ClCompile': {
+              'CompileAs': 'CompileAsC',
             },
           },
         }],

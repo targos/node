@@ -30,11 +30,13 @@
       'cflags': [ '-Werror=undefined-inline', '-Werror=extra-semi']
     }],
     [ '"<(_type)"=="executable"', {
-      'msvs_settings': {
-        'VCManifestTool': {
-          'EmbedManifest': 'true',
+      'msbuild_settings': {
+        'Manifest': {
           'AdditionalManifestFiles': 'src/res/node.exe.extra.manifest'
-        }
+        },
+        '': {
+          'EmbedManifest': 'true',
+        },
       },
     }],
     [ 'node_shared=="true"', {
@@ -149,8 +151,8 @@
               '-Wl,-force_load,<(PRODUCT_DIR)/<(STATIC_LIB_PREFIX)zlib<(STATIC_LIB_SUFFIX)',
             ],
           },
-          'msvs_settings': {
-            'VCLinkerTool': {
+          'msbuild_settings': {
+            'Link': {
               'AdditionalOptions': [
                 '/WHOLEARCHIVE:zlib<(STATIC_LIB_SUFFIX)',
               ],
@@ -188,8 +190,8 @@
               '-Wl,-force_load,<(PRODUCT_DIR)/libuv<(STATIC_LIB_SUFFIX)',
             ],
           },
-          'msvs_settings': {
-            'VCLinkerTool': {
+          'msbuild_settings': {
+            'Link': {
               'AdditionalOptions': [
                 '/WHOLEARCHIVE:libuv<(STATIC_LIB_SUFFIX)',
               ],
@@ -367,8 +369,8 @@
                   '-Wl,-force_load,<(PRODUCT_DIR)/<(openssl_product)',
                 ],
               },
-              'msvs_settings': {
-                'VCLinkerTool': {
+              'msbuild_settings': {
+                'Link': {
                   'AdditionalOptions': [
                     '/WHOLEARCHIVE:<(openssl_product)',
                   ],

@@ -137,9 +137,11 @@
           'v8_enable_handle_zapping': 1,
           'conditions': [
             ['node_shared != "true"', {
-              'MSVC_runtimeType': 1,    # MultiThreadedDebug (/MTd)
+              'MSVC_runtimeType': 1,
+              'MSVC_runtimeLibrary': 'MultiThreadedDebug', # /MTd
             }, {
-              'MSVC_runtimeType': 3,    # MultiThreadedDebugDLL (/MDd)
+              'MSVC_runtimeType': 3,
+              'MSVC_runtimeLibrary': 'MultiThreadedDebugDLL', # /MDd
             }],
           ],
         },
@@ -155,6 +157,18 @@
             'ldflags': [ '-fPIC' ]
           }],
         ],
+        'msbuild_settings': {
+          'ClCompile': {
+            'BasicRuntimeChecks': 'EnableFastChecks', # /RTC1
+            'MinimalRebuild': 'false',
+            'OmitFramePointers': 'false',
+            'Optimization': 'Disabled',              # /Od
+            'RuntimeLibrary': '<(MSVC_runtimeLibrary)',
+          },
+          '': {
+            'LinkIncremental': 'true', # Enable incremental linking
+          },
+        },
         'msvs_settings': {
           'VCCLCompilerTool': {
             'BasicRuntimeChecks': 3,        # /RTC1
@@ -178,9 +192,11 @@
           'pgo_use': ' -fprofile-use -fprofile-correction ',
           'conditions': [
             ['node_shared != "true"', {
-              'MSVC_runtimeType': 0    # MultiThreaded (/MT)
+              'MSVC_runtimeType': 0,
+              'MSVC_runtimeLibrary': 'MultiThreaded', # /MT
             }, {
-              'MSVC_runtimeType': 2   # MultiThreadedDLL (/MD)
+              'MSVC_runtimeType': 2,
+              'MSVC_runtimeLibrary': 'MultiThreadedDLL', # /MD
             }],
             ['llvm_version=="0.0"', {
               'lto': ' -flto=4 -fuse-linker-plugin -ffat-lto-objects ', # GCC
@@ -243,6 +259,23 @@
             'ldflags': [ '-fPIC' ]
           }],
         ],
+        'msbuild_settings': {
+          'ClCompile': {
+            'conditions': [
+              ['target_arch=="arm64"', {
+                'FloatingPointModel': 'Strict', # /fp:strict
+              }],
+            ],
+            'FunctionLevelLinking': 'true',
+            'IntrinsicFunctions': 'true',
+            'FavorSizeOrSpeed': 'Speed',              # /Ot, favor speed over size
+            'InlineFunctionExpansion': 'AnySuitable', # /Ob2, inline anything eligible
+            'OmitFramePointers': 'true',
+            'Optimization': 'Full',                   # /Ox, full optimization
+            'RuntimeLibrary': '<(MSVC_runtimeLibrary)',
+            'RuntimeTypeInfo': 'false',
+          },
+        },
         'msvs_settings': {
           'VCCLCompilerTool': {
             'conditions': [
@@ -282,6 +315,45 @@
         'cflags!': ['-Werror'],
       }],
     ],
+    'msbuild_settings': {
+      'ClCompile': {
+        'AdditionalOptions': [
+          '/Zc:__cplusplus',
+          # The following option enables c++20 on Windows. This is needed for V8 v12.4+
+          '-std:c++20',
+          # The following option reduces the "error C1060: compiler is out of heap space"
+          '/Zm2000',
+        ],
+        'BufferSecurityCheck': 'true',
+        'DebugInformationFormat': 'OldStyle', # /Z7 embed info in .obj files
+        'ExceptionHandling': 'false',         # /EHsc
+        'MultiProcessorCompilation': 'true',
+        'StringPooling': 'true',              # pool string literals
+        'SuppressStartupBanner': 'true',
+        'TreatWarningAsError': 'false',
+        'WarningLevel': 'Level3',             # /W3
+      },
+      'Link': {
+        'target_conditions': [
+          ['_type=="executable"', {
+            'SubSystem': 'Console',           # /SUBSYSTEM:CONSOLE
+          }],
+        ],
+        'conditions': [
+          ['target_arch=="ia32"', {
+            'TargetMachine' : 'MachineX86',   # /MACHINE:X86
+          }],
+          ['target_arch=="x64"', {
+            'TargetMachine' : 'MachineX64',   # /MACHINE:X64
+          }],
+          ['target_arch=="arm64"', {
+            'TargetMachine' : 'NotSet',       # MACHINE:ARM64 is inferred from the input files.
+          }],
+        ],
+        'GenerateDebugInformation': 'true',
+        'SuppressStartupBanner': 'true',
+      },
+    },
     'msvs_settings': {
       'VCCLCompilerTool': {
         'AdditionalOptions': [
