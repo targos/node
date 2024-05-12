@@ -46,7 +46,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          author: Node.js GitHub Bot <github-bot@iojs.org>
           body: This is an automated patch update of V8 to ${{ env.NEW_VERSION }}.
           branch: actions/update-v8-patch  # Custom branch *just* for this Action.
           labels: v8 engine
