@@ -43,6 +43,8 @@ jobs:
       - uses: gr2m/create-or-update-pull-request-action@86ec1766034c8173518f61d2075cc2a173fb8c97  # v1.9.4
         # Creates a PR or update the Action's existing PR, or
         # no-op if the base branch is already up-to-date.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           author: Node.js GitHub Bot <github-bot@iojs.org>
           body: This is an automated patch update of V8 to ${{ env.NEW_VERSION }}.
