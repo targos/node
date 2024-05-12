@@ -48,7 +48,7 @@ jobs:
         # Creates a PR or update the Action's existing PR, or
         # no-op if the base branch is already up-to-date.
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_USER_TOKEN }}
           branch: actions/update-v8-patch  # Custom branch *just* for this Action.
           delete-branch: true
           title: 'deps: patch V8 to ${{ env.NEW_VERSION }}'
