@@ -395,7 +395,7 @@ MaybeLocal<Value> StatementSync::ColumnToValue(const int column) {
     case SQLITE_TEXT: {
       const char* value = reinterpret_cast<const char*>(
           sqlite3_column_text(statement_, column));
-      return String::NewFromUtf8(env()->isolate(), value).FromMaybe(Local<Value>());
+      return String::NewFromUtf8(env()->isolate(), value).As<Value>();
     }
     case SQLITE_NULL:
       return Null(env()->isolate());
@@ -422,7 +422,7 @@ MaybeLocal<Name> StatementSync::ColumnNameToName(const int column) {
     return MaybeLocal<Name>();
   }
 
-  return String::NewFromUtf8(env()->isolate(), col_name).FromMaybe(Local<Name>());
+  return String::NewFromUtf8(env()->isolate(), col_name).As<Name>();
 }
 
 void StatementSync::MemoryInfo(MemoryTracker* tracker) const {}
