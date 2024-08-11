@@ -40,6 +40,7 @@
   V(constants)                                                                 \
   V(contextify)                                                                \
   V(credentials)                                                               \
+  V(debug)                                                                     \
   V(encoding_binding)                                                          \
   V(errors)                                                                    \
   V(fs)                                                                        \

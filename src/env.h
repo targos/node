@@ -764,6 +764,11 @@ class Environment final : public MemoryRetainer {
 
   EnabledDebugList* enabled_debug_list() { return &enabled_debug_list_; }
 
+#ifdef DEBUG
+  void TrackV8FastApiCall(const std::string& key);
+  int GetV8FastApiCallCount(const std::string& key);
+#endif  // DEBUG
+
   inline performance::PerformanceState* performance_state();
 
   void CollectUVExceptionInfo(v8::Local<v8::Value> context,
@@ -1189,6 +1194,10 @@ class Environment final : public MemoryRetainer {
   int request_waiting_ = 0;
 
   EnabledDebugList enabled_debug_list_;
+
+#ifdef DEBUG
+  std::unordered_map<std::string, int> v8_fast_api_call_counts_;
+#endif  // DEBUG
 
   std::vector<v8::Global<v8::Context>> contexts_;
   std::list<node_module> extra_linked_bindings_;

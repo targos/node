@@ -1573,6 +1573,16 @@ void CollectExceptionInfo(Environment* env,
   }
 }
 
+#ifdef DEBUG
+void Environment::TrackV8FastApiCall(const std::string& key) {
+  v8_fast_api_call_counts_[key]++;
+}
+
+int Environment::GetV8FastApiCallCount(const std::string& key) {
+  return v8_fast_api_call_counts_[key];
+}
+#endif  // DEBUG
+
 void Environment::CollectUVExceptionInfo(Local<Value> object,
                                          int errorno,
                                          const char* syscall,
