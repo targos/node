@@ -5,7 +5,14 @@
 #include "node_errors.h"
 #include "util-inl.h"
 #include "uv.h"
-#include "v8.h"
+
+#include "v8-context.h"
+#include "v8-exception.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 #include <cstring>
 
@@ -18,6 +25,7 @@ using v8::Isolate;
 using v8::Local;
 using v8::Object;
 using v8::String;
+using v8::TryCatch;
 using v8::Value;
 
 Local<Value> ErrnoException(Isolate* isolate,
@@ -243,7 +251,7 @@ Local<Value> WinapiErrnoException(Isolate* isolate,
 // fatal any more, as the user can handle the exception in the
 // TryCatch by listening to `uncaughtException`.
 // TODO(joyeecheung): deprecate it in favor of a more accurate name.
-void FatalException(Isolate* isolate, const v8::TryCatch& try_catch) {
+void FatalException(Isolate* isolate, const TryCatch& try_catch) {
   errors::TriggerUncaughtException(isolate, try_catch);
 }
 

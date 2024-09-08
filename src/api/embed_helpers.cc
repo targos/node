@@ -3,6 +3,17 @@
 #include "node.h"
 #include "node_snapshot_builder.h"
 
+#include "v8-context.h"
+#include "v8-debug.h"
+#include "v8-exception.h"
+#include "v8-function.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-locker.h"
+#include "v8-maybe.h"
+#include "v8-persistent-handle.h"
+#include "v8-snapshot.h"
+
 using v8::Context;
 using v8::Function;
 using v8::Global;
@@ -15,6 +26,7 @@ using v8::Maybe;
 using v8::Nothing;
 using v8::SealHandleScope;
 using v8::SnapshotCreator;
+using v8::StackTrace;
 using v8::TryCatch;
 
 namespace node {
@@ -133,7 +145,7 @@ CommonEnvironmentSetup::CommonEnvironmentSetup(
     platform->RegisterIsolate(isolate, loop);
     impl_->snapshot_creator.emplace(isolate, external_references.data());
     isolate->SetCaptureStackTraceForUncaughtExceptions(
-        true, 10, v8::StackTrace::StackTraceOptions::kDetailed);
+        true, 10, StackTrace::StackTraceOptions::kDetailed);
     SetIsolateMiscHandlers(isolate, {});
   } else {
     impl_->allocator = ArrayBufferAllocator::Create();
@@ -290,11 +302,11 @@ Environment* CommonEnvironmentSetup::env() const {
   return impl_->env.get();
 }
 
-v8::Local<v8::Context> CommonEnvironmentSetup::context() const {
+Local<Context> CommonEnvironmentSetup::context() const {
   return impl_->main_context.Get(impl_->isolate);
 }
 
-v8::SnapshotCreator* CommonEnvironmentSetup::snapshot_creator() {
+SnapshotCreator* CommonEnvironmentSetup::snapshot_creator() {
   return impl_->snapshot_creator ? &impl_->snapshot_creator.value() : nullptr;
 }
 

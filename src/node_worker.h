@@ -9,6 +9,9 @@
 #include "node_messaging.h"
 #include "uv.h"
 
+#include "v8-forward.h"
+#include "v8-isolate.h"
+
 namespace node {
 
 struct SnapshotData;

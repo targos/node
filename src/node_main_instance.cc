@@ -22,6 +22,11 @@
 #include "inspector/worker_inspector.h"  // ParentInspectorHandle
 #endif
 
+#include "v8-context.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-locker.h"
+
 namespace node {
 
 using v8::Context;

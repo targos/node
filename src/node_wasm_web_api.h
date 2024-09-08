@@ -4,7 +4,9 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "base_object-inl.h"
-#include "v8.h"
+
+#include "v8-forward.h"
+#include "v8-wasm.h"
 
 namespace node {
 namespace wasm_web_api {

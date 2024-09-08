@@ -2,7 +2,15 @@
 #include "async_wrap-inl.h"
 #include "env-inl.h"
 #include "node.h"
-#include "v8.h"
+
+#include "v8-context.h"
+#include "v8-function.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-microtask-queue.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 namespace node {
 
@@ -13,6 +21,7 @@ using v8::HandleScope;
 using v8::Isolate;
 using v8::Local;
 using v8::MaybeLocal;
+using v8::Number;
 using v8::Object;
 using v8::String;
 using v8::Undefined;
@@ -51,7 +60,7 @@ InternalCallbackScope::InternalCallbackScope(Environment* env,
                                              Local<Object> object,
                                              const async_context& asyncContext,
                                              int flags,
-                                             v8::Local<v8::Value> context_frame)
+                                             Local<Value> context_frame)
     : env_(env),
       async_context_(asyncContext),
       object_(object),
@@ -216,7 +225,7 @@ MaybeLocal<Value> InternalMakeCallback(Environment* env,
   Local<Context> context = env->context();
   if (use_async_hooks_trampoline) {
     MaybeStackBuffer<Local<Value>, 16> args(3 + argc);
-    args[0] = v8::Number::New(env->isolate(), asyncContext.async_id);
+    args[0] = Number::New(env->isolate(), asyncContext.async_id);
     args[1] = resource;
     args[2] = callback;
     for (int i = 0; i < argc; i++) {
@@ -345,7 +354,7 @@ MaybeLocal<Value> MakeSyncCallback(Isolate* isolate,
                                                argc,
                                                argv,
                                                async_context{0, 0},
-                                               v8::Undefined(isolate));
+                                               Undefined(isolate));
   return ret;
 }
 

@@ -5,11 +5,17 @@
 
 #include "env.h"
 #include "node_mutex.h"
-#include "v8.h"
+
+#include "v8-forward.h"
+#include "v8-maybe.h"
+#include "v8-persistent-handle.h"
+#include "v8-value-serializer.h"
+#include "v8-wasm.h"
+
 #include <deque>
+#include <set>
 #include <string>
 #include <unordered_map>
-#include <set>
 
 namespace node {
 namespace worker {

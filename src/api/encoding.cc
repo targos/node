@@ -1,13 +1,18 @@
 #include "node.h"
 #include "string_bytes.h"
 #include "util-inl.h"
-#include "v8.h"
+
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 namespace node {
 
 using v8::HandleScope;
 using v8::Isolate;
 using v8::Local;
+using v8::Uint32;
 using v8::Value;
 
 enum encoding ParseEncoding(const char* encoding,
@@ -114,7 +119,7 @@ enum encoding ParseEncoding(Isolate* isolate,
                             Local<Value> encoding_id,
                             enum encoding default_encoding) {
   if (encoding_id->IsUint32()) {
-    return static_cast<enum encoding>(encoding_id.As<v8::Uint32>()->Value());
+    return static_cast<enum encoding>(encoding_id.As<Uint32>()->Value());
   }
 
   return ParseEncoding(isolate, encoding_v, default_encoding);

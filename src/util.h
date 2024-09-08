@@ -25,10 +25,15 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "uv.h"
-#include "v8.h"
 
 #include "node.h"
 #include "node_exit_code.h"
+
+#include "v8-fast-api-calls.h"
+#include "v8-forward.h"
+#include "v8-maybe.h"
+#include "v8-memory-span.h"
+#include "v8-persistent-handle.h"
 
 #include <climits>
 #include <cstddef>

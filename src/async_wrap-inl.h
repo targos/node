@@ -28,6 +28,11 @@
 #include "base_object-inl.h"
 #include "node_internals.h"
 
+#include "v8-forward.h"
+#include "v8-local-handle.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+
 namespace node {
 
 inline AsyncWrap::ProviderType AsyncWrap::provider_type() const {

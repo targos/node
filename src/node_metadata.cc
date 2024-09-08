@@ -16,7 +16,8 @@
 #include "util.h"
 #include "uv.h"
 #include "uvwasi.h"
-#include "v8.h"
+
+#include "v8-initialization.h"
 
 #ifdef NODE_BUNDLED_ZLIB
 #include "zlib_version.h"

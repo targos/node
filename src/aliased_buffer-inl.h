@@ -5,6 +5,12 @@
 
 #include "aliased_buffer.h"
 #include "util-inl.h"
+#include "v8-array-buffer.h"
+#include "v8-context.h"
+#include "v8-forward.h"
+#include "v8-persistent-handle.h"
+#include "v8-snapshot.h"
+#include "v8-typed-array.h"
 
 namespace node {
 

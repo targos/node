@@ -70,9 +70,16 @@
 # define SIGKILL 9
 #endif
 
+// We keep the v8.h include here to avoid breaking addons that indirectly
+// depend on it.
 #include "v8.h"  // NOLINT(build/include_order)
 
-#include "v8-platform.h"  // NOLINT(build/include_order)
+#include "v8-date.h"
+#include "v8-forward.h"
+#include "v8-function.h"
+#include "v8-platform.h"
+#include "v8-snapshot.h"
+
 #include "node_version.h"  // NODE_MODULE_VERSION
 
 #define NAPI_EXPERIMENTAL

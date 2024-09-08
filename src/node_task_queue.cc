@@ -6,7 +6,18 @@
 #include "node_internals.h"
 #include "node_process-inl.h"
 #include "util-inl.h"
-#include "v8.h"
+
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-function.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-microtask-queue.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-promise.h"
+#include "v8-value.h"
 
 #include <atomic>
 
@@ -36,11 +47,11 @@ static Maybe<double> GetAssignedPromiseAsyncId(Environment* env,
                                                Local<Value> id_symbol) {
   Local<Value> maybe_async_id;
   if (!promise->Get(env->context(), id_symbol).ToLocal(&maybe_async_id)) {
-    return v8::Just(AsyncWrap::kInvalidAsyncId);
+    return Just(AsyncWrap::kInvalidAsyncId);
   }
   return maybe_async_id->IsNumber()
-      ? maybe_async_id->NumberValue(env->context())
-      : v8::Just(AsyncWrap::kInvalidAsyncId);
+             ? maybe_async_id->NumberValue(env->context())
+             : Just(AsyncWrap::kInvalidAsyncId);
 }
 
 void PromiseRejectCallback(PromiseRejectMessage message) {

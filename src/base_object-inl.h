@@ -28,7 +28,9 @@
 #include "env-inl.h"
 #include "util.h"
 
-#include "v8.h"
+#include "v8-forward.h"
+#include "v8-persistent-handle.h"
+#include "v8-profiler.h"
 
 namespace node {
 

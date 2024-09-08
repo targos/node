@@ -27,7 +27,13 @@
 #include <type_traits>  // std::remove_reference
 #include "base_object_types.h"
 #include "memory_tracker.h"
-#include "v8.h"
+
+#include "v8-forward.h"
+#include "v8-local-handle.h"
+#include "v8-maybe.h"
+#include "v8-persistent-handle.h"
+#include "v8-profiler.h"
+#include "v8-value-serializer.h"
 
 namespace node {
 

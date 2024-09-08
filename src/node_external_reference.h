@@ -3,10 +3,12 @@
 
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
+#include "v8-fast-api-calls.h"
+#include "v8-forward.h"
+#include "v8-template.h"
+
 #include <cinttypes>
 #include <vector>
-#include "v8-fast-api-calls.h"
-#include "v8.h"
 
 namespace node {
 

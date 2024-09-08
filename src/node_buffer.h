@@ -23,7 +23,9 @@
 #define SRC_NODE_BUFFER_H_
 
 #include "node.h"
-#include "v8.h"
+
+#include "v8-forward.h"
+#include "v8-typed-array.h"
 
 namespace node {
 
