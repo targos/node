@@ -11,7 +11,6 @@
 #include "permission/permission_base.h"
 #include "permission/wasi_permission.h"
 #include "permission/worker_permission.h"
-#include "v8.h"
 
 #include <string_view>
 #include <unordered_map>

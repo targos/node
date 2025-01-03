@@ -3,7 +3,6 @@
 #include "debug_utils-inl.h"
 #include "env.h"
 #include "path.h"
-#include "v8.h"
 
 #include <fcntl.h>
 #include <limits.h>

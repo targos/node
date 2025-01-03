@@ -3,8 +3,6 @@
 
 #include "node/inspector/protocol/NodeTracing.h"
 #include "tracing/agent.h"
-#include "v8.h"
-
 
 namespace node {
 class Environment;

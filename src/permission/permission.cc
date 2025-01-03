@@ -7,7 +7,13 @@
 #include "node_external_reference.h"
 #include "node_file.h"
 
-#include "v8.h"
+#include "v8-context.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-value.h"
 
 #include <memory>
 #include <string>
@@ -17,6 +23,8 @@ namespace node {
 
 using v8::Context;
 using v8::FunctionCallbackInfo;
+using v8::IntegrityLevel;
+using v8::Isolate;
 using v8::Local;
 using v8::MaybeLocal;
 using v8::NewStringType;
@@ -32,7 +40,7 @@ namespace {
 // permission.has('fs.in')
 static void Has(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
-  v8::Isolate* isolate = env->isolate();
+  Isolate* isolate = env->isolate();
   CHECK(args[0]->IsString());
 
   String::Utf8Value utf8_deny_scope(isolate, args[0]);
@@ -167,7 +175,7 @@ void Initialize(Local<Object> target,
                 void* priv) {
   SetMethodNoSideEffect(context, target, "has", Has);
 
-  target->SetIntegrityLevel(context, v8::IntegrityLevel::kFrozen).FromJust();
+  target->SetIntegrityLevel(context, IntegrityLevel::kFrozen).FromJust();
 }
 
 void RegisterExternalReferences(ExternalReferenceRegistry* registry) {

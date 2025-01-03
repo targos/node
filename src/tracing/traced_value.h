@@ -7,7 +7,7 @@
 
 #include "node.h"
 #include "util.h"
-#include "v8.h"
+#include "v8-platform.h"
 
 #include <cstddef>
 #include <memory>
