@@ -16,6 +16,10 @@
 #include "tracing/traced_value.h"
 #include "util.h"
 
+#include "libplatform/v8-tracing.h"
+#include "v8-forward.h"
+#include "v8-initialization.h"
+
 namespace node {
 
 // Ensures that __metadata trace events are only emitted

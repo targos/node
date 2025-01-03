@@ -5,7 +5,9 @@
 
 #include <cinttypes>
 #include "memory_tracker.h"
-#include "v8.h"
+
+#include "v8-forward.h"
+#include "v8-snapshot.h"
 
 namespace node {
 

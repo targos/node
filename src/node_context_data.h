@@ -4,7 +4,9 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "util.h"
-#include "v8.h"
+
+#include "v8-context.h"
+#include "v8-forward.h"
 
 namespace node {
 

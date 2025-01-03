@@ -30,6 +30,10 @@
 #include <regex>  // NOLINT(build/c++11)
 #include "node_revert.h"
 #include "util.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-forward.h"
+#include "v8-primitive.h"
 
 #define CHAR_TEST(bits, name, expr)                                           \
   template <typename T>                                                       \

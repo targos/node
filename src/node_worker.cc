@@ -11,7 +11,22 @@
 #include "node_snapshot_builder.h"
 #include "permission/permission.h"
 #include "util-inl.h"
+
+#include "v8-array-buffer.h"
+#include "v8-container.h"
+#include "v8-context.h"
 #include "v8-cppgc.h"
+#include "v8-exception.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-locker.h"
+#include "v8-maybe.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-template.h"
+#include "v8-typed-array.h"
+#include "v8-value.h"
 
 #include <memory>
 #include <string>

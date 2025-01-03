@@ -6,7 +6,9 @@
 #include "base_object.h"
 #include "node_mem.h"
 #include "uvwasi.h"
+
 #include "v8-fast-api-calls.h"
+#include "v8-forward.h"
 
 namespace node {
 namespace wasi {

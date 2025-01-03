@@ -3,12 +3,14 @@
 
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
+#include "v8-forward.h"
+#include "v8-script.h"
+
 #include <cinttypes>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include "v8.h"
 
 namespace node {
 class Environment;

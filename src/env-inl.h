@@ -34,8 +34,12 @@
 #include "node_realm-inl.h"
 #include "util-inl.h"
 #include "uv.h"
+
+#include "v8-container.h"
 #include "v8-cppgc.h"
-#include "v8.h"
+#include "v8-exception.h"
+#include "v8-forward.h"
+#include "v8-persistent-handle.h"
 
 #include <cstddef>
 #include <cstdint>

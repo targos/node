@@ -3,13 +3,28 @@
 #include "node_errors.h"
 #include "node_external_reference.h"
 #include "util-inl.h"
-#include "v8-fast-api-calls.h"
 
+#include "v8-array-buffer.h"
+#include "v8-container.h"
+#include "v8-context.h"
+#include "v8-debug.h"
+#include "v8-external.h"
+#include "v8-fast-api-calls.h"
+#include "v8-function-callback.h"
+#include "v8-isolate.h"
+#include "v8-local-handle.h"
+#include "v8-object.h"
+#include "v8-primitive.h"
+#include "v8-promise.h"
+#include "v8-proxy.h"
+#include "v8-template.h"
+#include "v8-value.h"
 namespace node {
 namespace util {
 
 using v8::ALL_PROPERTIES;
 using v8::Array;
+using v8::ArrayBuffer;
 using v8::ArrayBufferView;
 using v8::BigInt;
 using v8::Boolean;
