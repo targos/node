@@ -1120,6 +1120,9 @@ our %unified_info = (
             "test/buildtest_c_core_dispatch" => {
                 "noinst" => "1"
             },
+            "test/buildtest_c_core_names" => {
+                "noinst" => "1"
+            },
             "test/buildtest_c_core_object" => {
                 "noinst" => "1"
             },
@@ -1295,6 +1298,9 @@ our %unified_info = (
                 "noinst" => "1"
             },
             "test/buildtest_c_whrlpool" => {
+                "noinst" => "1"
+            },
+            "test/buildtest_c_x509_acert" => {
                 "noinst" => "1"
             },
             "test/byteorder_test" => {
@@ -8429,6 +8435,10 @@ our %unified_info = (
             "libcrypto",
             "libssl"
         ],
+        "test/buildtest_c_core_names" => [
+            "libcrypto",
+            "libssl"
+        ],
         "test/buildtest_c_core_object" => [
             "libcrypto",
             "libssl"
@@ -8662,6 +8672,10 @@ our %unified_info = (
             "libssl"
         ],
         "test/buildtest_c_whrlpool" => [
+            "libcrypto",
+            "libssl"
+        ],
+        "test/buildtest_c_x509_acert" => [
             "libcrypto",
             "libssl"
         ],
@@ -18717,6 +18731,10 @@ our %unified_info = (
             "test/generate_buildtest.pl",
             "core_dispatch"
         ],
+        "test/buildtest_core_names.c" => [
+            "test/generate_buildtest.pl",
+            "core_names"
+        ],
         "test/buildtest_core_object.c" => [
             "test/generate_buildtest.pl",
             "core_object"
@@ -18952,6 +18970,10 @@ our %unified_info = (
         "test/buildtest_whrlpool.c" => [
             "test/generate_buildtest.pl",
             "whrlpool"
+        ],
+        "test/buildtest_x509_acert.c" => [
+            "test/generate_buildtest.pl",
+            "x509_acert"
         ],
         "test/p_minimal.ld" => [
             "util/providers.num"
@@ -21339,6 +21361,9 @@ our %unified_info = (
         "test/buildtest_c_core_dispatch" => [
             "include"
         ],
+        "test/buildtest_c_core_names" => [
+            "include"
+        ],
         "test/buildtest_c_core_object" => [
             "include"
         ],
@@ -21514,6 +21539,9 @@ our %unified_info = (
             "include"
         ],
         "test/buildtest_c_whrlpool" => [
+            "include"
+        ],
+        "test/buildtest_c_x509_acert" => [
             "include"
         ],
         "test/byteorder_test" => [
@@ -23577,6 +23605,7 @@ our %unified_info = (
         "test/buildtest_c_conftypes",
         "test/buildtest_c_core",
         "test/buildtest_c_core_dispatch",
+        "test/buildtest_c_core_names",
         "test/buildtest_c_core_object",
         "test/buildtest_c_cryptoerr_legacy",
         "test/buildtest_c_decoder",
@@ -23636,6 +23665,7 @@ our %unified_info = (
         "test/buildtest_c_txt_db",
         "test/buildtest_c_types",
         "test/buildtest_c_whrlpool",
+        "test/buildtest_c_x509_acert",
         "test/byteorder_test",
         "test/ca_internals_test",
         "test/casttest",
@@ -30642,6 +30672,12 @@ our %unified_info = (
         "test/buildtest_c_core_dispatch-bin-buildtest_core_dispatch.o" => [
             "test/buildtest_core_dispatch.c"
         ],
+        "test/buildtest_c_core_names" => [
+            "test/buildtest_c_core_names-bin-buildtest_core_names.o"
+        ],
+        "test/buildtest_c_core_names-bin-buildtest_core_names.o" => [
+            "test/buildtest_core_names.c"
+        ],
         "test/buildtest_c_core_object" => [
             "test/buildtest_c_core_object-bin-buildtest_core_object.o"
         ],
@@ -30995,6 +31031,12 @@ our %unified_info = (
         ],
         "test/buildtest_c_whrlpool-bin-buildtest_whrlpool.o" => [
             "test/buildtest_whrlpool.c"
+        ],
+        "test/buildtest_c_x509_acert" => [
+            "test/buildtest_c_x509_acert-bin-buildtest_x509_acert.o"
+        ],
+        "test/buildtest_c_x509_acert-bin-buildtest_x509_acert.o" => [
+            "test/buildtest_x509_acert.c"
         ],
         "test/byteorder_test" => [
             "test/byteorder_test-bin-byteorder_test.o"
