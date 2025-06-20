@@ -27,6 +27,11 @@
           '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "torque_files =.*?v8_enable_i18n_support.*?torque_files \\+= ")',
         ],
       }],
+      ['v8_enable_temporal_support==1', {
+        'torque_files': [
+          '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "torque_files =.*?v8_enable_temporal_support.*?torque_files \\+= ")',
+        ],
+      }],
       ['v8_enable_webassembly==1', {
         'torque_files': [
           '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "torque_files =.*?v8_enable_webassembly.*?torque_files \\+= ")',
@@ -178,6 +183,11 @@
         'torque_runtime_support',
         'v8_maybe_icu',
       ],
+      'conditions': [
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
+        }],
+      ],
       'direct_dependent_settings': {
         'sources': [
           '<(SHARED_INTERMEDIATE_DIR)/torque-generated/csa-types.h',
@@ -187,7 +197,7 @@
           '<@(torque_outputs_csa_cc)',
           '<@(torque_outputs_csa_h)',
         ],
-      }
+      },
     },  # torque_generated_initializers
     {
       'target_name': 'torque_generated_definitions',
@@ -200,6 +210,11 @@
         'v8_internal_headers',
         'v8_libbase',
         'v8_maybe_icu',
+      ],
+      'conditions': [
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
+        }],
       ],
       'direct_dependent_settings': {
         'sources': [
@@ -272,6 +287,11 @@
       'sources': [
         '<(V8_ROOT)/src/init/setup-isolate-full.cc',
       ],
+      'conditions': [
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
+        }],
+      ],
     },  # v8_init
     {
       # This target is used to work around a GCC issue that causes the
@@ -300,6 +320,9 @@
             '<(icu_gyp_path):icui18n',
             '<(icu_gyp_path):icuuc',
           ],
+        }],
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
         }],
       ],
     },  # v8_initializers_slow
@@ -337,6 +360,9 @@
           'sources': [
             '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_initializers.*?v8_enable_webassembly.*?sources \\+= ")',
           ],
+        }],
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
         }],
         ['v8_target_arch=="ia32"', {
           'sources': [
@@ -507,6 +533,7 @@
             'v8_libplatform',
             'abseil.gyp:abseil',
             'fp16',
+            'rust.gyp:temporal_capi',
           ]
         }, {
           'dependencies': [
@@ -521,6 +548,7 @@
             'v8_libplatform',
             'abseil.gyp:abseil',
             'fp16',
+            'rust.gyp:temporal_capi',
           ]
         }],
         ['OS=="win" and clang==1', {
@@ -650,6 +678,11 @@
           ['v8_enable_snapshot_compression==1', {
             'sources': [
               '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_snapshot_compression.*?sources \\+= ")',
+            ],
+          }],
+          ['v8_enable_temporal_support==1', {
+            'sources': [
+              '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "v8_header_set.\\"v8_internal_headers\\".*?v8_enable_temporal_support.*?sources \\+= ")',
             ],
           }],
           ['v8_enable_sparkplug==1', {
@@ -943,6 +976,9 @@
         }, {
           'sources': ['<(V8_ROOT)/src/compiler/turbofan-disabled.cc'],
         }],
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
+        }],
       ],
     },  # v8_compiler_for_mksnapshot_source_set
     {
@@ -966,6 +1002,9 @@
           'dependencies': ['v8_compiler_sources'],
         }, {
           'sources': ['<(V8_ROOT)/src/compiler/turbofan-disabled.cc'],
+        }],
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
         }],
       ],
     },  # v8_compiler
@@ -1093,6 +1132,12 @@
           'sources': [
             '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?v8_enable_snapshot_compression.*?sources \\+= ")',
           ],
+        }],
+        ['v8_enable_temporal_support==1', {
+          'sources': [
+            '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_base_without_compiler.*?v8_enable_temporal_support.*?sources \\+= ")',
+          ],
+          'dependencies': ['rust.gyp:temporal_capi'],
         }],
         ['v8_enable_sparkplug==1', {
           'sources': [
@@ -1774,6 +1819,9 @@
         # Avoid excessive LTO
         ['enable_lto=="true"', {
           'ldflags': [ '-fno-lto' ],
+        }],
+        ['v8_enable_temporal_support==1', {
+          'dependencies': ['rust.gyp:temporal_capi'],
         }],
       ],
     },  # mksnapshot

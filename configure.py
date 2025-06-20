@@ -1003,6 +1003,12 @@ parser.add_argument('--v8-enable-snapshot-compression',
     default=None,
     help='Enable the built-in snapshot compression in V8.')
 
+parser.add_argument('--v8-enable-temporal-support',
+    action='store_true',
+    dest='v8_enable_temporal_support',
+    default=None,
+    help='Enable Temporal support in V8.')
+
 parser.add_argument('--node-builtin-modules-path',
     action='store',
     dest='node_builtin_modules_path',
@@ -1705,6 +1711,7 @@ def configure_library(lib, output, pkgname=None):
 def configure_v8(o, configs):
   set_configuration_variable(configs, 'v8_enable_v8_checks', release=1, debug=0)
 
+  o['variables']['v8_enable_temporal_support'] = 1 if options.v8_enable_temporal_support else 0
   o['variables']['v8_enable_webassembly'] = 0 if options.v8_lite_mode else 1
   o['variables']['v8_enable_javascript_promise_hooks'] = 1
   o['variables']['v8_enable_lite_mode'] = 1 if options.v8_lite_mode else 0

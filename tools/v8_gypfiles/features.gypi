@@ -297,6 +297,10 @@
     # add a dependency on the ICU library.
     'v8_enable_i18n_support%': 1,
 
+    # Enable Temporal API. Enabling this feature will
+    # add a dependency on the temporal_rs library.
+    'v8_enable_temporal_support%': 0,
+
     # Lite mode disables a number of performance optimizations to reduce memory
     # at the cost of performance.
     # Sets --DV8_LITE_MODE.
@@ -411,6 +415,9 @@
       }],
       ['v8_enable_i18n_support==1', {
         'defines': ['V8_INTL_SUPPORT',],
+      }],
+      ['v8_enable_temporal_support==1', {
+        'defines': ['V8_TEMPORAL_SUPPORT',],
       }],
       # Refs: https://github.com/nodejs/node/pull/23801
       # ['v8_enable_handle_zapping==1', {
