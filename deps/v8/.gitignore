@@ -157,3 +157,11 @@ bazel-v8
 /third_party/fp16/src/*
 !/third_party/fp16/src/include
 !/third_party/simdutf
+!/third_party/rust
+/third_party/rust/*
+!/third_party/rust/temporal_capi
+!/third_party/rust/chromium_crates_io
+/third_party/rust/chromium_crates_io/*
+!/third_party/rust/chromium_crates_io/vendor
+/third_party/rust/chromium_crates_io/vendor/*
+!/third_party/rust/chromium_crates_io/vendor/temporal_capi-*
