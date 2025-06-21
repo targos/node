@@ -161,7 +161,7 @@ bazel-v8
 /third_party/rust/*
 !/third_party/rust/temporal_capi
 !/third_party/rust/chromium_crates_io
-/third_party/rust/chromium_crates_io/*
-!/third_party/rust/chromium_crates_io/vendor
+/third_party/rust/chromium_crates_io/patches
+/third_party/rust/chromium_crates_io/supply-chain
 /third_party/rust/chromium_crates_io/vendor/*
 !/third_party/rust/chromium_crates_io/vendor/temporal_capi-*
