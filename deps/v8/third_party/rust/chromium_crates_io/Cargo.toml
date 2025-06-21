@@ -14,6 +14,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
+members = [
+  "vendor/temporal_capi-v0_0_9"
+]
 
 [dependencies]
 anyhow = "1.0.98"
@@ -50,9 +53,9 @@ features = ["nightly"]  # For optimized aarch64 implementation.
 # dependency.  Specifying `artifact = "bin"` below allows Cargo (and `gnrt`) to
 # also cover `cxxbridge-cmd` when analyzing the dependency tree.  See also
 # https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#artifact-dependencies
-[dependencies.cxxbridge-cmd]
-version = "1"
-artifact = "bin"
+#[dependencies.cxxbridge-cmd]
+#version = "1"
+#artifact = "bin"
 
 [dependencies.icu_casemap]
 version = "2.0.0"
