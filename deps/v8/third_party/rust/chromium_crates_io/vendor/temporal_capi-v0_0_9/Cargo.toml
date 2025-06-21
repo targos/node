@@ -44,6 +44,7 @@ compiled_data = ["temporal_rs/compiled_data"]
 [lib]
 name = "temporal_capi"
 path = "src/lib.rs"
+crate-type = ["staticlib"]
 
 [dependencies.diplomat]
 version = "0.12.0"
