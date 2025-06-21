@@ -1006,7 +1006,7 @@ parser.add_argument('--v8-enable-snapshot-compression',
 parser.add_argument('--v8-enable-temporal-support',
     action='store_true',
     dest='v8_enable_temporal_support',
-    default=None,
+    default=True,
     help='Enable Temporal support in V8.')
 
 parser.add_argument('--node-builtin-modules-path',
