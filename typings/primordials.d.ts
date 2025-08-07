@@ -126,6 +126,7 @@ declare namespace primordials {
   export const ArrayFrom: typeof Array.from
   export const ArrayFromAsync: typeof Array.fromAsync
   export const ArrayOf: typeof Array.of
+  export const ArrayPrototypeAt: UncurryThis<typeof Array.prototype.at>
   export const ArrayPrototypeConcat: UncurryThis<typeof Array.prototype.concat>
   export const ArrayPrototypeCopyWithin: UncurryThis<typeof Array.prototype.copyWithin>
   export const ArrayPrototypeFill: UncurryThis<typeof Array.prototype.fill>
@@ -341,6 +342,7 @@ declare namespace primordials {
   export const ObjectFreeze: typeof Object.freeze
   export const ObjectGetPrototypeOf: typeof Object.getPrototypeOf
   export const ObjectSetPrototypeOf: typeof Object.setPrototypeOf
+  export const ObjectHasOwn: typeof Object.hasOwn
   export const ObjectIsExtensible: typeof Object.isExtensible
   export const ObjectIsFrozen: typeof Object.isFrozen
   export const ObjectIsSealed: typeof Object.isSealed
@@ -367,6 +369,7 @@ declare namespace primordials {
   export const RegExpPrototypeGetDotAll: UncurryGetter<typeof RegExp.prototype, "dotAll">;
   export const RegExpPrototypeGetFlags: UncurryGetter<typeof RegExp.prototype, "flags">;
   export const RegExpPrototypeGetGlobal: UncurryGetter<typeof RegExp.prototype, "global">;
+  export const RegExpPrototypeGetHasIndices: UncurryGetter<typeof RegExp.prototype, "hasIndices">;
   export const RegExpPrototypeGetIgnoreCase: UncurryGetter<typeof RegExp.prototype, "ignoreCase">;
   export const RegExpPrototypeGetMultiline: UncurryGetter<typeof RegExp.prototype, "multiline">;
   export const RegExpPrototypeGetSource: UncurryGetter<typeof RegExp.prototype, "source">;
@@ -431,6 +434,7 @@ declare namespace primordials {
   export const StringPrototypeSubstring: UncurryThis<typeof String.prototype.substring>
   export const StringPrototypeSup: UncurryThis<typeof String.prototype.sup>
   export const StringPrototypeStartsWith: UncurryThis<typeof String.prototype.startsWith>
+  export const StringPrototypeSymbolIterator: UncurryMethod<typeof String.prototype, typeof Symbol.iterator>;
   export const StringPrototypeToString: UncurryThis<typeof String.prototype.toString>
   export const StringPrototypeTrim: UncurryThis<typeof String.prototype.trim>
   export const StringPrototypeTrimStart: UncurryThis<typeof String.prototype.trimStart>
