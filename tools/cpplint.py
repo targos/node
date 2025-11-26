@@ -924,6 +924,7 @@ _SEARCH_KERNEL_FILE = re.compile(r"\b(?:LINT_KERNEL_FILE)")
 
 _NULL_TOKEN_PATTERN = re.compile(r'\bNULL\b')
 
+_V8_PERSISTENT_PATTERN = re.compile(r'\bv8::Persistent\b')
 
 _RIGHT_LEANING_POINTER_PATTERN = re.compile(r'[^=|(,\s><);&?:}]'
                                             r'(?<!(sizeof|return))'
@@ -5468,7 +5469,7 @@ def CheckNullTokens(filename, clean_lines, linenum, error):
   line = clean_lines.elided[linenum]
 
   # Avoid preprocessor lines
-  if Match(r'^\s*#', line):
+  if re.match(r'^\s*#', line):
     return
 
   if line.find('/*') >= 0 or line.find('*/') >= 0:
@@ -5491,7 +5492,7 @@ def CheckV8PersistentTokens(filename, clean_lines, linenum, error):
   line = clean_lines.elided[linenum]
 
   # Avoid preprocessor lines
-  if Match(r'^\s*#', line):
+  if re.match(r'^\s*#', line):
     return
 
   if line.find('/*') >= 0 or line.find('*/') >= 0:
@@ -5514,7 +5515,7 @@ def CheckLeftLeaningPointer(filename, clean_lines, linenum, error):
   line = clean_lines.elided[linenum]
 
   # Avoid preprocessor lines
-  if Match(r'^\s*#', line):
+  if re.match(r'^\s*#', line):
     return
 
   if '/*' in line or '*/' in line:
@@ -7417,8 +7418,8 @@ def CheckLocalVectorUsage(filename, lines, error):
     error: The function to call with any errors found.
   """
   for linenum, line in enumerate(lines):
-    if (Search(r'\bstd::vector<v8::Local<[^>]+>>', line) or
-        Search(r'\bstd::vector<Local<[^>]+>>', line)):
+    if (re.search(r'\bstd::vector<v8::Local<[^>]+>>', line) or
+        re.search(r'\bstd::vector<Local<[^>]+>>', line)):
       error(filename, linenum, 'runtime/local_vector', 5,
             'Do not use std::vector<v8::Local<T>>. '
             'Use v8::LocalVector<T> instead.')
@@ -7435,11 +7436,11 @@ def CheckStringValueUsage(filename, lines, error):
     return # Skip test files, where Node.js headers may not be available
 
   for linenum, line in enumerate(lines):
-    if Search(r'\bString::Utf8Value\b', line):
+    if re.search(r'\bString::Utf8Value\b', line):
       error(filename, linenum, 'runtime/v8_string_value', 5,
             'Do not use v8::String::Utf8Value. '
             'Use node::Utf8Value instead.')
-    if Search(r'\bString::Value\b', line):
+    if re.search(r'\bString::Value\b', line):
       error(filename, linenum, 'runtime/v8_string_value', 5,
             'Do not use v8::String::Value. '
             'Use node::TwoByteValue instead.')
