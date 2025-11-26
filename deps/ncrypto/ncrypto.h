@@ -66,7 +66,7 @@ namespace ncrypto {
 #define NCRYPTO_STR(x) #x
 #define NCRYPTO_REQUIRE(EXPR)                                                  \
   {                                                                            \
-    if (!(EXPR) { abort(); }) }
+    if (!(EXPR) { abort(); }) }  // NOLINT(whitespace/newline)
 
 #define NCRYPTO_FAIL(MESSAGE)                                                  \
   do {                                                                         \
